@@ -11,23 +11,25 @@ flask>=3.0.0
 flask-socketio>=5.3.0
 eventlet>=0.35.0
 
-# ── Computer vision (CV card scanner) ─────────────────────────────────────────
+# ── Computer vision (CV card scanner — Modes 2 & 3) ───────────────────────────
 opencv-python>=4.8.0       # card detection, contour analysis, image processing
-Pillow>=10.0.0             # image decoding from pasted clipboard screenshots
-pytesseract>=0.3.10        # OCR wrapper — reads rank text from card corner images
+Pillow>=10.0.0             # image decoding from clipboard paste (Mode 2)
+pytesseract>=0.3.10        # OCR wrapper — reads rank text from card corners
+mss>=9.0.0                 # OS-level screen capture for live overlay (Mode 3)
 
-# NOTE: pytesseract is a Python wrapper around the Tesseract OCR engine.
-# You must also install the Tesseract binary separately (it is NOT a pip package):
+# NOTE: pytesseract needs the Tesseract binary (NOT pip):
+#   Windows:  choco install tesseract
+#             OR https://github.com/UB-Mannheim/tesseract/wiki
+#   macOS:    brew install tesseract
+#   Linux:    sudo apt install tesseract-ocr
 #
-#   Windows:   choco install tesseract
-#              OR download installer from https://github.com/UB-Mannheim/tesseract/wiki
+# NOTE: mss is only needed for  python main.py overlay  (Mode 3 live overlay).
+#       Modes 1 (manual) and 2 (screenshot paste) work without it.
 #
-#   macOS:     brew install tesseract
-#
-#   Ubuntu/Debian: sudo apt install tesseract-ocr
-#
-# After installing, verify with:  tesseract --version
-# The CV scanner will silently fall back to rank=unknown if Tesseract is missing.
+# NOTE: tkinter is needed for the live overlay UI. It is part of Python's
+#       standard library on Windows and macOS. On Linux run:
+#   Ubuntu/Debian: sudo apt install python3-tk
+#   Fedora:        sudo dnf install python3-tkinter
 
 # ── Testing ────────────────────────────────────────────────────────────────────
 pytest>=7.4.0

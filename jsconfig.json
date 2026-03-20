@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "jsx": "react",
+    "checkJs": false,
+    "noImplicitAny": false,
+    "strict": false
+  },
+  "exclude": [
+    "node_modules"
+  ]
+}

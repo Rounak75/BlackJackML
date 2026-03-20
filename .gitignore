@@ -5,6 +5,7 @@ __pycache__/
 *.pyo
 *.pyd
 .env
+overlay_settings.json
 
 # Trained models (large files)
 models/

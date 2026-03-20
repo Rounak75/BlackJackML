@@ -2,30 +2,34 @@
 ╔══════════════════════════════════════════════════════════════════════╗
 ║        BlackjackML — Command-Line Entry Point                        ║
 ║                                                                      ║
-║  This is the file you run to START the application.                  ║
-║  It provides three commands:                                         ║
+║  COMMANDS:                                                           ║
 ║                                                                      ║
 ║  1. python main.py web                                               ║
 ║     → Launches the live web dashboard at http://localhost:5000       ║
-║       Open this in your browser to use the card counter.            ║
+║       Contains two card-entry modes:                                 ║
+║         • Manual — click the 52-card grid to enter cards            ║
+║         • Screenshot CV — paste a screenshot, CV reads cards        ║
 ║                                                                      ║
-║  2. python main.py simulate --hands 100000                           ║
-║     → Runs a Monte Carlo simulation comparing:                       ║
-║       • Basic strategy alone (flat bet)                              ║
-║       • Basic strategy + card counting (bet spread)                  ║
-║       • Full system (counting + Illustrious 18 deviations)          ║
-║       Prints a report with house edge / player edge for each.        ║
+║  2. python main.py overlay                                           ║
+║     → Launches the LIVE DESKTOP OVERLAY (Mode 3)                    ║
+║       A transparent always-on-top window that sits over your         ║
+║       casino software and scans the screen automatically.            ║
+║       Requires: pip install mss                                      ║
+║       Shows: action, true count, bet, detected cards                 ║
+║       Hotkeys: F9 pause · F10 reselect region · Esc quit            ║
 ║                                                                      ║
-║  3. python main.py train --hands 500000 --epochs 50                  ║
-║     → Trains the neural network decision model and saves it to       ║
-║       models/best_model.pt. You must do this before the ML          ║
-║       overlay in the dashboard shows meaningful results.            ║
+║  3. python main.py simulate --hands 100000                           ║
+║     → Monte Carlo simulation of strategy performance.               ║
 ║                                                                      ║
-║  QUICK START FOR BEGINNERS:                                          ║
+║  4. python main.py train --hands 500000 --epochs 50                  ║
+║     → Trains the neural network and saves to models/best_model.pt   ║
+║                                                                      ║
+║  QUICK START:                                                         ║
 ║  ─────────────────────────                                           ║
 ║  Step 1: pip install -r requirements.txt                             ║
-║  Step 2: python main.py web                                          ║
-║  Step 3: Open http://localhost:5000 in your browser                 ║
+║  Step 2: pip install mss          (for live overlay only)           ║
+║  Step 3: python main.py web       (web dashboard)                   ║
+║     OR:  python main.py overlay   (live overlay)                    ║
 ╚══════════════════════════════════════════════════════════════════════╝
 """
 
@@ -59,27 +63,46 @@ EXAMPLES:
         """
     )
 
-    # Create sub-commands: web, simulate, train
+    # Create sub-commands: web, overlay, simulate, train
     subparsers = parser.add_subparsers(dest="command", help="Command to run")
 
     # ── "web" sub-command ─────────────────────────────────────────────
-    # Starts the Flask + Socket.IO web server.
-    # Access the dashboard at http://localhost:{port}
     web_parser = subparsers.add_parser(
         "web",
         help="Start the live web dashboard"
     )
     web_parser.add_argument(
         "--port", type=int, default=5000,
-        help="Port number (default: 5000). Change if 5000 is already in use."
+        help="Port number (default: 5000)."
     )
     web_parser.add_argument(
         "--host", default="0.0.0.0",
-        help="Host address. '0.0.0.0' allows access from other devices on your network."
+        help="Host address."
     )
     web_parser.add_argument(
         "--debug", action="store_true",
-        help="Enable Flask debug mode (auto-reload on code changes). DO NOT use in production."
+        help="Enable Flask debug mode. DO NOT use in production."
+    )
+
+    # ── "overlay" sub-command ─────────────────────────────────────────
+    # Live desktop overlay — scans screen region automatically,
+    # shows action/count/bet in a transparent always-on-top window.
+    overlay_parser = subparsers.add_parser(
+        "overlay",
+        help="Launch the live desktop overlay (requires: pip install mss)"
+    )
+    overlay_parser.add_argument(
+        "--decks", type=int, default=6,
+        help="Number of decks in the shoe (default: 6)."
+    )
+    overlay_parser.add_argument(
+        "--system", default="hi_lo",
+        choices=["hi_lo", "ko", "omega_ii", "zen"],
+        help="Card counting system (default: hi_lo)."
+    )
+    overlay_parser.add_argument(
+        "--interval", type=int, default=1500,
+        help="Scan interval in milliseconds (default: 1500)."
     )
 
     # ── "simulate" sub-command ────────────────────────────────────────
@@ -124,12 +147,30 @@ EXAMPLES:
     # ── Dispatch to the appropriate module ────────────────────────────
 
     if args.command == "web":
-        # Import here (not at top) so other commands don't require Flask
         from app.server import start_server
         port  = getattr(args, 'port',  5000)
         host  = getattr(args, 'host',  '0.0.0.0')
         debug = getattr(args, 'debug', False)
         start_server(host=host, port=port, debug=debug)
+
+    elif args.command == "overlay":
+        from app.overlay import start_overlay
+        import json, os
+        # Apply CLI args into settings before launching
+        settings_file = os.path.join(os.path.dirname(__file__), 'overlay_settings.json')
+        settings = {}
+        try:
+            if os.path.exists(settings_file):
+                with open(settings_file) as f:
+                    settings = json.load(f)
+        except Exception:
+            pass
+        settings['num_decks']     = getattr(args, 'decks',    6)
+        settings['system']        = getattr(args, 'system',   'hi_lo')
+        settings['scan_interval'] = getattr(args, 'interval', 1500)
+        with open(settings_file, 'w') as f:
+            json.dump(settings, f, indent=2)
+        start_overlay()
 
     elif args.command == "simulate":
         # Import the simulator and run the 3-way validation comparison
