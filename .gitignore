@@ -1,22 +1,37 @@
-# Python
+# ── Python ────────────────────────────────────────────────────────────────────
 venv/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 .env
-overlay_settings.json
 
-# Trained models (large files)
+# ── Trained models (large binary files — do not commit) ──────────────────────
 models/
 *.pt
 *.pth
 *.pkl
 
-# OS files
+# ── YOLO training outputs (large — regenerate with train_yolo.py) ─────────────
+yolo/dataset/             # regenerate: python yolo/generate_dataset.py
+yolo/runs/                # YOLO training run logs and checkpoints
+yolo/best_card_model.pt   # copy of best.pt saved here after training
+
+# ── Overlay settings (machine-specific, not for version control) ──────────────
+overlay_settings.json
+
+# ── OS files ──────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# IDE
+# ── IDE ───────────────────────────────────────────────────────────────────────
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# ── Logs and temp files ───────────────────────────────────────────────────────
+*.log
+*.tmp
+.pytest_cache/

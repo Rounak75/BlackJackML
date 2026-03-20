@@ -52,14 +52,22 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 EXAMPLES:
-  python main.py web                         Start dashboard on port 5000
-  python main.py web --port 8080             Start on custom port
-  python main.py web --host 0.0.0.0          Allow LAN access
-  python main.py simulate                    Quick 100k-hand validation
-  python main.py simulate --hands 500000     Full validation (2-5 min)
-  python main.py train                       Train with 500k hands
-  python main.py train --hands 1000000       Full 1M hand training
-  python main.py train --hands 100000 --epochs 20   Fast test training
+  python main.py web                                  Start dashboard on port 5000
+  python main.py web --port 8080                      Start on custom port
+  python main.py web --host 0.0.0.0                   Allow LAN access
+  python main.py overlay                              Launch live desktop overlay
+  python main.py overlay --decks 6 --interval 1500   Custom overlay settings
+  python main.py simulate                             Quick 100k-hand validation
+  python main.py simulate --hands 500000              Full validation (2-5 min)
+  python main.py train                                Train with 500k hands
+  python main.py train --hands 1000000                Full 1M hand training
+  python main.py train --hands 100000 --epochs 20     Fast test training
+
+YOLO CARD DETECTION SETUP (run these before starting the dashboard):
+  python yolo/generate_dataset.py --images 10000      Generate training data
+  python yolo/train_yolo.py                           Train card detector
+  python yolo/train_yolo.py --model yolov8m           Higher accuracy model
+  python yolo/train_yolo.py --eval                    Evaluate trained model
         """
     )
 

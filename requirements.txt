@@ -1,35 +1,58 @@
-# ── Core ML & data ────────────────────────────────────────────────────────────
-numpy>=1.24.0
-pandas>=2.0.0
-torch>=2.0.0
-scikit-learn>=1.3.0
-matplotlib>=3.7.0
-seaborn>=0.12.0
-
-# ── Web server ─────────────────────────────────────────────────────────────────
-flask>=3.0.0
-flask-socketio>=5.3.0
-eventlet>=0.35.0
-
-# ── Computer vision (CV card scanner — Modes 2 & 3) ───────────────────────────
-opencv-python>=4.8.0       # card detection, contour analysis, image processing
-Pillow>=10.0.0             # image decoding from clipboard paste (Mode 2)
-pytesseract>=0.3.10        # OCR wrapper — reads rank text from card corners
-mss>=9.0.0                 # OS-level screen capture for live overlay (Mode 3)
-
-# NOTE: pytesseract needs the Tesseract binary (NOT pip):
-#   Windows:  choco install tesseract
-#             OR https://github.com/UB-Mannheim/tesseract/wiki
-#   macOS:    brew install tesseract
-#   Linux:    sudo apt install tesseract-ocr
+# ══════════════════════════════════════════════════════════════════════════════
+# BlackjackML — Python Dependencies
+# ══════════════════════════════════════════════════════════════════════════════
 #
-# NOTE: mss is only needed for  python main.py overlay  (Mode 3 live overlay).
-#       Modes 1 (manual) and 2 (screenshot paste) work without it.
+# Install everything:
+#   pip install -r requirements.txt
 #
-# NOTE: tkinter is needed for the live overlay UI. It is part of Python's
-#       standard library on Windows and macOS. On Linux run:
-#   Ubuntu/Debian: sudo apt install python3-tk
-#   Fedora:        sudo dnf install python3-tkinter
+# For GPU-accelerated training (6× faster — optional):
+#   pip uninstall torch -y
+#   pip install torch --index-url https://download.pytorch.org/whl/cu121
+#
+# SYSTEM DEPENDENCIES (not pip — install separately):
+#   Tesseract OCR:
+#     Windows → https://github.com/UB-Mannheim/tesseract/wiki
+#     macOS   → brew install tesseract
+#     Linux   → sudo apt install tesseract-ocr
+#
+#   tkinter (for live overlay desktop window — overlay.py):
+#     Windows → already included with Python
+#     macOS   → already included with Python
+#     Linux   → sudo apt install python3-tk
+#
+# ── Core ML & Neural Network ──────────────────────────────────────────────────
+numpy>=1.24.0          # array math — used by every module
+torch>=2.0.0           # PyTorch — neural network training + inference
+                       # BlackjackNet v2: ResNet + Attention + 3 decision heads
 
-# ── Testing ────────────────────────────────────────────────────────────────────
-pytest>=7.4.0
+# ── Web Server & Real-Time Communication ─────────────────────────────────────
+flask>=3.0.0           # web framework — serves dashboard at localhost:5000
+flask-socketio>=5.3.0  # WebSocket support — real-time card updates to browser
+eventlet>=0.35.0       # async worker for flask-socketio (threading mode)
+
+# ── Computer Vision — Card Detection ─────────────────────────────────────────
+opencv-python>=4.8.0   # image processing — card contour detection, preprocessing
+Pillow>=10.0.0         # image rendering — synthetic dataset generation + clipboard paste
+pytesseract>=0.3.10    # OCR wrapper — fallback rank reader when YOLO not available
+                       # REQUIRES: tesseract binary installed separately (see above)
+
+# ── YOLO Card Detector ────────────────────────────────────────────────────────
+ultralytics>=8.0.0     # YOLOv8 — detects all 52 cards in one forward pass
+                       # Used by: yolo/generate_dataset.py, yolo/train_yolo.py,
+                       #          app/cv_detector.py (auto-loads if model exists)
+                       # Train:   python yolo/generate_dataset.py
+                       #          python yolo/train_yolo.py
+
+# ── Live Screen Capture (Mode 3 — Live Auto-Scan) ────────────────────────────
+mss>=9.0.0             # OS-level screen capture — invisible to casino browsers
+                       # Used by: app/live_scanner.py (background capture thread)
+                       # tkinter for the overlay window is stdlib — no pip needed
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest>=7.4.0          # unit test runner
+
+# ── REMOVED FROM ORIGINAL (not used anywhere in the codebase) ────────────────
+# pandas        — train.py uses stdlib csv module, not pandas
+# scikit-learn  — torch DataLoader handles train/test split internally
+# matplotlib    — not imported anywhere (training log saved as CSV, not plotted)
+# seaborn       — not imported anywhere
