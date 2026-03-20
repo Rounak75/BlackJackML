@@ -77,8 +77,8 @@ HARD_TABLE = {
     12: [  H,  H,  S,  S,  S,  H,  H,  H,  H,  H],
     13: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],
     14: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],
-    15: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],
-    16: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],
+    15: [  S,  S,  S,  S,  S,  H,  H,  H,SUR,SUR],  # vs 10,A: Surrender
+    16: [  S,  S,  S,  S,  S,  H,  H,  H,SUR,SUR],  # vs 10,A: Surrender
     17: [  S,  S,  S,  S,  S,  S,  S,  S,  S,  S],
     18: [  S,  S,  S,  S,  S,  S,  S,  S,  S,  S],
     19: [  S,  S,  S,  S,  S,  S,  S,  S,  S,  S],
@@ -98,7 +98,7 @@ SOFT_TABLE = {
     15:  [       H,   H,   D,   D,   D,   H,   H,   H,   H,   H],  # A,4
     16:  [       H,   H,   D,   D,   D,   H,   H,   H,   H,   H],  # A,5
     17:  [       H,   D,   D,   D,   D,   H,   H,   H,   H,   H],  # A,6
-    18:  [       S,  Ds,  Ds,  Ds,  Ds,   S,   S,   H,   H,   H],  # A,7 — S17: Stand vs 2
+    18:  [      Ds,  Ds,  Ds,  Ds,  Ds,   S,   S,   H,   H,   H],  # A,7 — S17: Ds vs 2-6
     19:  [       S,   S,   S,   S,  Ds,   S,   S,   S,   S,   S],  # A,8
     20:  [       S,   S,   S,   S,   S,   S,   S,   S,   S,   S],  # A,9
 }

@@ -336,6 +336,10 @@ body {
   border: 1px solid var(--border);
   border-radius: 12px;
   padding: 14px;
+  height: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .widget-title {

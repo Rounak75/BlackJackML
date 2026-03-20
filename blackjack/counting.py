@@ -108,7 +108,7 @@ class CardCounter:
         Per casino rules: house edge ~2% without strategy, 0.5% with perfect play (RTP 99.50%).
         Break-even at TC = +1.
         """
-        base_edge = -0.005           # House edge with perfect basic strategy = 0.50% (RTP 99.50%)
+        base_edge = -0.0043          # House edge 8-deck S17: 0.43% (Griffin/WoO reference)
         tc_advantage = self.true_count * 0.005  # Each +1 TC ≈ +0.5% to player (Hi-Lo system)
         return base_edge + tc_advantage
 

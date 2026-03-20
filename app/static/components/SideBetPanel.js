@@ -186,112 +186,112 @@ function SideBetPanel({ sideBets }) {
       <Widget title="Side Bet EV" badge={alerts.length > 0 ? `${alerts.length} ACTIVE` : undefined}
         badgeColor={alerts.length > 0 ? 'text-jade' : undefined}>
 
-        {/* Compact grid of bet cards — 3 bets so use single column on small, 
-            or keep 1fr 1fr and let Lucky Ladies span naturally */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          {bets.map(({ key, icon, name, short, data, payout, color }) => {
-            const ev  = data ? (data.ev  || 0) : null;
-            const rec = data && data.recommended;
+        {/* 3 equal cards in a row */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 6, marginBottom: 8 }}>
+          {bets.map(({ key, icon, short, data, payout, color }) => {
+            const ev    = data ? (data.ev || 0) : null;
+            const rec   = data && data.recommended;
             const isPos = ev !== null && ev >= 0;
-
             return (
-              <div
-                key={key}
-                className="rounded-xl p-2.5 transition-all"
-                style={{
-                  background: rec
-                    ? `linear-gradient(135deg, ${color}18, ${color}08)`
-                    : '#111827',
-                  border: `1.5px solid ${rec ? color : 'rgba(255,255,255,0.08)'}`,
-                  boxShadow: rec ? `0 0 12px ${color}22` : 'none',
-                  position: 'relative',
-                  overflow: 'hidden',
-                }}
-              >
-                {/* Pulse dot when recommended */}
+              <div key={key} style={{
+                background: rec ? `linear-gradient(135deg,${color}18,${color}08)` : '#111827',
+                border: `1.5px solid ${rec ? color : 'rgba(255,255,255,0.08)'}`,
+                borderRadius: 10, padding: '10px 8px',
+                boxShadow: rec ? `0 0 12px ${color}22` : 'none',
+                position: 'relative',
+              }}>
                 {rec && (
-                  <div style={{
-                    position: 'absolute', top: 6, right: 6,
-                    width: 7, height: 7, borderRadius: '50%',
-                    background: color, animation: 'pulse 1.5s ease-in-out infinite',
-                  }} />
+                  <div style={{ position:'absolute', top:6, right:6, width:6, height:6,
+                    borderRadius:'50%', background:color,
+                    animation:'pulse 1.5s ease-in-out infinite' }} />
                 )}
-
-                {/* Icon + short name */}
-                <div className="flex items-center gap-1.5 mb-1.5">
-                  <span style={{ fontSize: '0.9rem' }}>{icon}</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wide"
-                    style={{ color: rec ? color : '#7a8eab' }}>
-                    {short}
-                  </span>
+                <div style={{ fontSize:13, marginBottom:4 }}>{icon}</div>
+                <div style={{ fontSize:9, fontWeight:700, textTransform:'uppercase',
+                  letterSpacing:'0.06em', color: rec ? color : '#7a8eab', marginBottom:5 }}>
+                  {short}
                 </div>
-
-                {/* EV value — big */}
-                <div className="font-mono font-extrabold leading-none mb-1"
-                  style={{
-                    fontSize: '1.1rem',
-                    color: ev !== null ? (isPos ? '#44e882' : '#ff5c5c') : '#4a5568',
-                  }}>
+                <div style={{ fontSize:18, fontWeight:800, fontFamily:'DM Mono,monospace',
+                  lineHeight:1, marginBottom:4,
+                  color: ev !== null ? (isPos ? '#44e882' : '#ff5c5c') : '#4a5568' }}>
                   {ev !== null ? `${ev >= 0 ? '+' : ''}${ev.toFixed(1)}%` : '—'}
                 </div>
-
-                {/* Payout & status */}
-                <div className="text-[9px]" style={{ color: '#7a8eab' }}>
-                  {payout}
-                </div>
-
-                {/* Status badge */}
-                <div className="mt-1.5">
-                  {rec ? (
-                    <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                      style={{ background: `${color}22`, color, border: `1px solid ${color}44` }}>
-                      ✓ BET NOW
-                    </span>
-                  ) : (
-                    <span className="text-[9px]" style={{ color: '#4a5568' }}>
-                      skip
-                    </span>
-                  )}
-                </div>
+                <div style={{ fontSize:8, color:'#7a8eab', marginBottom:6 }}>{payout}</div>
+                {rec
+                  ? <span style={{ fontSize:8, fontWeight:700, color,
+                      background:`${color}20`, border:`1px solid ${color}40`,
+                      borderRadius:4, padding:'2px 6px' }}>✓ BET</span>
+                  : <span style={{ fontSize:8, color:'#4a5568' }}>skip</span>
+                }
               </div>
             );
           })}
         </div>
 
-        {/* Extra details for recommended bets */}
-        {bets.some(b => b.data && b.data.recommended) && (
-          <div className="mt-3 space-y-1.5">
-            <div className="text-[9px] uppercase tracking-widest font-bold mb-1"
-              style={{ color: '#7a8eab' }}>
-              Active opportunities
-            </div>
-            {bets.filter(b => b.data && b.data.recommended).map(({ key, icon, name, data, color }) => (
-              <div key={key}
-                className="flex items-center justify-between px-2.5 py-2 rounded-lg"
-                style={{ background: `${color}12`, border: `1px solid ${color}33` }}>
-                <div className="flex items-center gap-2">
-                  <span>{icon}</span>
-                  <span className="text-xs font-semibold" style={{ color }}>{name}</span>
+        {/* Separator */}
+        <div style={{ borderTop:'1px solid rgba(255,255,255,0.07)', margin:'4px 0 10px' }} />
+
+        {/* EV legend / all-negative hint — fills remaining space */}
+        <div style={{ display:'flex', flexDirection:'column', gap:6 }}>
+          {bets.some(b => b.data && b.data.recommended) ? (
+            bets.filter(b => b.data && b.data.recommended).map(({ key, icon, name, data, color }) => (
+              <div key={key} style={{
+                display:'flex', alignItems:'center', justifyContent:'space-between',
+                padding:'7px 10px', borderRadius:8,
+                background:`${color}10`, border:`1px solid ${color}30`,
+              }}>
+                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                  <span style={{fontSize:13}}>{icon}</span>
+                  <span style={{ fontSize:11, fontWeight:700, color }}>{name}</span>
                 </div>
-                <div className="text-right">
-                  <div className="font-mono font-bold text-xs" style={{ color: '#44e882' }}>
-                    +{(data.ev || 0).toFixed(1)}% EV
+                <div style={{ textAlign:'right' }}>
+                  <div style={{ fontSize:13, fontWeight:800, color:'#44e882',
+                    fontFamily:'DM Mono,monospace' }}>
+                    +{(data.ev||0).toFixed(1)}% EV
                   </div>
                   {data.reason && (
-                    <div className="text-[9px]" style={{ color: '#7a8eab' }}>{data.reason}</div>
+                    <div style={{ fontSize:9, color:'#7a8eab' }}>{data.reason}</div>
                   )}
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* All negative — small hint */}
-        {bets.every(b => !b.data || !b.data.recommended) && (
-          <div className="mt-2 text-center text-[10px]" style={{ color: '#4a5568' }}>
-            No +EV side bets right now — skip all
-          </div>
-        )}
+            ))
+          ) : (
+            /* All negative — show EV summary table so space is used */
+            <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
+              <div style={{ fontSize:9, color:'#7a8eab', fontWeight:700,
+                textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:2 }}>
+                Expected Value Summary
+              </div>
+              {bets.map(({ key, icon, name, data, color }) => {
+                const ev = data ? (data.ev || 0) : null;
+                return (
+                  <div key={key} style={{
+                    display:'flex', alignItems:'center', justifyContent:'space-between',
+                    padding:'6px 10px', borderRadius:7, background:'#111827',
+                    border:'1px solid rgba(255,255,255,0.06)',
+                  }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                      <span style={{fontSize:12}}>{icon}</span>
+                      <span style={{ fontSize:10, color:'#b0bfd8' }}>{name}</span>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                      <span style={{ fontSize:11, fontWeight:700,
+                        fontFamily:'DM Mono,monospace',
+                        color: ev !== null && ev >= 0 ? '#44e882' : '#ff5c5c' }}>
+                        {ev !== null ? `${ev >= 0 ? '+' : ''}${ev.toFixed(1)}%` : '—'}
+                      </span>
+                      <span style={{ fontSize:8, color:'#4a5568',
+                        background:'rgba(255,255,255,0.04)', padding:'1px 5px',
+                        borderRadius:3 }}>SKIP</span>
+                    </div>
+                  </div>
+                );
+              })}
+              <div style={{ fontSize:9, color:'#4a5568', textAlign:'center', marginTop:4 }}>
+                No +EV opportunities — all side bets negative
+              </div>
+            </div>
+          )}
+        </div>
       </Widget>
 
       <style>{`

@@ -584,20 +584,28 @@ function PasteZone() {
 // Higher FPS = faster detection but more CPU usage.
 // 2fps is usually enough for blackjack (cards don't change that fast).
 function FpsSelector({ value, onChange }) {
+  const opts = [{fps:0,label:'Off'},{fps:2,label:'2fps'},{fps:5,label:'5fps'},{fps:10,label:'10fps'}];
   return (
-    <div style={{display:'flex', alignItems:'center', gap:6}}>
-      <span style={{fontSize:10, color:C.muted}}>Speed</span>
-      {[2,5,10].map(fps => (
-        <button key={fps} onClick={() => onChange(fps)}
-          style={{
-            padding:'2px 8px', fontSize:10, borderRadius:4, cursor:'pointer',
-            background: value===fps ? C.sapphD : 'transparent',
-            border:`1px solid ${value===fps ? C.sapph : 'rgba(255,255,255,0.1)'}`,
-            color: value===fps ? C.sapph : C.muted,
-          }}>
-          {fps}fps
-        </button>
-      ))}
+    <div style={{
+      display:'inline-flex', borderRadius:6, overflow:'hidden',
+      border:'1px solid rgba(255,255,255,0.12)', flexShrink:0,
+    }}>
+      {opts.map(({fps, label}, i) => {
+        const active = value === fps;
+        return (
+          <button key={fps} onClick={() => onChange(fps)}
+            style={{
+              padding:'4px 10px', fontSize:10, fontWeight: active ? 700 : 400,
+              cursor:'pointer', whiteSpace:'nowrap',
+              borderLeft: i > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none',
+              background: active ? C.sapph : 'transparent',
+              color: active ? '#0a0e18' : C.muted,
+              transition:'all 0.12s',
+            }}>
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -718,6 +726,233 @@ function SetupGuide({ available }) {
   );
 }
 
+
+// ══════════════════════════════════════════════════════════════
+// WINDOW PICKER — dropdown to select which OS window to scan
+// ══════════════════════════════════════════════════════════════
+//
+// Fetches /api/windows on mount and whenever the user opens the dropdown.
+// On selection, calls /api/live/set_window (REST) and emits live_set_window
+// (socket) to update the scanner ROI to that window's screen coordinates.
+// Browser windows (Chrome/Edge/Firefox/Stake etc.) are sorted to the top.
+
+function WindowPicker({ socket, onWindowSelect }) {
+  const { useState, useEffect } = React;
+  const [open,    setOpen]    = useState(false);
+  const [windows, setWindows] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState(null);
+
+  const fetchWindows = () => {
+    setLoading(true);
+    fetch('/api/windows')
+      .then(r => r.json())
+      .then(d => { setWindows(d.windows || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+
+  const handleOpen = () => {
+    setOpen(o => !o);
+    if (!open) fetchWindows();
+  };
+
+  const handlePick = (win) => {
+    setSelected(win);
+    setOpen(false);
+    // Tell server to restrict scan to this window's screen coordinates
+    const payload = { x: win.x, y: win.y, w: win.w, h: win.h, title: win.title };
+    if (socket && socket.connected) {
+      socket.emit('live_set_window', payload);
+    } else {
+      fetch('/api/live/set_window', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+    if (onWindowSelect) onWindowSelect(win);
+  };
+
+  const handleClear = (e) => {
+    e.stopPropagation();
+    setSelected(null);
+    // Clear ROI — scan full screen again
+    if (socket && socket.connected) {
+      socket.emit('live_set_window', { x: 0, y: 0, w: 0, h: 0, title: 'Full Screen' });
+    } else {
+      fetch('/api/live/set_window', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: 0, y: 0, w: 0, h: 0 }),
+      }).catch(() => {});
+    }
+  };
+
+  // Highlight keywords that suggest casino/browser windows
+  const isBrowser = (title) => {
+    const t = title.toLowerCase();
+    return ['chrome','firefox','edge','opera','brave','safari',
+             'stake','casino','blackjack','21','bet'].some(k => t.includes(k));
+  };
+
+  return (
+    <div style={{ position: 'relative', marginBottom: 8 }}>
+      {/* Trigger button */}
+      <button
+        onClick={handleOpen}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 6,
+          padding: '6px 10px', fontSize: 11, borderRadius: 6, cursor: 'pointer',
+          background: selected ? C.sapphD : 'rgba(255,255,255,0.04)',
+          border: `1px solid ${selected ? C.sapph + '60' : 'rgba(255,255,255,0.10)'}`,
+          color: selected ? C.sapph : C.muted,
+          textAlign: 'left',
+        }}
+      >
+        <span style={{ fontSize: 13 }}>🖥</span>
+        <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {selected ? selected.title : 'Full screen (click to pick a window)'}
+        </span>
+        {selected && (
+          <span
+            onClick={handleClear}
+            style={{ fontSize: 14, color: C.muted, padding: '0 2px', lineHeight: 1, cursor: 'pointer' }}
+            title="Clear — scan full screen"
+          >×</span>
+        )}
+        <span style={{ fontSize: 9, color: C.muted }}>{open ? '▲' : '▼'}</span>
+      </button>
+
+      {/* Dropdown list */}
+      {open && (
+        <div style={{
+          position: 'absolute', zIndex: 999, top: 'calc(100% + 4px)', left: 0, right: 0,
+          background: C.base2, border: `1px solid ${C.sapph}40`,
+          borderRadius: 8, overflow: 'hidden',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.6)',
+          maxHeight: 260, overflowY: 'auto',
+        }}>
+          {loading && (
+            <div style={{ padding: '12px', textAlign: 'center', color: C.muted, fontSize: 11 }}>
+              Scanning open windows…
+            </div>
+          )}
+
+          {!loading && windows.length === 0 && (
+            <div style={{ padding: '10px 12px', fontSize: 10, lineHeight: 1.7 }}>
+              <div style={{ fontWeight: 700, color: C.ruby, marginBottom: 6 }}>
+                ⚠ No windows detected
+              </div>
+              <div style={{ color: C.sec, marginBottom: 4 }}>
+                Restart the server, then click the dropdown again.
+              </div>
+              <div style={{ color: C.muted, marginBottom: 8, fontSize: 9 }}>
+                If this keeps happening, launch Chrome with remote debugging to list tabs individually:
+              </div>
+              <code style={{ display:'block', padding:'5px 8px', marginBottom: 10,
+                background: C.base3, borderRadius: 4, color: C.jade, fontSize: 9 }}>
+                chrome.exe --remote-debugging-port=9222
+              </code>
+              <div style={{ fontSize: 9, color: C.muted, marginBottom: 4, fontWeight: 700 }}>
+                Or set scan region manually:
+              </div>
+            </div>
+          )}
+
+          {/* Full screen option */}
+          {!loading && (
+            <button
+              onClick={() => handlePick({ title: 'Full Screen', x: 0, y: 0, w: 0, h: 0 })}
+              style={{
+                width: '100%', padding: '8px 12px', fontSize: 11, textAlign: 'left',
+                background: !selected ? 'rgba(106,175,255,0.08)' : 'transparent',
+                border: 'none', borderBottom: '1px solid rgba(255,255,255,0.06)',
+                color: !selected ? C.sapph : C.sec, cursor: 'pointer', display: 'flex',
+                alignItems: 'center', gap: 8,
+              }}
+            >
+              <span>🖥</span>
+              <span>Full Screen</span>
+              {!selected && <span style={{ marginLeft: 'auto', fontSize: 9, color: C.sapph }}>✓ active</span>}
+            </button>
+          )}
+
+          {!loading && (() => {
+            const tabs = windows.filter(w => w.is_tab);
+            const wins = windows.filter(w => !w.is_tab);
+
+            const renderItem = (win, i, arr) => {
+              const browser  = isBrowser(win.title);
+              const isActive = selected && selected.id === win.id;
+              return (
+                <button key={win.id || i} onClick={() => handlePick(win)}
+                  style={{
+                    width: '100%', padding: '7px 12px', fontSize: 10, textAlign: 'left',
+                    background: isActive ? 'rgba(106,175,255,0.10)' : 'transparent',
+                    border: 'none',
+                    borderBottom: i < arr.length - 1 ? '1px solid rgba(255,255,255,0.04)' : 'none',
+                    color: isActive ? C.sapph : browser ? C.text : C.sec,
+                    cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                  }}
+                >
+                  <span style={{flexShrink:0}}>{win.is_tab ? '🌐' : browser ? '🖥' : '🪟'}</span>
+                  <div style={{ flex: 1, overflow: 'hidden', minWidth: 0 }}>
+                    <div style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                      {win.title.replace('[TAB] ', '')}
+                    </div>
+                    {win.url && (
+                      <div style={{ fontSize: 8, color: C.muted, overflow:'hidden',
+                        textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                        {win.url.replace(/^https?:\/\//, '').slice(0, 50)}
+                      </div>
+                    )}
+                  </div>
+                  <span style={{ fontSize: 9, color: C.muted, flexShrink: 0 }}>
+                    {win.w > 0 ? `${win.w}×${win.h}` : ''}
+                  </span>
+                  {isActive && <span style={{ fontSize: 9, color: C.sapph }}>✓</span>}
+                </button>
+              );
+            };
+
+            return (
+              <>
+                {tabs.length > 0 && (
+                  <>
+                    <div style={{ padding:'4px 12px', fontSize:8, fontWeight:700,
+                      color: C.sapph, textTransform:'uppercase', letterSpacing:'0.08em',
+                      background: 'rgba(106,175,255,0.06)', borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
+                      🌐 Browser Tabs
+                    </div>
+                    {tabs.map((w, i) => renderItem(w, i, tabs))}
+                  </>
+                )}
+                {wins.length > 0 && (
+                  <>
+                    <div style={{ padding:'4px 12px', fontSize:8, fontWeight:700,
+                      color: C.muted, textTransform:'uppercase', letterSpacing:'0.08em',
+                      background: 'rgba(255,255,255,0.03)', borderBottom:'1px solid rgba(255,255,255,0.05)',
+                      borderTop: tabs.length > 0 ? '1px solid rgba(255,255,255,0.08)' : 'none' }}>
+                      🪟 OS Windows
+                    </div>
+                    {wins.map((w, i) => renderItem(w, i, wins))}
+                  </>
+                )}
+                {tabs.length === 0 && wins.length > 0 && (
+                  <div style={{ padding:'6px 12px 4px', fontSize:9, color: C.muted,
+                    borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
+                    💡 Launch Chrome with <code style={{color:C.gold}}>--remote-debugging-port=9222</code> to see individual tabs
+                  </div>
+                )}
+              </>
+            );
+          })()}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── LiveMode — the main live scan start/stop/display component ───────────────
 //
 // When the user clicks "Start Live Scan":
@@ -748,39 +983,105 @@ function LiveMode({ socket, count }) {
   const [available, setAvailable] = useState(true);
 
   // Whether to show the optional scan region input fields
-  const [showRegion, setShowRegion] = useState(false);
+  const [showRegion, setShowRegion] = useState(true);   // open by default — always useful
 
   // The x, y, width, height of the scan region (empty = full screen)
   const [region, setRegion] = useState({x:'',y:'',w:'',h:''});
 
+  // Sync live scanner state from REST (used on mount, on tab refocus, on reconnect)
+  const syncStatus = () => {
+    fetch('/api/live/status').then(r => r.json()).then(d => {
+      setRunning(!!d.running);
+      setAvailable(d.available !== false);
+      if (d.fps) setFps(d.fps);
+    }).catch(() => {});
+  };
+
   useEffect(() => {
     if (!socket) return;
+
     const onStatus = (data) => {
       setRunning(!!data.running);
       if (data.available !== undefined) setAvailable(!!data.available);
       if (data.message) setStatusMsg(data.message);
       if (data.fps)     setFps(data.fps);
     };
+
     socket.on('live_status', onStatus);
     socket.on('live_update', setLiveData);
-    fetch('/api/live/status').then(r => r.json()).then(d => {
-      setRunning(!!d.running);
-      setAvailable(d.available !== false);
-      if (d.fps) setFps(d.fps);
-    }).catch(() => {});
-    return () => { socket.off('live_status', onStatus); socket.off('live_update', setLiveData); };
+
+    // Re-subscribe to live_update after socket reconnects
+    // (browser may have throttled/killed the WS while tab was hidden)
+    const onReconnect = () => {
+      syncStatus();
+      setStatusMsg('Reconnected');
+    };
+    socket.on('reconnect', onReconnect);
+    socket.on('connect',   onReconnect);   // also fires on first connect
+
+    // When the user switches back to this tab, re-sync state
+    const onVisibility = () => {
+      if (!document.hidden) syncStatus();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+
+    // Initial sync
+    syncStatus();
+
+    return () => {
+      socket.off('live_status', onStatus);
+      socket.off('live_update', setLiveData);
+      socket.off('reconnect',   onReconnect);
+      socket.off('connect',     onReconnect);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
   }, [socket]);
 
   const start = () => {
-    if (!socket) return;
     const reg = (showRegion && region.w && region.h)
       ? [parseInt(region.x)||0, parseInt(region.y)||0, parseInt(region.w), parseInt(region.h)]
       : null;
-    socket.emit('live_start', { fps, region: reg });
+    const payload = { fps, region: reg };
+    // Try WebSocket first; fall back to REST if socket is missing/disconnected
+    if (socket && socket.connected) {
+      socket.emit('live_start', payload);
+    } else {
+      fetch('/api/live/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then(r => r.json())
+        .then(d => {
+          setRunning(true);
+          setStatusMsg(d.message || 'Live scanner started');
+          if (d.available === false) setAvailable(false);
+        })
+        .catch(() => setStatusMsg('Failed to start — is the server running?'));
+    }
   };
-  const stop = () => socket && socket.emit('live_stop');
-  const changeFps = (f) => { setFps(f); if (running && socket) socket.emit('live_set_fps', {fps:f}); };
-  const newHand = () => socket && socket.emit('live_new_hand');
+
+  const stop = () => {
+    if (socket && socket.connected) {
+      socket.emit('live_stop');
+    } else {
+      fetch('/api/live/stop', { method: 'POST' })
+        .then(() => { setRunning(false); setStatusMsg('Stopped'); })
+        .catch(() => {});
+    }
+  };
+  const changeFps = (f) => {
+    if (f === 0) { stop(); setFps(0); return; }   // Off = stop scanning
+    setFps(f);
+    if (running) {
+      if (socket && socket.connected) socket.emit('live_set_fps', { fps: f });
+      else fetch('/api/live/set_fps', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({fps:f}) }).catch(()=>{});
+    }
+  };
+  const newHand = () => {
+    if (socket && socket.connected) socket.emit('live_new_hand');
+    else fetch('/api/live/new_hand', { method:'POST' }).catch(()=>{});
+  };
 
   const d   = liveData;
   const tc  = d ? d.true_count       : (count ? count.true      : 0);
@@ -793,6 +1094,9 @@ function LiveMode({ socket, count }) {
 
   return (
     <div>
+      {/* Window / tab picker — lets user point scanner at a specific browser window */}
+      <WindowPicker socket={socket} />
+
       <div style={{
         fontSize:9, color:C.jade, marginBottom:8,
         background:C.jadeD, border:`1px solid ${C.jade}25`,
@@ -803,14 +1107,10 @@ function LiveMode({ socket, count }) {
 
       <SetupGuide available={available} />
 
-      <div style={{display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8}}>
+      <div style={{display:'flex', alignItems:'center', gap:8, marginBottom:8}}>
         <StatusDot running={running} stable={d?.stable} cardsDetected={d?.cards_detected||0} />
+        <div style={{flex:1}} />
         <FpsSelector value={fps} onChange={changeFps} />
-        <button onClick={newHand} disabled={!running}
-          style={{padding:'3px 8px', fontSize:10, borderRadius:4, cursor:'pointer',
-            background:'transparent', border:'1px solid rgba(255,255,255,0.1)', color:C.muted}}>
-          New Hand
-        </button>
       </div>
 
       {/* Optional region */}

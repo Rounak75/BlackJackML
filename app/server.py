@@ -52,7 +52,14 @@ from config import GameConfig, CountingConfig, BettingConfig, MLConfig
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'blackjack-ml-counter-secret'
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')  # threading mode: Ctrl+C works on Windows
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",
+    async_mode='threading',   # threading mode: Ctrl+C works on Windows
+    ping_timeout=60,           # wait 60s before declaring client dead
+    ping_interval=25,          # keep-alive ping every 25s (survives tab switch)
+    max_http_buffer_size=10_000_000,
+)
 
 # ── JSON safety net ────────────────────────────────────────────────────────────
 # Converts numpy/torch scalar types to Python natives before JSON encoding.
@@ -122,6 +129,11 @@ current_player_hand = Hand()
 current_dealer_hand = Hand()   # was: current_dealer_upcard = None
 
 session_history = []
+
+# ── Live scanner ───────────────────────────────────────────────────────────────
+# Wire up after get_full_state / apply_card helpers are defined below.
+# We store a reference here and initialise after CARD MAPPING section.
+live_scanner = None   # initialised in _init_live_scanner() called at bottom
 
 
 # ══════════════════════════════════════════════════════════════
@@ -601,6 +613,405 @@ def handle_record_result(data):
     betting_engine.record_result(bet, profit)
     session_history.append({'bet': bet, 'profit': profit})
     _safe_emit('state_update', get_full_state())
+
+
+
+# ══════════════════════════════════════════════════════════════
+# LIVE SCANNER — socket handlers + REST routes
+# ══════════════════════════════════════════════════════════════
+# Initialise the scanner now that get_full_state / handle_deal_card are defined.
+
+from app.live_scanner import LiveScanner as _LiveScanner
+
+def _apply_card(rank, suit, target='seen'):
+    """Bridge: scanner thread → deal_card handler (thread-safe)."""
+    try:
+        r = RANK_MAP.get(str(rank).upper())
+        s = SUIT_MAP.get(str(suit).lower())
+        if r and s:
+            card = Card(r, s)
+            if target == 'player':
+                current_player_hand.add_card(card)
+            elif target == 'dealer':
+                current_dealer_hand.add_card(card)
+            counter.add_card(card)
+            socketio.emit('state_update', _json.loads(_json.dumps(get_full_state(), cls=_SafeEncoder)))
+    except Exception as e:
+        log.warning(f'[Live] apply_card error: {e}')
+
+def _reset_hand():
+    """Bridge: scanner new-hand signal."""
+    global current_player_hand, current_dealer_hand
+    current_player_hand = Hand()
+    current_dealer_hand = Hand()
+    socketio.emit('state_update', _json.loads(_json.dumps(get_full_state(), cls=_SafeEncoder)))
+
+live_scanner = _LiveScanner(
+    socketio=socketio,
+    get_state_fn=get_full_state,
+    apply_card_fn=_apply_card,
+    reset_hand_fn=_reset_hand,
+)
+
+
+@socketio.on('live_start')
+def handle_live_start(data=None):
+    data = data or {}
+    fps    = int(data.get('fps', 5))
+    region = data.get('region', None)
+
+    live_scanner._fps = max(1, min(30, fps))
+    if region and len(region) == 4:
+        x, y, w, h = region
+        live_scanner._roi = {'left': x, 'top': y, 'width': w, 'height': h}
+    else:
+        live_scanner._roi = None
+
+    ok = live_scanner.start()
+    emit('live_status', {
+        'running':   live_scanner.is_running,
+        'available': live_scanner.is_available,
+        'fps':       live_scanner._fps,
+        'message':   f'Live scanner started ({live_scanner._backend}, {fps}fps)' if ok
+                     else 'Screen capture unavailable — install mss: pip install mss',
+    })
+
+
+@socketio.on('live_stop')
+def handle_live_stop(data=None):
+    live_scanner.stop()
+    emit('live_status', {
+        'running':   False,
+        'available': live_scanner.is_available,
+        'message':   'Live scanner stopped',
+    })
+
+
+@socketio.on('live_set_fps')
+def handle_live_set_fps(data=None):
+    fps = int((data or {}).get('fps', 5))
+    live_scanner._fps = max(1, min(30, fps))
+    emit('live_status', {
+        'running': live_scanner.is_running,
+        'fps':     live_scanner._fps,
+        'message': f'FPS set to {fps}',
+    })
+
+
+@socketio.on('live_new_hand')
+def handle_live_new_hand(data=None):
+    _reset_hand()
+    emit('notification', {'type': 'info', 'message': 'New hand started'})
+
+
+# REST fallbacks — used when WebSocket isn't connected yet
+@app.route('/api/live/status')
+def api_live_status():
+    return jsonify({
+        'running':   live_scanner.is_running,
+        'available': live_scanner.is_available,
+        'fps':       live_scanner._fps,
+    })
+
+
+@app.route('/api/live/start', methods=['POST'])
+def api_live_start():
+    data   = request.get_json(force=True) or {}
+    fps    = int(data.get('fps', 5))
+    region = data.get('region', None)
+    live_scanner._fps = max(1, min(30, fps))
+    if region and len(region) == 4:
+        x, y, w, h = region
+        live_scanner._roi = {'left': x, 'top': y, 'width': w, 'height': h}
+    else:
+        live_scanner._roi = None
+    ok = live_scanner.start()
+    return jsonify({
+        'running':   live_scanner.is_running,
+        'available': live_scanner.is_available,
+        'message':   f'Started ({live_scanner._backend}, {fps}fps)' if ok else 'mss not installed — run: pip install mss',
+    })
+
+
+@app.route('/api/live/stop', methods=['POST'])
+def api_live_stop():
+    live_scanner.stop()
+    return jsonify({'running': False})
+
+
+@app.route('/api/live/set_fps', methods=['POST'])
+def api_live_set_fps():
+    fps = int((request.get_json(force=True) or {}).get('fps', 5))
+    live_scanner._fps = max(1, min(30, fps))
+    return jsonify({'fps': live_scanner._fps})
+
+
+@app.route('/api/live/new_hand', methods=['POST'])
+def api_live_new_hand():
+    _reset_hand()
+    return jsonify({'ok': True})
+
+
+# ── Window / tab listing ───────────────────────────────────────────────────────
+# Returns all visible OS windows so the user can pick which browser tab to scan.
+# Works on Windows (via ctypes EnumWindows), macOS (via Quartz), Linux (via xdotool/wmctrl).
+
+def _list_windows():
+    """
+    Return list of {id, title, x, y, w, h} for all visible OS windows.
+    Windows: PowerShell Get-Process (no install needed) + Chrome CDP for tabs.
+    macOS:   AppleScript.
+    Linux:   wmctrl / xdotool.
+    """
+    import platform, json as _j, subprocess
+    wins = []
+    system = platform.system()
+
+    if system == 'Windows':
+        # ── Primary: ctypes EnumWindows with full geometry ───────────────────
+        # This works reliably from any Python process on Windows — no extra
+        # tools needed, no PowerShell, no elevated permissions required.
+        try:
+            import ctypes
+            import ctypes.wintypes as wt
+
+            user32 = ctypes.windll.user32
+
+            # SetThreadDpiAwarenessContext so GetWindowRect returns physical px
+            try:
+                ctypes.windll.user32.SetThreadDpiAwarenessContext(
+                    ctypes.c_void_p(-2))   # DPI_AWARENESS_CONTEXT_SYSTEM_AWARE
+            except Exception:
+                pass
+
+            EnumProc = ctypes.WINFUNCTYPE(ctypes.c_bool, wt.HWND, wt.LPARAM)
+
+            def _enum_cb(hwnd, _):
+                try:
+                    # Skip invisible or minimised windows
+                    if not user32.IsWindowVisible(hwnd):
+                        return True
+                    if user32.IsIconic(hwnd):
+                        return True
+
+                    # Skip tool windows (system tray, popups etc.)
+                    ex_style = user32.GetWindowLongW(hwnd, -20)  # GWL_EXSTYLE
+                    if ex_style & 0x00000080:   # WS_EX_TOOLWINDOW
+                        return True
+
+                    # Skip windows with no title
+                    length = user32.GetWindowTextLengthW(hwnd)
+                    if length == 0:
+                        return True
+
+                    buf = ctypes.create_unicode_buffer(length + 1)
+                    user32.GetWindowTextW(hwnd, buf, length + 1)
+                    title = buf.value.strip()
+                    if not title:
+                        return True
+
+                    # Get window geometry
+                    rect = wt.RECT()
+                    user32.GetWindowRect(hwnd, ctypes.byref(rect))
+                    w = rect.right  - rect.left
+                    h = rect.bottom - rect.top
+                    if w < 100 or h < 100:
+                        return True
+
+                    wins.append({
+                        'id':    int(hwnd),
+                        'title': title,
+                        'x': int(rect.left),
+                        'y': int(rect.top),
+                        'w': int(w),
+                        'h': int(h),
+                    })
+                except Exception:
+                    pass
+                return True
+
+            # Keep cb_ref alive for the duration of the call
+            cb_ref = EnumProc(_enum_cb)
+            user32.EnumWindows(cb_ref, 0)
+
+        except Exception as e:
+            log.warning(f'[Win] EnumWindows: {e}')
+
+        # ── Fallback: simple PowerShell one-liner (no complex PS objects) ─────
+        # Only runs if EnumWindows produced nothing (rare edge case)
+        if not wins:
+            try:
+                ps = (
+                    'Get-Process | Where-Object {$_.MainWindowTitle} | '
+                    'Select-Object -ExpandProperty MainWindowTitle | '
+                    'ConvertTo-Json -Compress'
+                )
+                r = subprocess.run(
+                    ['powershell', '-NoProfile', '-NonInteractive',
+                     '-Command', ps],
+                    capture_output=True, text=True, timeout=3,
+                    creationflags=0x08000000,   # CREATE_NO_WINDOW
+                )
+                if r.returncode == 0 and r.stdout.strip():
+                    raw = r.stdout.strip()
+                    titles = _j.loads(raw) if raw.startswith('[') else [_j.loads(raw)]
+                    for t in (titles if isinstance(titles, list) else [titles]):
+                        title = str(t).strip()
+                        if title:
+                            wins.append({
+                                'id': title, 'title': title,
+                                'x': 0, 'y': 0, 'w': 1920, 'h': 1080,
+                            })
+            except Exception as e:
+                log.warning(f'[Win] PS fallback: {e}')
+        # ── 2. Chrome / Edge tab list via remote debugging port ───────────────
+        # Chrome/Edge must be launched with --remote-debugging-port=9222
+        # (or user can enable it). This gives us individual tab titles + URLs.
+        for port in [9222, 9223, 9224]:
+            try:
+                import urllib.request
+                resp = urllib.request.urlopen(
+                    f'http://localhost:{port}/json', timeout=0.5)
+                tabs = _j.loads(resp.read())
+                for t in tabs:
+                    if t.get('type') != 'page':
+                        continue
+                    tab_title = t.get('title', '').strip()
+                    tab_url   = t.get('url', '')
+                    if not tab_title or tab_url.startswith('chrome-extension://'):
+                        continue
+                    # Find the matching OS window to get its geometry
+                    # Match by looking for a window whose title contains the tab title (truncated)
+                    short = tab_title[:40]
+                    matched = next((w for w in wins if short.lower() in w['title'].lower()), None)
+                    geo = matched or {'x': 0, 'y': 0, 'w': 1920, 'h': 1080}
+                    wins.append({
+                        'id':    t.get('id', tab_url),
+                        'title': f'[TAB] {tab_title}',
+                        'url':   tab_url,
+                        'x': geo['x'], 'y': geo['y'], 'w': geo['w'], 'h': geo['h'],
+                        'is_tab': True,
+                    })
+            except Exception:
+                pass  # port not open — Chrome not in debug mode, skip silently
+
+    elif system == 'Darwin':
+        try:
+            import subprocess, json as _j
+            script = '''
+            tell application "System Events"
+                set wins to {}
+                repeat with proc in (every process whose visible is true)
+                    try
+                        repeat with w in (every window of proc)
+                            set pos to position of w
+                            set sz  to size of w
+                            set end of wins to {name of proc & ": " & name of w, item 1 of pos, item 2 of pos, item 1 of sz, item 2 of sz}
+                        end repeat
+                    end try
+                end repeat
+                return wins
+            end tell
+            '''
+            r = subprocess.run(['osascript', '-e', script], capture_output=True, text=True, timeout=3)
+            for line in r.stdout.strip().split(', {'):
+                parts = line.strip('{}').split(', ')
+                if len(parts) >= 5:
+                    try:
+                        wins.append({'id': parts[0], 'title': parts[0],
+                                     'x': int(parts[1]), 'y': int(parts[2]),
+                                     'w': int(parts[3]), 'h': int(parts[4])})
+                    except ValueError:
+                        pass
+        except Exception as e:
+            log.warning(f'[macOS] window list error: {e}')
+
+    else:  # Linux — try wmctrl then xdotool
+        try:
+            import subprocess
+            r = subprocess.run(['wmctrl', '-lG'], capture_output=True, text=True, timeout=3)
+            if r.returncode == 0:
+                for line in r.stdout.strip().splitlines():
+                    parts = line.split(None, 7)
+                    if len(parts) >= 8:
+                        try:
+                            wins.append({
+                                'id':    parts[0],
+                                'title': parts[7],
+                                'x': int(parts[2]), 'y': int(parts[3]),
+                                'w': int(parts[4]), 'h': int(parts[5]),
+                            })
+                        except ValueError:
+                            pass
+        except FileNotFoundError:
+            pass
+        except Exception as e:
+            log.warning(f'[Linux] wmctrl error: {e}')
+
+        if not wins:
+            try:
+                import subprocess
+                r = subprocess.run(['xdotool', 'search', '--onlyvisible', '--name', ''],
+                                   capture_output=True, text=True, timeout=3)
+                for wid in r.stdout.strip().splitlines()[:30]:
+                    try:
+                        ti = subprocess.run(['xdotool', 'getwindowname', wid],
+                                            capture_output=True, text=True, timeout=1)
+                        ge = subprocess.run(['xdotool', 'getwindowgeometry', '--shell', wid],
+                                            capture_output=True, text=True, timeout=1)
+                        title = ti.stdout.strip()
+                        geo   = dict(l.split('=') for l in ge.stdout.strip().splitlines() if '=' in l)
+                        if title and int(geo.get('WIDTH', 0)) > 50:
+                            wins.append({
+                                'id': wid, 'title': title,
+                                'x': int(geo.get('X', 0)), 'y': int(geo.get('Y', 0)),
+                                'w': int(geo.get('WIDTH', 800)), 'h': int(geo.get('HEIGHT', 600)),
+                            })
+                    except Exception:
+                        pass
+            except FileNotFoundError:
+                pass
+
+    return wins
+
+
+@app.route('/api/windows')
+def api_list_windows():
+    """List all visible OS windows for the tab-picker dropdown."""
+    try:
+        wins = _list_windows()
+        # Sort: browser windows first (Chrome, Firefox, Edge, Opera, Brave)
+        browser_kw = ['chrome', 'firefox', 'edge', 'opera', 'brave', 'safari',
+                      'stake', 'casino', 'blackjack', '21']
+        def _score(w):
+            t = w['title'].lower()
+            return -1 if any(k in t for k in browser_kw) else 0
+        wins.sort(key=_score)
+        return jsonify({'windows': wins, 'count': len(wins)})
+    except Exception as e:
+        return jsonify({'windows': [], 'error': str(e)})
+
+
+@app.route('/api/live/set_window', methods=['POST'])
+def api_live_set_window():
+    """Point the scanner at a specific window by its geometry."""
+    data = request.get_json(force=True) or {}
+    x, y, w, h = int(data.get('x', 0)), int(data.get('y', 0)), \
+                 int(data.get('w', 1920)), int(data.get('h', 1080))
+    live_scanner.set_roi(x, y, w, h)
+    return jsonify({'ok': True, 'roi': {'x': x, 'y': y, 'w': w, 'h': h}})
+
+
+@socketio.on('live_set_window')
+def handle_live_set_window(data):
+    data = data or {}
+    x, y, w, h = int(data.get('x', 0)), int(data.get('y', 0)), \
+                 int(data.get('w', 1920)), int(data.get('h', 1080))
+    live_scanner.set_roi(x, y, w, h)
+    emit('live_status', {
+        'running': live_scanner.is_running,
+        'message': f'Scanning window: {data.get("title", "selected")} ({w}×{h})',
+    })
 
 
 # ══════════════════════════════════════════════════════════════

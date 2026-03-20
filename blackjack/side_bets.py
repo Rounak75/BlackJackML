@@ -49,7 +49,7 @@ class SideBetAnalyzer:
         return {
             "perfect_pairs":     self.perfect_pairs_ev(shoe),
             "twenty_one_plus_3": self.twenty_one_plus_3_ev(shoe, player_cards, dealer_upcard),
-            "lucky_ladies":      self.lucky_ladies_ev(shoe),
+            "lucky_ladies":      self.lucky_ladies_ev(shoe, dealer_upcard),
         }
 
     # ──────────────────────────────────────────────────────────────────────
@@ -274,7 +274,7 @@ class SideBetAnalyzer:
     # LUCKY LADIES
     # ──────────────────────────────────────────────────────────────────────
 
-    def lucky_ladies_ev(self, shoe: Shoe) -> Dict:
+    def lucky_ladies_ev(self, shoe: Shoe, dealer_upcard: Card = None) -> Dict:
         """
         Lucky Ladies: pays on player's first two cards totaling 20.
         Payout tiers (highest wins, hierarchical):
@@ -315,6 +315,23 @@ class SideBetAnalyzer:
 
         # ── QH pair ────────────────────────────────────────────────────
         qh_pair = comb(qh_cnt, 2) if qh_cnt >= 2 else 0
+
+        # ── QH pair + dealer BJ (1000:1) ────────────────────────────────────
+        # Dealer BJ requires their upcard to be Ace or 10-value.
+        # If we know the dealer upcard is Ace, P(dealer BJ) ≈ 10-count/remaining.
+        # If we know it's 10-value, P(dealer BJ) ≈ ace-count/remaining.
+        # If unknown, we cannot compute this tier — set to 0.
+        p_dealer_bj = 0.0
+        if dealer_upcard is not None:
+            remaining_cards = len(shoe.cards)
+            if dealer_upcard.is_ace and remaining_cards > 0:
+                ten_cnt = by_val.get(10, 0)
+                p_dealer_bj = ten_cnt / remaining_cards
+            elif dealer_upcard.value == 10 and remaining_cards > 0:
+                ace_cnt = by_val.get(11, 0)
+                p_dealer_bj = ace_cnt / remaining_cards
+        # P(QH pair AND dealer BJ) — QH pair is from player's 2 cards
+        p_qh_dealer_bj = (qh_pair / total_combos) * p_dealer_bj if total_combos > 0 else 0
 
         # ── Matched 20: same rank + same suit, total = 20 ──────────────
         # Only 10-value cards can form a matched pair totaling 20
@@ -365,20 +382,20 @@ class SideBetAnalyzer:
 
         # ── Hierarchical tier assignment ────────────────────────────────
         # Award the HIGHEST applicable tier for each combo
-        p_qh      = qh_pair  / total_combos
+        p_qh_bj   = p_qh_dealer_bj                              # QH pair + dealer BJ: 1000:1
+        p_qh      = max(0, qh_pair / total_combos - p_qh_bj)    # QH pair (no dealer BJ): 200:1
         # matched includes QH; subtract QH to get non-QH matched tier
-        p_matched = (matched_20 - qh_pair) / total_combos
+        p_matched = max(0, (matched_20 - qh_pair) / total_combos)
         # suited_20 may overlap matched — subtract matched from suited
         suited_non_matched = max(0, suited_20 - matched_20)
         p_suited  = suited_non_matched / total_combos
         # any_20 minus the upper tiers
         any_non_special = max(0, any_20 - matched_20 - suited_non_matched)
         p_any     = any_non_special / total_combos
-        p_loss    = 1.0 - p_qh - p_matched - p_suited - p_any
-
         payouts = self.config.LUCKY_LADIES_PAYOUT
-        # FIXED: correct net EV formula + all tiers included
-        ev = (p_qh      * payouts["queen_hearts_pair"]
+        p_loss = max(0, 1.0 - p_qh_bj - p_qh - p_matched - p_suited - p_any)
+        ev = (p_qh_bj   * payouts["matched_20_with_dealer_bj"]
+              + p_qh     * payouts["queen_hearts_pair"]
               + p_matched * payouts["matched_20"]
               + p_suited  * payouts["suited_20"]
               + p_any     * payouts["any_20"]

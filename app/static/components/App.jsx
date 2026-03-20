@@ -427,14 +427,10 @@ function App() {
         {/* ── LEFT COLUMN ───────────────────────────────────────────────── */}
         <div className="flex flex-col gap-2.5">
 
-          {/* AI Recommendation — the big HIT / STAND / DOUBLE / etc. text.
-              Shows why: basic strategy vs count-based deviation.
-              The recommendation comes from the server, already computed. */}
+          {/* AI action recommendation */}
           <ActionPanel recommendation={rec} count={count} />
 
-          {/* Bet sizing and result recording.
-              Calculates Kelly Criterion optimal bet from count and bankroll.
-              Auto-resolve buttons detect BJ/bust and calculate exact profit. */}
+          {/* Bet sizing — Kelly criterion, custom bet, auto-resolve */}
           <BettingPanel
             betting={betting}
             count={count}
@@ -444,32 +440,25 @@ function App() {
             onCurrencyChange={setCurrency}
             customBet={customBet}
             onCustomBetChange={setCustomBet}
-            playerHand={playerHand}        // for auto-resolve: detect BJ, bust
-            dealerHand={dealerHand}        // for auto-resolve: detect dealer BJ
-            insurance={insurance}          // for insurance settlement in profit calc
+            playerHand={playerHand}
+            dealerHand={dealerHand}
+            insurance={insurance}
             isDoubled={isDoubled}
             onIsDoubledChange={setIsDoubled}
             tookInsurance={tookInsurance}
             onTookInsuranceChange={setTookInsurance}
           />
 
-          {/* Side bet EV — real-time expected value for optional side bets.
-              Updates every hand based on actual remaining shoe composition.
-              Usually negative EV but can flip positive with unusual shoe. */}
-          <SideBetPanel sideBets={sideBets} />
-
-          {/* Basic strategy reference table — colour-coded grid of all possible
-              hand vs upcard combinations. Highlights your current situation. */}
+          {/* Basic strategy grid */}
           <StrategyRefTable playerHand={playerHand} dealerUpcard={dealerUp} />
+
         </div>
 
 
         {/* ── CENTER COLUMN ─────────────────────────────────────────────── */}
         <div className="flex flex-col gap-2.5">
 
-          {/* Hand display — shows player and dealer cards graphically.
-              dealerHand = ALL dealer cards (not just the visible upcard).
-              insurance is shown as a separate chip when the dealer shows Ace. */}
+          {/* Hand display */}
           <HandDisplay
             playerHand={playerHand}
             dealerUpcard={dealerUp}
@@ -482,11 +471,7 @@ function App() {
             activeBet={customBet}
           />
 
-          {/* Card entry grid — 52 buttons (4 suits × 13 ranks).
-              Clicking a button calls handleDealCard.
-              Cards fade as they're dealt (via remainingByRank from shoe state).
-              P/D toggle above sets whether cards go to player or dealer.
-              Hi-Lo tag colour (+/0/-) shown on each card for quick reference. */}
+          {/* Card entry grid */}
           <CardGrid
             target={dealTarget}
             onTargetChange={setTarget}
@@ -496,59 +481,59 @@ function App() {
             dealerMustDraw={dealerMustDraw}
             dealerStands={dealerStandsFlag}
           />
+
+          {/* Compact info strip */}
+          <CenterToolbar
+            recommendation={rec}
+            count={count}
+            playerHand={playerHand}
+            dealerUpcard={dealerUp}
+            betting={betting}
+            history={history}
+            session={session}
+            currency={currency}
+          />
+
+          {/* ── Center data grid — fills empty space below cards */}
+          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+
+            {/* Side Bet EV + Session Stats side by side, equal height */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, alignItems:'stretch' }}>
+              <SideBetPanel sideBets={sideBets} />
+              <SessionStats session={session} currency={currency} />
+            </div>
+
+            {/* Count history sparkline */}
+            <CountHistoryPanel history={history} />
+
+          </div>
         </div>
 
 
         {/* ── RIGHT COLUMN ──────────────────────────────────────────────── */}
         <div className="panel-right flex flex-col gap-2.5">
 
-          {/* ─── UNIFIED CARD SCANNER PANEL ─────────────────────────────
-              This single panel handles all three entry modes.
-              The three-button toggle at the top switches between:
-
-                ✋ Manual     — reminder text; user clicks the card grid
-                📋 Screenshot — paste zone + CV detection + confirmation flow
-                🔴 Live Scan  — start/stop button; Flask scans screen via mss
-
-              All three modes ultimately call onDealCard with the same
-              signature, so the rest of the app doesn't care which mode
-              produced the card — it all flows the same way. */}
+          {/* Card scanner — Manual / Screenshot / Live Scan */}
           <LiveOverlayPanel
-            socket={socketRef.current}  // live mode listens to WebSocket events
-            count={gameState?.count}    // fallback count display before live starts
-            scanMode={scanMode}         // which of the 3 modes is currently active
-            onSetMode={setScanMode}     // called when user clicks a mode button
-            onDealCard={handleDealCard} // screenshot/live use this to submit cards
-            dealTarget={dealTarget}     // default routing when not using 'auto'
+            socket={socketRef.current}
+            count={gameState?.count}
+            scanMode={scanMode}
+            onSetMode={setScanMode}
+            onDealCard={handleDealCard}
+            dealTarget={dealTarget}
           />
 
-          {/* Shoe composition — bar chart of remaining cards by rank.
-              Shows how many 2s, 3s, … 10s, Aces are left in the shoe.
-              Useful for visualising why the count is high or low. */}
+          {/* Shoe composition */}
           <ShoePanel shoe={shoe} />
 
-          {/* Edge meter — visual gauge showing current player advantage.
-              Ranges from about -2% (strongly negative count) to +2% (hot shoe).
-              Goes green above 0%, red below. */}
+          {/* Edge meter */}
           <EdgeMeter count={count} />
 
-          {/* Session stats — running totals for this session.
-              Hands played, win rate, total profit/loss, estimated hourly rate. */}
-          <SessionStats session={session} currency={currency} />
-
-          {/* ML shuffle tracker — Bayesian model that tries to track
-              card clumping across imperfect shuffles (riffle, strip etc.).
-              Adds a small adjustment to the true count when it detects bias. */}
-          <ShuffleTrackerPanel tracker={tracker} />
-
-          {/* Count history — sparkline chart of the true count over the last
-              60 cards, plus a scrollable log of each card and its count value. */}
-          <CountHistoryPanel history={history} />
-
-          {/* Illustrious 18 panel — cheat sheet showing which count-based
-              deviations from basic strategy are currently active or close to
-              triggering based on the current true count. */}
+          {/* Illustrious 18 + Fab 4 */}
           <I18Panel count={count} />
+
+          {/* ML shuffle tracker */}
+          <ShuffleTrackerPanel tracker={tracker} />
         </div>
 
       </div>

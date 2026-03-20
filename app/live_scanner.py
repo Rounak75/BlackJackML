@@ -328,6 +328,29 @@ class LiveScanner:
                     if isinstance(o, _np.ndarray):   return o.tolist()
                     return super().default(o)
 
-            self.socketio.emit('state_update', _j.loads(_j.dumps(state, cls=_E)))
+            clean = _j.loads(_j.dumps(state, cls=_E))
+            self.socketio.emit('state_update', clean)
+
+            # Also emit live_update so LiveMode overlay panel gets rich data
+            # (count bar, bet badge, recommendation, hand value etc.)
+            count = clean.get('count', {})
+            rec   = clean.get('recommendation', {})
+            bet   = clean.get('betting', {})
+            ph    = clean.get('player_hand', {})
+            self.socketio.emit('live_update', {
+                'running':        self.is_running,
+                'stable':         len(self._prev_cards) > 0,
+                'cards_detected': len(self._prev_cards),
+                'true_count':     count.get('true', 0),
+                'rc':             count.get('running', 0),
+                'advantage':      count.get('advantage', 0),
+                'decks_remaining':count.get('decks_remaining', '—'),
+                'recommendation': rec,
+                'bet':            bet.get('recommended_bet', 0),
+                'bet_action':     bet.get('action', ''),
+                'hand_value':     ph.get('value', 0),
+                'is_soft':        ph.get('is_soft', False),
+                'cards_this_hand':len(ph.get('cards', [])),
+            })
         except Exception as e:
             log.error(f'[Live] push_state error: {e}')

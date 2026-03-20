@@ -63,7 +63,7 @@ class BettingEngine:
         if advantage is None:
             # House edge 0.50% with perfect basic strategy (8-deck S17, RTP 99.50%)
             # Each +1 true count = +0.5% player advantage
-            advantage = -0.005 + (true_count * 0.005)
+            advantage = -0.0043 + (true_count * 0.005)  # 8-deck S17 base edge 0.43%
 
         # Calculate spread-based bet
         spread_bet = self._spread_bet(true_count)

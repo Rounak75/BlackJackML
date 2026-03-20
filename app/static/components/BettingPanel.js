@@ -371,7 +371,7 @@ function BettingPanel({
           {[0.5, 1, 2, 5].map(mult => (
             <button
               key={mult}
-              onClick={() => onCustomBetChange(parseFloat((betting.recommended_bet * mult).toFixed(dec)))}
+              onClick={() => onCustomBetChange(parseFloat((activeBet * mult).toFixed(dec)))}
               className="text-[10px] px-2 py-1.5 rounded-md font-semibold"
               style={{
                 background: '#212d45',
