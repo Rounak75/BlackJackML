@@ -599,4 +599,4 @@ def start_server(host: str = '0.0.0.0', port: int = 5000, debug: bool = False):
 
 
 if __name__ == '__main__':
-    start_server(debug=True)
+    start_server(debug=True) #Test
