@@ -541,7 +541,7 @@ class BlackjackDecisionModel:
         Automatically rebuilds the network if the saved input_dim or
         trunk_dim differs from the class default — no size mismatches.
         """
-        checkpoint = torch.load(path, map_location=self.device)
+        checkpoint = torch.load(path, map_location=self.device, weights_only=True)
 
         saved_input_dim = checkpoint.get("input_dim", 28)
         saved_trunk_dim = checkpoint.get("trunk_dim", 256)

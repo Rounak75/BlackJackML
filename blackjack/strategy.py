@@ -135,7 +135,6 @@ SURRENDER_TABLE = {
     (16, 11): True,   # 16 vs Ace
     (15, 10): True,
     (15, 11): True,   # 15 vs Ace — surrender in 8-deck S17
-    (17, 11): True,   # Hard 17 vs Ace — surrender in 8-deck S17
 }
 
 

@@ -132,10 +132,9 @@ class Hand:
 
     @property
     def can_split(self) -> bool:
-        """Rule: Split initial cards of equal value.
-        This includes same-rank pairs (A-A, 8-8) AND different ten-value
-        cards (J-Q, K-10) since all face cards and 10s are worth 10."""
-        return self.is_pair or self.is_ten_pair
+        """Rule: Split only same-rank pairs (A-A, 8-8, K-K etc.).
+        Standard casino rules require matching rank to split."""
+        return self.is_pair
 
     @property
     def is_split_ace_hand(self) -> bool:

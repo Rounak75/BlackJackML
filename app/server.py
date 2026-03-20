@@ -30,7 +30,7 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
-from flask import Flask, render_template, jsonify
+from flask import Flask, render_template, jsonify, request
 from flask_socketio import SocketIO, emit
 
 import sys
@@ -425,6 +425,42 @@ def api_state():
     return jsonify(get_full_state())
 
 
+@app.route('/api/detect_cards', methods=['POST'])
+def api_detect_cards():
+    """
+    Computer vision card detection endpoint.
+
+    Accepts a base64-encoded screenshot frame, runs the CV pipeline,
+    and returns a list of detected cards with confidence scores.
+
+    Request JSON:  { "frame": "<base64 image string>" }
+    Response JSON: { "cards": [ {rank, suit, confidence, bbox}, ... ] }
+
+    The browser captures the frame via getDisplayMedia() (screen share)
+    or getUserMedia() (webcam) and sends one JPEG frame here.
+    The UI shows a confirmation dialog before cards are applied.
+    """
+    try:
+        from app.cv_detector import detect_from_base64
+    except ImportError:
+        try:
+            from cv_detector import detect_from_base64
+        except ImportError:
+            return jsonify({'error': 'cv_detector module not found', 'cards': []}), 500
+
+    try:
+        data      = request.get_json(force=True) or {}
+        frame_b64 = data.get('frame', '')
+        if not frame_b64:
+            return jsonify({'error': 'No frame data', 'cards': []}), 400
+
+        detections = detect_from_base64(frame_b64)
+        return jsonify({'cards': detections})
+
+    except Exception as exc:
+        return jsonify({'error': str(exc), 'cards': []}), 500
+
+
 # ══════════════════════════════════════════════════════════════
 # WEBSOCKET EVENT HANDLERS
 # ══════════════════════════════════════════════════════════════
@@ -599,4 +635,4 @@ def start_server(host: str = '0.0.0.0', port: int = 5000, debug: bool = False):
 
 
 if __name__ == '__main__':
-    start_server(debug=True) #Test
+    start_server(debug=True)

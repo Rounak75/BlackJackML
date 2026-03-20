@@ -76,11 +76,39 @@ function ActionPanel({ recommendation, count }) {
           >
             Why this action?
           </div>
-          {lines.map((line, i) => (
-            <p key={i} className="text-xs leading-relaxed mb-1" style={{ color: '#b0bfd8' }}>
-              {line}
-            </p>
-          ))}
+          {lines.map((line, i) => {
+            // First line of a deviation is the trigger badge
+            const isTrigger = isDev && i === 0;
+            // Last line starting with 💡 is the pro tip
+            const isTip = line.startsWith('💡');
+            return (
+              <p
+                key={i}
+                className="text-xs leading-relaxed mb-2"
+                style={{
+                  color: isTrigger ? '#b99bff'
+                       : isTip     ? '#ffd447'
+                       : '#b0bfd8',
+                  background: isTrigger
+                    ? 'rgba(185,155,255,0.08)'
+                    : isTip
+                    ? 'rgba(255,212,71,0.06)'
+                    : 'transparent',
+                  borderLeft: isTrigger
+                    ? '2px solid rgba(185,155,255,0.5)'
+                    : isTip
+                    ? '2px solid rgba(255,212,71,0.4)'
+                    : 'none',
+                  padding: (isTrigger || isTip) ? '4px 8px' : '0',
+                  borderRadius: 4,
+                  fontFamily: isTrigger ? 'var(--font-mono, monospace)' : 'inherit',
+                  fontSize: isTrigger ? '10px' : '11px',
+                }}
+              >
+                {line}
+              </p>
+            );
+          })}
         </div>
       )}
     </Widget>

@@ -46,6 +46,7 @@ function App() {
   // Lifted from BettingPanel so HandDisplay can read them
   const [isDoubled,     setIsDoubled]     = useState(false)
   const [tookInsurance, setTookInsurance] = useState(false)
+  const [cvMode,        setCvMode]        = useState(false)
 
   const socketRef      = useRef(null)
   const undoStack      = useRef([])
@@ -88,11 +89,11 @@ function App() {
 
   // ── Handlers ───────────────────────────────────────────
 
-  const handleDealCard = useCallback((rank, suit) => {
-    const target = dealTargetRef.current   // always current — no stale closure
+  const handleDealCard = useCallback((rank, suit, targetOverride) => {
+    const target = targetOverride || dealTargetRef.current
     undoStack.current.push({ rank, suit, target })
     socketRef.current?.emit('deal_card', { rank, suit, target })
-  }, [])  // no dependency needed — reads ref synchronously
+  }, [])
 
   const handleNewHand = useCallback(() => {
     undoStack.current = []
@@ -288,6 +289,12 @@ function App() {
 
         {/* RIGHT */}
         <div className="panel-right flex flex-col gap-2.5">
+          <CVScanPanel
+            onDealCard={handleDealCard}
+            dealTarget={dealTarget}
+            cvMode={cvMode}
+            onToggle={() => setCvMode(m => !m)}
+          />
           <ShoePanel shoe={shoe} />
           <EdgeMeter count={count} />
           <SessionStats session={session} currency={currency} />

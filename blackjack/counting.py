@@ -79,7 +79,7 @@ class CardCounter:
     def decks_remaining(self) -> float:
         total = self.num_decks * 52
         remaining = total - self.cards_seen
-        return max(remaining / 52.0, 0.5)  # Floor at 0.5 decks minimum — prevents division by near-zero
+        return max(remaining / 52.0, 0.25)  # Floor at 0.25 (13 cards) — more accurate late-shoe TC
 
     @property
     def true_count(self) -> float:
