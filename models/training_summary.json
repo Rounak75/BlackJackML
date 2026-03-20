@@ -1,0 +1,17 @@
+{
+  "best_accuracy": 0.999766,
+  "best_epoch": 52,
+  "total_epochs_run": 60,
+  "stopped_early": false,
+  "num_hands": 2588429,
+  "training_time_s": 27678.4,
+  "device": "cpu",
+  "per_action_acc": {
+    "hit": 0.9997,
+    "stand": 0.9998,
+    "double": 0.9999,
+    "split": 0.9995,
+    "surrender": 1.0
+  },
+  "saved_at": "2026-03-20T13:47:58.059686Z"
+}

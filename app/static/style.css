@@ -1,0 +1,431 @@
+/*
+ * app/static/style.css — BlackjackML Dashboard (Redesigned)
+ * ─────────────────────────────────────────────────────────
+ * Improved visibility: higher contrast, brighter text, bolder UI.
+ */
+
+/* ══════════════════════════════════════════════════════════
+   CSS CUSTOM PROPERTIES
+   ══════════════════════════════════════════════════════════ */
+:root {
+  /* Backgrounds — slightly lighter for better contrast */
+  --bg-0: #0a0e18;
+  --bg-1: #111827;
+  --bg-2: #1a2236;
+  --bg-3: #212d45;
+  --bg-4: #2a3a58;
+
+  /* Borders — more visible */
+  --border:        rgba(255, 255, 255, 0.12);
+  --border-bright: rgba(255, 255, 255, 0.22);
+
+  /* Text — significantly brighter */
+  --text-0: #f0f4ff;   /* Primary — near white */
+  --text-1: #b0bfd8;   /* Secondary */
+  --text-2: #7a8eab;   /* Muted / labels */
+
+  /* Accent colours — brighter, more saturated */
+  --gold:   #ffd447;
+  --jade:   #44e882;
+  --ruby:   #ff5c5c;
+  --sapph:  #6aafff;
+  --ameth:  #b99bff;
+
+  /* Action colours */
+  --action-hit:       #44e882;
+  --action-stand:     #6aafff;
+  --action-double:    #ffd447;
+  --action-split:     #b99bff;
+  --action-surrender: #ff5c5c;
+
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --t:    0.18s var(--ease);
+}
+
+/* ══════════════════════════════════════════════════════════
+   GLOBAL RESET
+   ══════════════════════════════════════════════════════════ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 14px;
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--text-0);
+  font-family: 'DM Sans', sans-serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ══════════════════════════════════════════════════════════
+   SCROLLBARS
+   ══════════════════════════════════════════════════════════ */
+::-webkit-scrollbar        { width: 5px; height: 5px; }
+::-webkit-scrollbar-track  { background: transparent; }
+::-webkit-scrollbar-thumb  { background: var(--border-bright); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-2); }
+* { scrollbar-width: thin; scrollbar-color: var(--border-bright) transparent; }
+
+/* ══════════════════════════════════════════════════════════
+   ACTION DISPLAY — big recommendation text
+   ══════════════════════════════════════════════════════════ */
+.action-text-base {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  transition: color 0.3s var(--ease), text-shadow 0.3s var(--ease);
+}
+
+.action-hit       { color: var(--action-hit);       text-shadow: 0 0 50px rgba(68, 232, 130, 0.55); }
+.action-stand     { color: var(--action-stand);     text-shadow: 0 0 50px rgba(106, 175, 255, 0.55); }
+.action-double    { color: var(--action-double);    text-shadow: 0 0 50px rgba(255, 212, 71, 0.55); }
+.action-split     { color: var(--action-split);     text-shadow: 0 0 50px rgba(185, 155, 255, 0.55); }
+.action-surrender { color: var(--action-surrender); text-shadow: 0 0 50px rgba(255, 92, 92, 0.55); }
+
+/* ══════════════════════════════════════════════════════════
+   MINI PLAYING CARDS
+   ══════════════════════════════════════════════════════════ */
+.mini-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 64px;
+  border-radius: 7px;
+  background: var(--bg-2);
+  border: 1.5px solid var(--border-bright);
+  font-family: 'DM Mono', monospace;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-0);
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.55);
+  animation: cardDeal 0.22s var(--ease);
+  user-select: none;
+}
+
+.mini-card.red   { color: #ff7a7a; border-color: rgba(255, 92, 92, 0.5); }
+.mini-card.black { color: var(--text-0); }
+.mini-card .card-suit { font-size: 0.7rem; line-height: 1; }
+
+@keyframes cardDeal {
+  from { opacity: 0; transform: translateY(-16px) scale(0.8); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   CARD GRID BUTTONS
+   ══════════════════════════════════════════════════════════ */
+.card-btn {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  aspect-ratio: 0.72;
+  min-height: 44px;
+  border: 1.5px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-1);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-0);
+  cursor: pointer;
+  transition: all var(--t);
+  overflow: hidden;
+}
+
+.card-btn:hover {
+  background: var(--bg-3);
+  border-color: var(--gold);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.55), 0 0 10px rgba(255,212,71,0.15);
+  z-index: 1;
+  color: #fff;
+}
+
+.card-btn:active { transform: translateY(-1px); }
+
+.card-btn.red-card          { color: #ff7a7a; }
+.card-btn.red-card:hover    { border-color: #ff5c5c; box-shadow: 0 8px 20px rgba(0,0,0,0.55), 0 0 10px rgba(255,92,92,0.2); color: #ff9999; }
+
+.card-btn.count-pos::after  { content: "+"; position: absolute; top: 2px; right: 3px; font-size: 0.52rem; color: var(--jade); line-height: 1; }
+.card-btn.count-neg::after  { content: "−"; position: absolute; top: 2px; right: 3px; font-size: 0.52rem; color: var(--ruby); line-height: 1; }
+.card-btn.depleted { opacity: 0.28; }
+.card-btn .btn-suit { font-size: 0.6rem; }
+
+/* ══════════════════════════════════════════════════════════
+   SHOE COMPOSITION BARS
+   ══════════════════════════════════════════════════════════ */
+.shoe-bar {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  border-radius: 3px;
+  transition: height 0.55s var(--ease);
+  min-height: 2px;
+}
+.shoe-bar.high { background: linear-gradient(to top, var(--ruby), rgba(255, 92, 92, 0.55)); }
+.shoe-bar.low  { background: linear-gradient(to top, var(--jade), rgba(68, 232, 130, 0.55)); }
+.shoe-bar.mid  { background: linear-gradient(to top, var(--sapph), rgba(106, 175, 255, 0.55)); }
+
+/* ══════════════════════════════════════════════════════════
+   COUNT VALUE COLOURS
+   ══════════════════════════════════════════════════════════ */
+.count-pos     { color: var(--jade)  !important; }
+.count-neg     { color: var(--ruby)  !important; }
+.count-hot     { color: var(--gold)  !important; text-shadow: 0 0 14px rgba(255, 212, 71, 0.6); }
+.count-neutral { color: var(--text-1) !important; }
+
+/* ══════════════════════════════════════════════════════════
+   STRATEGY REFERENCE TABLE
+   ══════════════════════════════════════════════════════════ */
+.strat-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem;
+}
+
+.strat-table th,
+.strat-table td {
+  padding: 4px 5px;
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.strat-table th    { background: var(--bg-1); color: var(--text-1); font-weight: 700; }
+.strat-table .rlbl { background: var(--bg-1); color: var(--text-0); font-weight: 700; }
+
+.s-H   { background: rgba(68, 232, 130, 0.18); color: #5df59a; }
+.s-S   { background: rgba(106, 175, 255, 0.18); color: #7dc0ff; }
+.s-D   { background: rgba(255, 212, 71, 0.18); color: #ffd447; }
+.s-Ds  { background: rgba(255, 160, 70, 0.18); color: #ffb060; }
+.s-SP  { background: rgba(185, 155, 255, 0.18); color: #c4a8ff; }
+.s-SY  { background: rgba(185, 155, 255, 0.10); color: #b99bff; }
+.s-SUR { background: rgba(255, 92, 92, 0.18);  color: #ff7070; }
+
+.cell-hl {
+  outline: 2px solid var(--gold);
+  outline-offset: -2px;
+  z-index: 1;
+  position: relative;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PROGRESS / METER BARS
+   ══════════════════════════════════════════════════════════ */
+.edge-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.5s var(--ease);
+  background: linear-gradient(90deg, var(--ruby), var(--gold), var(--jade));
+}
+
+.pen-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--jade), var(--gold), var(--ruby));
+  transition: width 0.5s var(--ease);
+}
+
+.ml-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--ameth), #d0bcff);
+  transition: width 0.5s var(--ease);
+}
+
+/* ══════════════════════════════════════════════════════════
+   COUNT HISTORY CANVAS
+   ══════════════════════════════════════════════════════════ */
+#count-canvas {
+  width: 100%;
+  height: 90px;
+  display: block;
+  border-radius: 6px;
+  background: var(--bg-1);
+}
+
+/* ══════════════════════════════════════════════════════════
+   TOAST NOTIFICATIONS
+   ══════════════════════════════════════════════════════════ */
+.toast {
+  padding: 11px 18px;
+  border-radius: 10px;
+  background: var(--bg-3);
+  border: 1px solid var(--border-bright);
+  color: var(--text-0);
+  font-size: 0.8rem;
+  font-weight: 500;
+  max-width: 340px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+  animation: toastSlide 0.25s var(--ease);
+  transition: opacity 0.3s, transform 0.3s;
+}
+
+.toast.info    { border-left: 3px solid var(--sapph); }
+.toast.success { border-left: 3px solid var(--jade); }
+.toast.warning { border-left: 3px solid var(--gold); }
+.toast.error   { border-left: 3px solid var(--ruby); }
+
+@keyframes toastSlide {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ══════════════════════════════════════════════════════════
+   KEYBOARD SHORTCUT BAR
+   ══════════════════════════════════════════════════════════ */
+.shortcut-hint {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 0.65rem;
+  color: var(--text-1);
+  background: rgba(17, 24, 39, 0.9);
+  border: 1px solid var(--border-bright);
+  border-radius: 999px;
+  padding: 4px 16px;
+  backdrop-filter: blur(12px);
+  pointer-events: none;
+  white-space: nowrap;
+  letter-spacing: 0.02em;
+}
+
+.shortcut-hint kbd {
+  background: var(--bg-4);
+  border: 1px solid var(--border-bright);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  color: var(--text-0);
+}
+
+/* ══════════════════════════════════════════════════════════
+   ILLUSTRIOUS 18 DEVIATION ROWS
+   ══════════════════════════════════════════════════════════ */
+.i18-row {
+  transition: background var(--t), border-color var(--t);
+}
+
+.i18-row.active-dev {
+  border-color: rgba(255, 212, 71, 0.5) !important;
+  background: rgba(255, 212, 71, 0.08) !important;
+}
+
+.i18-row.active-dev .dev-sit { color: var(--gold); }
+
+/* ══════════════════════════════════════════════════════════
+   WIDGET / PANEL CARDS — elevated look
+   ══════════════════════════════════════════════════════════ */
+.widget-card {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.widget-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 700;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-1);
+  margin-bottom: 10px;
+}
+
+/* ══════════════════════════════════════════════════════════
+   TOPBAR CONTROLS — better visibility
+   ══════════════════════════════════════════════════════════ */
+.topbar-select {
+  background: var(--bg-3);
+  border: 1.5px solid var(--border-bright);
+  color: var(--text-0);
+  font-size: 0.75rem;
+  border-radius: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  outline: none;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.topbar-select:focus { border-color: var(--gold); }
+
+.topbar-btn {
+  background: var(--bg-3);
+  border: 1.5px solid var(--border-bright);
+  color: var(--text-0);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--t);
+  font-family: 'DM Sans', sans-serif;
+  white-space: nowrap;
+}
+
+.topbar-btn:hover {
+  background: var(--bg-4);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.topbar-btn.danger {
+  background: rgba(255, 92, 92, 0.12);
+  border-color: rgba(255, 92, 92, 0.4);
+  color: var(--ruby);
+}
+
+.topbar-btn.danger:hover {
+  background: rgba(255, 92, 92, 0.22);
+  border-color: var(--ruby);
+}
+
+/* ══════════════════════════════════════════════════════════
+   RESPONSIVE BREAKPOINTS
+   ══════════════════════════════════════════════════════════ */
+@media (max-width: 1280px) {
+  html { font-size: 13px; }
+}
+
+@media (max-width: 1024px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+  .panel-right {
+    grid-column: 1 / -1;
+    display: flex !important;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .panel-right > * { flex: 1; min-width: 240px; }
+}
+
+@media (max-width: 700px) {
+  html { font-size: 12px; }
+  .dashboard-grid {
+    grid-template-columns: 1fr !important;
+    padding: 6px !important;
+  }
+  .card-grid-inner {
+    grid-template-columns: repeat(7, 1fr) !important;
+  }
+}

@@ -1,0 +1,389 @@
+"""
+╔══════════════════════════════════════════════════════════════════════════════╗
+║  blackjack/game.py — Hand, Round, and Table                                 ║
+║                                                                              ║
+║  WHAT THIS FILE DOES:                                                        ║
+║  • Action     = the five things a player can do (hit/stand/double/etc.)    ║
+║  • HandResult = the six possible outcomes of a hand                         ║
+║  • Hand       = a player or dealer hand (cards + bet + state flags)        ║
+║  • Round      = one complete round: deal → play → resolve                  ║
+║  • BlackjackTable = the table: manages shoe, rounds, and running totals     ║
+║                                                                              ║
+║  KEY CONCEPTS FOR BEGINNERS:                                                 ║
+║  ────────────────────────────                                                ║
+║  A Hand stores cards and computes blackjack values automatically.           ║
+║  It handles the Ace being worth 1 or 11 via the values property.           ║
+║                                                                              ║
+║  Soft hand = has a usable Ace worth 11 (A+6 = "soft 17")                   ║
+║  Hard hand = Ace worth 1, or no Ace (10+7 = "hard 17")                     ║
+║                                                                              ║
+║  HOW TO USE:                                                                 ║
+║    from blackjack.game import Hand, Round, Action                           ║
+║    hand = Hand(bet=25)                                                       ║
+║    hand.add_card(card1)                                                      ║
+║    hand.add_card(card2)                                                      ║
+║    print(hand.best_value)     # highest non-bust total                      ║
+║    print(hand.is_soft)        # True if Ace counts as 11                    ║
+║    print(hand.is_blackjack)   # True for natural 21                         ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+"""
+from typing import List, Optional, Tuple
+from .card import Card, Shoe, ShuffleType
+from enum import Enum
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from config import GameConfig
+
+
+class Action(Enum):
+    HIT = "hit"
+    STAND = "stand"
+    DOUBLE = "double"
+    SPLIT = "split"
+    SURRENDER = "surrender"
+    INSURANCE = "insurance"
+
+
+class HandResult(Enum):
+    WIN = "win"
+    LOSS = "loss"
+    PUSH = "push"
+    BLACKJACK = "blackjack"
+    SURRENDER = "surrender"
+    PENDING = "pending"
+
+
+class Hand:
+    """A blackjack hand (player or dealer)."""
+
+    def __init__(self, bet: float = 0):
+        self.cards: List[Card] = []
+        self.bet = bet
+        self.is_split = False
+        self.is_doubled = False
+        self.is_surrendered = False
+        self.is_insured = False
+        self.insurance_bet = 0.0
+        self.result = HandResult.PENDING
+
+    def add_card(self, card: Card):
+        self.cards.append(card)
+
+    @property
+    def values(self) -> List[int]:
+        """All possible hand values (handling soft aces)."""
+        total = 0
+        aces = 0
+        for card in self.cards:
+            if card.is_ace:
+                aces += 1
+                total += 11
+            else:
+                total += card.value
+
+        results = [total]
+        for _ in range(aces):
+            results.append(results[-1] - 10)
+
+        return sorted(set(r for r in results if r <= 21) or [min(results)])
+
+    @property
+    def best_value(self) -> int:
+        """Best (highest non-bust) value."""
+        vals = self.values
+        non_bust = [v for v in vals if v <= 21]
+        return max(non_bust) if non_bust else min(vals)
+
+    @property
+    def is_soft(self) -> bool:
+        """Whether the hand contains a usable ace."""
+        total = sum(11 if c.is_ace else c.value for c in self.cards)
+        if total > 21:
+            return False
+        aces = sum(1 for c in self.cards if c.is_ace)
+        if aces == 0:
+            return False
+        # Check if counting one ace as 11 still keeps us <= 21
+        hard_total = sum(1 if c.is_ace else c.value for c in self.cards)
+        return (hard_total + 10) <= 21
+
+    @property
+    def is_pair(self) -> bool:
+        return len(self.cards) == 2 and self.cards[0].rank == self.cards[1].rank
+
+    @property
+    def is_ten_pair(self) -> bool:
+        """Pair of ten-value cards (may differ in rank, e.g., J-Q)."""
+        return len(self.cards) == 2 and self.cards[0].is_ten and self.cards[1].is_ten
+
+    @property
+    def is_blackjack(self) -> bool:
+        return (len(self.cards) == 2 and self.best_value == 21
+                and not self.is_split)
+
+    @property
+    def is_bust(self) -> bool:
+        return self.best_value > 21
+
+    @property
+    def can_double(self) -> bool:
+        return len(self.cards) == 2 and not self.is_doubled
+
+    @property
+    def can_split(self) -> bool:
+        """Rule: Split initial cards of equal value.
+        This includes same-rank pairs (A-A, 8-8) AND different ten-value
+        cards (J-Q, K-10) since all face cards and 10s are worth 10."""
+        return self.is_pair or self.is_ten_pair
+
+    @property
+    def is_split_ace_hand(self) -> bool:
+        """True when this hand was formed by splitting aces.
+        Rule: single card dealt to each split ace — no further hits allowed.
+        Safe to call on empty hands — returns False when no cards."""
+        if not self.cards:
+            return False
+        return self.is_split and self.cards[0].is_ace
+
+    def available_actions(self, config: GameConfig = None,
+                          num_splits_done: int = 0) -> List[Action]:
+        """Get available actions for this hand given current state."""
+        if config is None:
+            config = GameConfig()
+
+        # Rule: Single card dealt to each Split Ace — no hit, no double allowed
+        # Once the hand has 2 cards (Ace + dealt card), player must stand.
+        if self.is_split_ace_hand and len(self.cards) >= 2:
+            return [Action.STAND]
+
+        actions = [Action.HIT, Action.STAND]
+
+        # Rule: No Double after Split
+        if self.can_double:
+            if not self.is_split or config.ALLOW_DOUBLE_AFTER_SPLIT:
+                actions.append(Action.DOUBLE)
+
+        # Rule: Only one Split per hand (MAX_SPLITS=2 means 1 split creates 2 hands)
+        if self.can_split and num_splits_done < config.MAX_SPLITS - 1:
+            if not (self.cards[0].is_ace and self.is_split
+                    and not config.ALLOW_RESPLIT_ACES):
+                actions.append(Action.SPLIT)
+
+        # Rule: Surrender only on initial 2-card non-split hand
+        if (len(self.cards) == 2 and not self.is_split
+                and config.ALLOW_LATE_SURRENDER):
+            actions.append(Action.SURRENDER)
+
+        return actions
+
+    def __repr__(self) -> str:
+        cards_str = " ".join(str(c) for c in self.cards)
+        return f"Hand({cards_str} = {self.best_value})"
+
+
+class Round:
+    """A single round of blackjack."""
+
+    def __init__(self, shoe: Shoe, base_bet: float = 10):
+        self.shoe = shoe
+        self.player_hands: List[Hand] = [Hand(bet=base_bet)]
+        self.dealer_hand = Hand()
+        self.is_complete = False
+        self.total_profit = 0.0
+        self.cards_dealt_this_round: List[Card] = []
+
+    def deal_initial(self) -> Tuple[List[Card], Card]:
+        """Deal initial cards: 2 to player, 2 to dealer (one face down)."""
+        dealt = []
+        for _ in range(2):
+            card = self.shoe.deal()
+            self.player_hands[0].add_card(card)
+            dealt.append(card)
+            self.cards_dealt_this_round.append(card)
+
+        for _ in range(2):
+            card = self.shoe.deal()
+            self.dealer_hand.add_card(card)
+            dealt.append(card)
+            self.cards_dealt_this_round.append(card)
+
+        dealer_upcard = self.dealer_hand.cards[0]
+        return dealt, dealer_upcard
+
+    @property
+    def dealer_upcard(self) -> Optional[Card]:
+        if self.dealer_hand.cards:
+            return self.dealer_hand.cards[0]
+        return None
+
+    @property
+    def dealer_hole_card(self) -> Optional[Card]:
+        if len(self.dealer_hand.cards) >= 2:
+            return self.dealer_hand.cards[1]
+        return None
+
+    def player_hit(self, hand_idx: int = 0) -> Card:
+        card = self.shoe.deal()
+        self.player_hands[hand_idx].add_card(card)
+        self.cards_dealt_this_round.append(card)
+        return card
+
+    def player_double(self, hand_idx: int = 0) -> Card:
+        hand = self.player_hands[hand_idx]
+        hand.bet *= 2
+        hand.is_doubled = True
+        card = self.shoe.deal()
+        hand.add_card(card)
+        self.cards_dealt_this_round.append(card)
+        return card
+
+    def player_split(self, hand_idx: int = 0, new_bet: float = None) -> Tuple[Card, Card]:
+        hand = self.player_hands[hand_idx]
+        if new_bet is None:
+            new_bet = hand.bet
+
+        # Create new hand with second card
+        new_hand = Hand(bet=new_bet)
+        new_hand.is_split = True
+        new_hand.add_card(hand.cards.pop())
+
+        hand.is_split = True
+
+        # Deal one card to each
+        card1 = self.shoe.deal()
+        hand.add_card(card1)
+        self.cards_dealt_this_round.append(card1)
+
+        card2 = self.shoe.deal()
+        new_hand.add_card(card2)
+        self.cards_dealt_this_round.append(card2)
+
+        self.player_hands.insert(hand_idx + 1, new_hand)
+        return card1, card2
+
+    def player_surrender(self, hand_idx: int = 0):
+        hand = self.player_hands[hand_idx]
+        hand.is_surrendered = True
+        hand.result = HandResult.SURRENDER
+
+    def player_insurance(self, hand_idx: int = 0):
+        hand = self.player_hands[hand_idx]
+        hand.is_insured = True
+        hand.insurance_bet = hand.bet / 2
+
+    def play_dealer(self, h17: bool = False) -> List[Card]:
+        """Play out the dealer's hand according to rules.
+        Rule: Dealer hits on 16 or less, stands on soft 17 or more (S17).
+        h17=False (default) = Dealer STANDS on all 17s including soft 17.
+        h17=True  = Dealer HITS soft 17 only (not used for this casino).
+        """
+        dealt = []
+        while True:
+            val = self.dealer_hand.best_value
+            is_soft = self.dealer_hand.is_soft
+            # Must stand on 17+ (hard or soft) when h17=False (S17 rules)
+            if val > 17:
+                break
+            if val == 17:
+                if h17 and is_soft:
+                    pass  # H17 rule: hit soft 17 only
+                else:
+                    break  # S17 rule: stand on all 17s
+            # val <= 16: always hit
+            card = self.shoe.deal()
+            self.dealer_hand.add_card(card)
+            dealt.append(card)
+            self.cards_dealt_this_round.append(card)
+        return dealt
+
+    def resolve(self, config: GameConfig = None) -> float:
+        """Resolve all hands and calculate profit/loss."""
+        if config is None:
+            config = GameConfig()
+
+        dealer_val = self.dealer_hand.best_value
+        dealer_bj = self.dealer_hand.is_blackjack
+        total_profit = 0.0
+
+        for hand in self.player_hands:
+            if hand.result == HandResult.SURRENDER:
+                total_profit -= hand.bet / 2
+                continue
+
+            # Insurance resolution
+            if hand.is_insured:
+                if dealer_bj:
+                    total_profit += hand.insurance_bet * config.INSURANCE_PAYS
+                else:
+                    total_profit -= hand.insurance_bet
+
+            # Main bet resolution
+            if hand.is_blackjack:
+                if dealer_bj:
+                    hand.result = HandResult.PUSH
+                else:
+                    hand.result = HandResult.BLACKJACK
+                    total_profit += hand.bet * config.BLACKJACK_PAYS
+            elif hand.is_bust:
+                hand.result = HandResult.LOSS
+                total_profit -= hand.bet
+            elif dealer_bj:
+                hand.result = HandResult.LOSS
+                total_profit -= hand.bet
+            elif self.dealer_hand.is_bust:
+                hand.result = HandResult.WIN
+                total_profit += hand.bet
+            elif hand.best_value > dealer_val:
+                hand.result = HandResult.WIN
+                total_profit += hand.bet
+            elif hand.best_value < dealer_val:
+                hand.result = HandResult.LOSS
+                total_profit -= hand.bet
+            else:
+                hand.result = HandResult.PUSH
+
+        self.total_profit = total_profit
+        self.is_complete = True
+        return total_profit
+
+
+class BlackjackTable:
+    """
+    Full blackjack table managing shoe, rounds, and game flow.
+    """
+
+    def __init__(self, config: GameConfig = None):
+        self.config = config or GameConfig()
+        self.shoe = Shoe(
+            num_decks=self.config.NUM_DECKS,
+            penetration=self.config.PENETRATION,
+            burn_cards=self.config.BURN_CARDS,
+        )
+        self.round_history: List[Round] = []
+        self.current_round: Optional[Round] = None
+        self.total_hands_played = 0
+        self.total_profit = 0.0
+
+    def start_round(self, bet: float = None) -> Round:
+        """Start a new round."""
+        if self.shoe.needs_shuffle:
+            self.shoe.reshuffle()
+
+        if bet is None:
+            bet = self.config.TABLE_MIN
+
+        self.current_round = Round(self.shoe, base_bet=bet)
+        return self.current_round
+
+    def finish_round(self) -> float:
+        """Finish the current round and return profit."""
+        if self.current_round is None:
+            return 0.0
+
+        profit = self.current_round.total_profit
+        self.total_profit += profit
+        self.total_hands_played += 1
+        self.round_history.append(self.current_round)
+        self.current_round = None
+        return profit

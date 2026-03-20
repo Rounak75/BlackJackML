@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!--
+  ╔══════════════════════════════════════════════════════════════╗
+  ║  app/templates/index.html — Dashboard UI                     ║
+  ║                                                              ║
+  ║  ARCHITECTURE:                                               ║
+  ║  • React (CDN) — component-based UI                         ║
+  ║  • Tailwind CSS (CDN) — utility-first styling               ║
+  ║  • Socket.IO — real-time WebSocket                          ║
+  ║                                                              ║
+  ║  COMPONENT FILES (in app/static/components/):               ║
+  ║  • constants.js    — static data, lookup tables             ║
+  ║  • utils.js        — helper functions                       ║
+  ║  • TopBar.js       — sticky header + count display          ║
+  ║  • Widget.js       — reusable card/panel wrapper            ║
+  ║  • ActionPanel.js  — AI recommendation panel                ║
+  ║  • BettingPanel.js — bet sizing + Kelly                     ║
+  ║  • SideBetPanel.js — side bet EV panel                      ║
+  ║  • HandDisplay.js  — player/dealer hand cards               ║
+  ║  • CardGrid.js     — 52-button card deal grid               ║
+  ║  • StrategyRefTable.js — basic strategy table               ║
+  ║  • ShoePanel.js    — shoe composition bars                  ║
+  ║  • EdgeMeter.js    — player/house edge bar                  ║
+  ║  • SessionStats.js — win/loss/profit tracker                ║
+  ║  • ShuffleTracker.js — ML Bayesian panel                    ║
+  ║  • CountHistory.js — sparkline + card log                   ║
+  ║  • I18Panel.js     — Illustrious 18 cheat sheet             ║
+  ║  • App.js          — root component, wires all together     ║
+  ╚══════════════════════════════════════════════════════════════╝
+  -->
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BlackjackML — Live Counter & AI Advisor</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            display: ['Syne', 'sans-serif'],
+            mono:    ['DM Mono', 'monospace'],
+            body:    ['DM Sans', 'sans-serif'],
+          },
+          colors: {
+            // Improved contrast — lighter variants for readability
+            base:  {
+              DEFAULT: '#0a0e18',
+              1: '#111827',
+              2: '#1a2236',
+              3: '#212d45',
+              4: '#2a3a58',
+            },
+            gold:  { DEFAULT: '#ffd447', dim: '#c49a18' },
+            jade:  { DEFAULT: '#44e882', dim: 'rgba(68,232,130,0.18)' },
+            ruby:  { DEFAULT: '#ff5c5c', dim: 'rgba(255,92,92,0.18)' },
+            sapph: { DEFAULT: '#6aafff', dim: 'rgba(106,175,255,0.18)' },
+            ameth: { DEFAULT: '#b99bff', dim: 'rgba(185,155,255,0.18)' },
+          },
+          boxShadow: {
+            glow: '0 0 24px rgba(255,212,71,0.18)',
+            card: '0 4px 28px rgba(0,0,0,0.5)',
+          },
+          // Brighter text shades
+          textColor: {
+            primary:   '#f0f4ff',
+            secondary: '#b0bfd8',
+            muted:     '#7a8eab',
+          },
+        }
+      }
+    }
+  </script>
+
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body class="bg-base text-white font-body min-h-screen overflow-x-hidden" style="color: #f0f4ff;">
+
+  <div id="root"></div>
+  <div id="toasts" class="fixed top-16 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+  <!-- Dependencies -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Component files (loaded in dependency order) -->
+  <script type="text/babel" src="/static/components/constants.js"></script>
+  <script type="text/babel" src="/static/components/utils.js"></script>
+  <script type="text/babel" src="/static/components/Widget.js"></script>
+  <script type="text/babel" src="/static/components/TopBar.js"></script>
+  <script type="text/babel" src="/static/components/ActionPanel.js"></script>
+  <script type="text/babel" src="/static/components/BettingPanel.js"></script>
+  <script type="text/babel" src="/static/components/SideBetPanel.js"></script>
+  <script type="text/babel" src="/static/components/HandDisplay.js"></script>
+  <script type="text/babel" src="/static/components/CardGrid.js"></script>
+  <script type="text/babel" src="/static/components/StrategyRefTable.js"></script>
+  <script type="text/babel" src="/static/components/ShoePanel.js"></script>
+  <script type="text/babel" src="/static/components/EdgeMeter.js"></script>
+  <script type="text/babel" src="/static/components/SessionStats.js"></script>
+  <script type="text/babel" src="/static/components/ShuffleTracker.js"></script>
+  <script type="text/babel" src="/static/components/CountHistory.js"></script>
+  <script type="text/babel" src="/static/components/I18Panel.js"></script>
+  <script type="text/babel" src="/static/components/App.js"></script>
+</body>
+</html>
