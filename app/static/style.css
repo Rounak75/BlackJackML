@@ -206,6 +206,59 @@ body {
 .strat-table th    { background: var(--bg-1); color: var(--text-0); font-weight: 800; }
 .strat-table .rlbl { background: var(--bg-1); color: var(--text-0); font-weight: 800; }
 
+/* ── Compact strategy table — fits full table without scrolling ── */
+.strat-table-compact {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;   /* smaller than the original 0.72rem */
+  table-layout: fixed;
+}
+
+.strat-table-compact .strat-th,
+.strat-table-compact .strat-corner,
+.strat-table-compact .strat-rlbl,
+.strat-table-compact .strat-cell {
+  padding: 2px 1px;   /* was 5px 6px — 60% less vertical space per row */
+  text-align: center;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Column header row */
+.strat-table-compact .strat-th {
+  background: var(--bg-1);
+  color: var(--text-0);
+  font-weight: 800;
+  font-size: 0.58rem;
+}
+
+/* Empty top-left corner cell */
+.strat-table-compact .strat-corner {
+  background: var(--bg-1);
+  width: 22px;
+  min-width: 22px;
+}
+
+/* Row label (hand total / pair name) */
+.strat-table-compact .strat-rlbl {
+  background: var(--bg-1);
+  color: var(--text-0);
+  font-weight: 700;
+  font-size: 0.58rem;
+  text-align: left;
+  padding-left: 3px;
+  width: 24px;
+  min-width: 24px;
+}
+
+/* Action cells */
+.strat-table-compact .strat-cell {
+  font-weight: 700;
+  font-size: 0.58rem;
+}
+
 .s-H   { background: rgba(68, 232, 130, 0.25); color: #6fffa8; font-weight: 700; }
 .s-S   { background: rgba(106, 175, 255, 0.25); color: #90d0ff; font-weight: 700; }
 .s-D   { background: rgba(255, 212, 71,  0.25); color: #ffe066; font-weight: 700; }
