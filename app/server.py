@@ -727,12 +727,18 @@ def handle_deal_card(data):
 
         _safe_emit('state_update', get_full_state())
 
+        # Notify player when cut card is reached
+        if shoe.needs_shuffle:
+            emit('notification', {
+                'type': 'warning',
+                'message': 'Cut card reached -- click Shuffle after this hand'
+            })
+
     except Exception as e:
         import traceback
         print(f'[ERROR] handle_deal_card crashed: {e}')
         traceback.print_exc()
         emit('error', {'message': f'Server error processing card: {str(e)}'})
-
 
 
 @socketio.on('player_split')

@@ -45,8 +45,8 @@ function CenterToolbar({ recommendation, count, playerHand, dealerUpcard,
   const isBust  = playerHand?.is_bust;
   const isBJ    = playerHand?.is_blackjack;
   const hasCards= (playerHand?.cards?.length ?? 0) >= 1;
-  const profit  = session?.profit ?? 0;
-  const hands   = session?.hands  ?? 0;
+  const profit = session?.total_profit ?? 0;
+  const hands  = session?.hands_played ?? 0;
   const sym     = currency?.symbol ?? '₹';
 
   // Side count values
