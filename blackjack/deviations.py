@@ -211,6 +211,15 @@ class DeviationEngine:
         for dev in ILLUSTRIOUS_18:
             if dev.matches(hand, dealer_upcard) and dev.should_deviate(true_count):
                 if dev.action in available_actions:
+                    # STAND deviations (e.g. Hard 16 vs 10 at TC>=0) mean:
+                    # "stand instead of HIT when you can't surrender."
+                    # If surrender IS available, it's still the better play —
+                    # don't let a STAND deviation override a valid surrender.
+                    if (dev.action == Action.STAND
+                            and Action.SURRENDER in available_actions
+                            and self.basic_strategy._should_surrender(
+                                hand.best_value, dealer_upcard.count_key)):
+                        continue  # let basic strategy return SUR
                     self.last_deviation_used = dev
                     return dev.action
 

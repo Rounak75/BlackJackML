@@ -30,7 +30,7 @@
 function HandDisplay({
   playerHand, dealerUpcard, dealerHand, dealerMustDraw,
   sideBets, insurance,
-  isDoubled, tookInsurance, activeBet,
+  isDoubled, tookInsurance, onInsuranceChange, activeBet, currency,
 }) {
   const bv   = playerHand?.cards?.length > 0 ? playerHand.value : null
   const bj   = playerHand?.is_blackjack
@@ -166,80 +166,161 @@ function HandDisplay({
             User confirms they took it via the toggle in BettingPanel.
         ─────────────────────────────────────────────────────────────── */}
         {insurance?.available && (
-          <div
-            className="mb-2 px-2.5 py-2 rounded-lg text-xs"
-            style={{
+          <div className="mb-3" style={{ borderRadius: 10, overflow: 'hidden' }}>
+
+            {/* ── Top info strip ─────────────────────────────────────── */}
+            <div style={{
+              padding: '8px 12px',
               background: tookInsurance
-                ? 'rgba(106,175,255,0.18)'
-                : insurance.recommended
-                ? 'rgba(106,175,255,0.12)'
-                : 'rgba(255,255,255,0.04)',
-              border: `1.5px solid ${
-                tookInsurance
-                  ? 'rgba(106,175,255,0.7)'
-                  : insurance.recommended
-                  ? 'rgba(106,175,255,0.55)'
-                  : 'rgba(255,255,255,0.12)'}`,
-            }}
-          >
-            <div className="font-bold mb-0.5 flex items-center gap-1.5"
-              style={{ color: insurance.recommended ? '#6aafff' : '#b8ccdf' }}>
-              🛡️ Insurance offered · Pays 2:1 · Costs ½ your bet
-              {/* Badge showing whether user toggled insurance ON */}
-              {tookInsurance && (
-                <span
-                  className="text-[9px] font-bold px-1.5 py-0.5 rounded-full"
-                  style={{ background: 'rgba(106,175,255,0.25)', color: '#6aafff', border: '1px solid rgba(106,175,255,0.5)' }}
-                >
-                  ✓ INSURED
-                </span>
+                ? 'rgba(106,175,255,0.15)'
+                : 'rgba(255,212,71,0.08)',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 18 }}>🛡</span>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', marginBottom: 1 }}>
+                    Insurance Available
+                    {tookInsurance && (
+                      <span style={{
+                        marginLeft: 8, fontSize: 9, fontWeight: 700, padding: '1px 6px',
+                        borderRadius: 10, background: 'rgba(106,175,255,0.3)',
+                        color: '#6aafff', border: '1px solid rgba(106,175,255,0.6)',
+                      }}>✓ INSURED</span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: 10, color: '#b8ccdf' }}>
+                    Pays 2:1 · Costs {sym}{activeBet > 0 ? (activeBet * 0.5).toFixed(0) : '½ bet'}
+                    {activeBet > 0 && tookInsurance && (
+                      <span style={{ color: '#6aafff', fontWeight: 700 }}>
+                        {' '}· win {sym}{(activeBet).toFixed(0)} if dealer BJ
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {/* EV badge */}
+              {insurance.ev !== null && (
+                <div style={{
+                  textAlign: 'right', fontSize: 11, fontFamily: 'DM Mono, monospace',
+                }}>
+                  <div style={{ fontWeight: 800, color: insurance.ev >= 0 ? '#44e882' : '#ff5c5c' }}>
+                    {insurance.ev >= 0 ? '+' : ''}{insurance.ev?.toFixed(1)}% EV
+                  </div>
+                  <div style={{ fontSize: 9, color: '#94a7c4' }}>
+                    {insurance.ten_probability?.toFixed(1)}% tens left
+                  </div>
+                </div>
               )}
             </div>
-            <div className="text-[10px] mb-1" style={{ color: '#ccdaec' }}>
-              {insurance.reason}
+
+            {/* ── AI recommendation + action button ──────────────────── */}
+            <div style={{
+              background: tookInsurance
+                ? 'rgba(106,175,255,0.10)'
+                : insurance.recommended
+                ? 'rgba(68,232,130,0.06)'
+                : 'rgba(255,92,92,0.06)',
+              padding: '10px 12px',
+              border: `1.5px solid ${
+                tookInsurance ? 'rgba(106,175,255,0.5)'
+                : insurance.recommended ? 'rgba(68,232,130,0.35)'
+                : 'rgba(255,92,92,0.25)'}`,
+              borderTop: 'none',
+            }}>
+
+              {/* Reason */}
+              <div style={{ fontSize: 10, color: '#ccdaec', marginBottom: 8, lineHeight: 1.5 }}>
+                {insurance.reason}
+              </div>
+
+              {/* Big YES / NO button */}
+              {!tookInsurance ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {/* TAKE button */}
+                  <button
+                    onClick={() => onInsuranceChange && onInsuranceChange(true)}
+                    style={{
+                      flex: insurance.recommended ? 2 : 1,
+                      padding: '9px 0', borderRadius: 8, cursor: 'pointer',
+                      fontWeight: 800, fontSize: 13, border: 'none',
+                      background: insurance.recommended
+                        ? 'linear-gradient(135deg,#44e882,#22cc66)'
+                        : 'rgba(255,255,255,0.07)',
+                      color: insurance.recommended ? '#0a0e18' : '#94a7c4',
+                      boxShadow: insurance.recommended ? '0 2px 12px rgba(68,232,130,0.35)' : 'none',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.filter = 'brightness(1.1)';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.filter = '';
+                      e.currentTarget.style.transform = '';
+                    }}
+                    title="I placed the insurance bet on the table"
+                  >
+                    ✓ Take Insurance
+                  </button>
+                  {/* DECLINE button */}
+                  <button
+                    onClick={() => onInsuranceChange && onInsuranceChange(false)}
+                    style={{
+                      flex: !insurance.recommended ? 2 : 1,
+                      padding: '9px 0', borderRadius: 8, cursor: 'pointer',
+                      fontWeight: 800, fontSize: 13, border: 'none',
+                      background: !insurance.recommended
+                        ? 'linear-gradient(135deg,#ff5c5c,#cc2222)'
+                        : 'rgba(255,255,255,0.07)',
+                      color: !insurance.recommended ? '#ffffff' : '#94a7c4',
+                      boxShadow: !insurance.recommended ? '0 2px 12px rgba(255,92,92,0.35)' : 'none',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.filter = 'brightness(1.1)';
+                      e.currentTarget.style.transform = 'translateY(-1px)';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.filter = '';
+                      e.currentTarget.style.transform = '';
+                    }}
+                    title="Skip insurance — continue playing"
+                  >
+                    ✗ Decline
+                  </button>
+                </div>
+              ) : (
+                /* Already took insurance — show settlement + undo */
+                <div>
+                  <div style={{
+                    padding: '7px 10px', borderRadius: 7, marginBottom: 6,
+                    background: 'rgba(106,175,255,0.1)', border: '1px solid rgba(106,175,255,0.3)',
+                    fontSize: 11, fontFamily: 'DM Mono, monospace', color: '#6aafff',
+                    textAlign: 'center', fontWeight: 700,
+                  }}>
+                    {dealerBj
+                      ? `🎯 Dealer BJ! Insurance pays +${sym}${(activeBet).toFixed(0)}`
+                      : dealerHand?.card_count >= 2
+                      ? `❌ No dealer BJ — lost insurance ${sym}${(activeBet * 0.5).toFixed(0)}`
+                      : `⏳ Insured ${sym}${(activeBet * 0.5).toFixed(0)} · waiting for hole card`}
+                  </div>
+                  <button
+                    onClick={() => onInsuranceChange && onInsuranceChange(false)}
+                    style={{
+                      width: '100%', padding: '5px', borderRadius: 6, cursor: 'pointer',
+                      fontSize: 10, fontWeight: 600,
+                      background: 'transparent',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: '#94a7c4',
+                    }}
+                  >
+                    ↩ Undo — I did not take insurance
+                  </button>
+                </div>
+              )}
             </div>
-            {insurance.ev !== null && (
-              <div className="text-[10px] font-mono" style={{ color: '#b8ccdf' }}>
-                EV: <span style={{ color: insurance.ev >= 0 ? '#44e882' : '#ff5c5c', fontWeight: 700 }}>
-                  {insurance.ev >= 0 ? '+' : ''}{insurance.ev?.toFixed(1)}%
-                </span>
-                &nbsp;· Ten probability: {insurance.ten_probability?.toFixed(1)}%
-              </div>
-            )}
-            {/* Only show the recommendation if user hasn't confirmed yet */}
-            {!tookInsurance && (
-              <div
-                className="mt-1.5 text-[11px] font-extrabold text-center py-1 rounded-md"
-                style={{
-                  background: insurance.recommended
-                    ? 'rgba(68,232,130,0.12)'
-                    : 'rgba(255,92,92,0.1)',
-                  color: insurance.recommended ? '#44e882' : '#ff5c5c',
-                  border: `1px solid ${insurance.recommended
-                    ? 'rgba(68,232,130,0.3)'
-                    : 'rgba(255,92,92,0.3)'}`,
-                }}
-              >
-                {insurance.recommended ? '✓ TAKE INSURANCE — toggle in Bet panel' : '✗ DECLINE INSURANCE'}
-              </div>
-            )}
-            {/* When insured, show what settlement will be */}
-            {tookInsurance && activeBet > 0 && (
-              <div
-                className="mt-1.5 text-[10px] font-mono text-center py-1 rounded-md"
-                style={{
-                  background: 'rgba(106,175,255,0.1)',
-                  color: '#6aafff',
-                  border: '1px solid rgba(106,175,255,0.3)',
-                }}
-              >
-                {dealerBj
-                  ? `Dealer BJ — insurance pays +${(activeBet * 0.5 * 2).toFixed(2)}`
-                  : dealerHand?.card_count >= 2
-                  ? `No dealer BJ — insurance lost -${(activeBet * 0.5).toFixed(2)}`
-                  : `Stake: ${(activeBet * 0.5).toFixed(2)} · awaiting hole card`}
-              </div>
-            )}
           </div>
         )}
 
@@ -288,7 +369,7 @@ function HandDisplay({
         {dealerBj && (
           <div className="mt-2 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
             style={{ background: 'rgba(255,212,71,0.15)', border: '1.5px solid rgba(255,212,71,0.5)', color: '#ffd447' }}>
-            ⚠️ DEALER BLACKJACK — resolving…
+            ⚠ DEALER BLACKJACK — resolving…
           </div>
         )}
       </div>

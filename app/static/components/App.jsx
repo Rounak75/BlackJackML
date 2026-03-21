@@ -35,8 +35,30 @@
 
 // ── Pull out the React hooks we need ──────────────────────────────────────────
 // React is loaded globally from CDN in index.html, so we destructure here.
-const { useState, useEffect, useRef, useCallback } = React;
 
+const { useState, useEffect, useRef, useCallback } = React;
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null, stack: null };
+  }
+  componentDidCatch(err, info) {
+    this.setState({ error: err.toString(), stack: info.componentStack });
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{padding:30,fontFamily:'monospace',background:'#0a0e18',color:'#f0f4ff',minHeight:'100vh'}}>
+          <div style={{color:'#ff5c5c',fontSize:22,marginBottom:16,fontWeight:800}}>BlackjackML — Render Error</div>
+          <div style={{background:'#1a2236',padding:16,borderRadius:8,marginBottom:16,border:'1px solid rgba(255,92,92,0.4)',color:'#ff9a9a',fontSize:14,lineHeight:1.7}}>{this.state.error}</div>
+          <div style={{background:'#111827',padding:16,borderRadius:8,color:'#94a7c4',fontSize:11,whiteSpace:'pre-wrap',maxHeight:400,overflowY:'auto'}}>{this.state.stack}</div>
+          <p style={{color:'#ffd447',marginTop:16,fontSize:12}}>Screenshot this and share it.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // APP — the one and only root component
@@ -481,6 +503,7 @@ function App() {
             insurance={insurance}
             isDoubled={isDoubled}
             tookInsurance={tookInsurance}
+            onInsuranceChange={setTookInsurance}
             activeBet={customBet}
             currency={currency}
           />
@@ -590,10 +613,16 @@ function App() {
   )
 }
 
-// ── Mount the App ──────────────────────────────────────────────────────────────
-// ReactDOM.createRoot() takes the <div id="root"> from index.html and hands
-// control of it to React. From this point React manages all DOM updates
-// efficiently using its virtual DOM diffing algorithm — we never touch
-// the DOM directly.
-const root = ReactDOM.createRoot(document.getElementById('root'))
-root.render(<App />)
+// Mount React app — waits for DOM to be ready so #root div exists
+function mountApp() {
+  var container = document.getElementById('root');
+  if (!container) { setTimeout(mountApp, 10); return; }
+  ReactDOM.createRoot(container).render(
+    <ErrorBoundary><App /></ErrorBoundary>
+  );
+}
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', mountApp);
+} else {
+  mountApp();
+}

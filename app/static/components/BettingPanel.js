@@ -413,18 +413,25 @@ function BettingPanel({
         {insurance?.available ? (
           <button
             onClick={() => onTookInsuranceChange(!tookInsurance)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all"
+            className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg font-bold transition-all"
             style={{
-              background: tookInsurance ? 'rgba(106,175,255,0.15)' : '#111827',
-              border: `1.5px solid ${tookInsurance ? 'rgba(106,175,255,0.6)' : 'rgba(255,255,255,0.12)'}`,
-              color: tookInsurance ? '#6aafff' : '#b8ccdf',
+              fontSize: 13,
+              background: tookInsurance
+                ? 'rgba(106,175,255,0.18)'
+                : 'rgba(255,212,71,0.10)',
+              border: `2px solid ${tookInsurance
+                ? 'rgba(106,175,255,0.7)'
+                : 'rgba(255,212,71,0.5)'}`,
+              color: tookInsurance ? '#6aafff' : '#ffd447',
+              boxShadow: tookInsurance
+                ? '0 0 10px rgba(106,175,255,0.25)'
+                : '0 0 10px rgba(255,212,71,0.2)',
             }}
           >
-            <span>🛡️</span>
-            <span>{tookInsurance ? 'INSURED' : 'Took Insurance?'}</span>
+            <span style={{ fontSize: 16 }}>🛡</span>
+            <span>{tookInsurance ? '✓ INSURED' : 'Insurance?'}</span>
           </button>
         ) : (
-          /* Placeholder so layout doesn't jump */
           <div className="flex-1" />
         )}
       </div>
@@ -492,7 +499,7 @@ function BettingPanel({
             { label: '🏆 WIN',     result: 'win',       color: '#44e882', bg: 'rgba(68,232,130,0.1)',  border: 'rgba(68,232,130,0.4)'  },
             { label: '🤝 PUSH',    result: 'push',      color: '#6aafff', bg: 'rgba(106,175,255,0.1)', border: 'rgba(106,175,255,0.4)' },
             { label: '💀 LOSS',    result: 'loss',      color: '#ff5c5c', bg: 'rgba(255,92,92,0.1)',   border: 'rgba(255,92,92,0.4)'   },
-            { label: '🏳️ SURR',   result: 'surrender', color: '#ff9a20', bg: 'rgba(255,154,32,0.1)',  border: 'rgba(255,154,32,0.4)'  },
+            { label: '🏳 SURR',   result: 'surrender', color: '#ff9a20', bg: 'rgba(255,154,32,0.1)',  border: 'rgba(255,154,32,0.4)'  },
           ].map(({ label, result, color, bg, border }) => (
             <button
               key={result}

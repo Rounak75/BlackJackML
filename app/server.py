@@ -45,8 +45,27 @@ from blackjack.deviations import DeviationEngine
 from blackjack.betting import BettingEngine
 from blackjack.side_bets import SideBetAnalyzer
 from blackjack.game import Hand, Action
-from ml_model.shuffle_tracker import ShuffleTracker
-from ml_model.model import BlackjackDecisionModel
+try:
+    from ml_model.shuffle_tracker import ShuffleTracker
+    from ml_model.model import BlackjackDecisionModel
+    ML_AVAILABLE = True
+except ImportError as _ml_err:
+    print(f"[WARNING] ML model not available ({_ml_err}). "
+          "Train the model first with: python main.py train")
+    ML_AVAILABLE = False
+    class BlackjackDecisionModel:
+        def __init__(self, *a, **kw): pass
+        def load(self, *a, **kw): return False
+        def predict(self, *a, **kw): return None
+    class ShuffleTracker:
+        def __init__(self, *a, **kw):
+            self.bayesian_confidence = 0.0
+        def observe_card(self, *a, **kw): pass
+        def get_enhanced_true_count(self, tc, *a, **kw): return tc
+        def get_count_adjustment(self): return 0.0
+        def get_state(self):
+            return {'bayesian_confidence':0,'count_adjustment':0,
+                    'ace_prediction':None,'shuffles_tracked':0}
 from config import GameConfig, CountingConfig, BettingConfig, MLConfig
 
 
@@ -595,6 +614,15 @@ def get_full_state():
 # ══════════════════════════════════════════════════════════════
 # HTTP ROUTES
 # ══════════════════════════════════════════════════════════════
+
+@app.route('/test')
+def test_page():
+    return render_template('test.html')
+
+@app.route('/diag')
+def diag():
+    return render_template('diag.html')
+
 
 @app.route('/')
 def index():
