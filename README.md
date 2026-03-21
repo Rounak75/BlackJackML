@@ -10,6 +10,7 @@
 [![React 18](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)](https://react.dev)
 [![OpenCV](https://img.shields.io/badge/OpenCV-4.8+-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org)
 [![Tesseract](https://img.shields.io/badge/Tesseract-5.x-brightgreen)](https://github.com/tesseract-ocr/tesseract)
+[![Node.js 18+](https://img.shields.io/badge/Node.js-18+-339933?logo=node.js&logoColor=white)](https://nodejs.org)
 
 ---
 
@@ -19,23 +20,24 @@
 2. [How Everything Fits Together](#-how-everything-fits-together-read-this-first)
 3. [Quick Start — Complete Setup](#-quick-start--complete-setup)
 4. [Project Structure](#-project-structure)
-5. [Training the Blackjack Strategy AI From Scratch](#-training-the-blackjack-strategy-ai-from-scratch)
-6. [What the Strategy Model Actually Learns](#-what-the-strategy-model-actually-learns)
-7. [Fine-Tuning the Strategy Model](#-fine-tuning-the-strategy-model)
-8. [YOLO Card Detection — Full Setup Guide](#-yolo-card-detection--full-setup-guide)
-9. [Dataset Sources for YOLO](#-dataset-sources-for-yolo)
-10. [Fine-Tuning YOLO for Your Casino](#-fine-tuning-yolo-for-your-casino)
-11. [OpenCV + Tesseract OCR Fallback](#-opencv--tesseract-ocr-fallback)
-12. [Running the Dashboard](#-running-the-dashboard)
-13. [How to Use the Dashboard](#-how-to-use-the-dashboard)
-14. [Three Card Entry Modes](#-three-card-entry-modes)
-15. [How Card Routing Works](#-how-card-routing-works-your-cards-vs-others)
-16. [Model Performance & Accuracy](#-model-performance--accuracy)
-17. [Player Advantage Analysis](#-player-advantage-analysis)
-18. [Customising Settings](#-customising-settings)
-19. [Deployment](#-deployment)
-20. [Troubleshooting](#-troubleshooting)
-21. [Architecture Deep Dive](#-architecture-deep-dive)
+5. [How the Frontend Build Works](#-how-the-frontend-build-works-read-this-if-you-edit-any-js-files)
+6. [Training the Blackjack Strategy AI From Scratch](#-training-the-blackjack-strategy-ai-from-scratch)
+7. [What the Strategy Model Actually Learns](#-what-the-strategy-model-actually-learns)
+8. [Fine-Tuning the Strategy Model](#-fine-tuning-the-strategy-model)
+9. [YOLO Card Detection — Full Setup Guide](#-yolo-card-detection--full-setup-guide)
+10. [Training YOLO with the Roboflow 20,000-Image Dataset](#-training-yolo-with-the-roboflow-20000-image-dataset)
+11. [Fine-Tuning YOLO for Your Specific Casino](#-fine-tuning-yolo-for-your-specific-casino)
+12. [OpenCV + Tesseract OCR Fallback](#-opencv--tesseract-ocr-fallback)
+13. [Running the Dashboard](#-running-the-dashboard)
+14. [How to Use the Dashboard](#-how-to-use-the-dashboard)
+15. [Three Card Entry Modes](#-three-card-entry-modes)
+16. [How Card Routing Works](#-how-card-routing-works-your-cards-vs-others)
+17. [Model Performance & Accuracy](#-model-performance--accuracy)
+18. [Player Advantage Analysis](#-player-advantage-analysis)
+19. [Customising Settings](#-customising-settings)
+20. [Deployment](#-deployment)
+21. [Troubleshooting](#-troubleshooting)
+22. [Architecture Deep Dive](#-architecture-deep-dive)
 
 ---
 
@@ -70,7 +72,7 @@ BlackjackML has TWO completely separate AI systems:
 
 ┌─────────────────────────────────────────────────────────────────┐
 │  SYSTEM 1 — Card Detection (YOLO + OpenCV + Tesseract)          │
-│  ───────────────────────────────────────────────────────────── │
+│  ─────────────────────────────────────────────────────────────  │
 │  PURPOSE: Look at a screenshot or live screen capture and       │
 │           identify which cards are visible.                     │
 │                                                                 │
@@ -88,7 +90,7 @@ BlackjackML has TWO completely separate AI systems:
                             ↓
 ┌─────────────────────────────────────────────────────────────────┐
 │  SYSTEM 2 — Strategy AI (PyTorch Neural Network)                │
-│  ───────────────────────────────────────────────────────────── │
+│  ─────────────────────────────────────────────────────────────  │
 │  PURPOSE: Given the current hand situation and running count,   │
 │           recommend the best action and bet size.               │
 │                                                                 │
@@ -127,17 +129,36 @@ python --version
 # Should show: Python 3.10.x or higher
 ```
 
-### Step 2 — Open a terminal in the project folder
+### Step 2 — Install Node.js 18+
+
+Node.js is required to rebuild the frontend bundle when you edit any `.js` component file.
+You only need it for development — **not** to run the dashboard.
+
+Download from [nodejs.org](https://nodejs.org/) — choose the LTS version.
+
+> **Windows:** The installer adds Node to PATH automatically. Restart your terminal after installing.
+
+Verify Node is installed:
+```bash
+node --version
+# Should show: v18.x.x or higher
+
+tsc --version
+# Should show: Version 5.x.x
+# If not found: npm install -g typescript
+```
+
+### Step 3 — Open a terminal in the project folder
 
 ```bash
 # Windows PowerShell — navigate to the project:
-cd C:\Users\YourName\Downloads\MLModel\Model1
+cd C:\Users\YourName\Downloads\BlackJackML-main
 
 # Mac / Linux:
-cd /path/to/MLModel
+cd /path/to/BlackJackML-main
 ```
 
-### Step 3 — Create a virtual environment
+### Step 4 — Create a virtual environment
 
 A virtual environment is an isolated Python installation just for this project.
 It prevents version conflicts with other Python projects on your computer.
@@ -146,7 +167,7 @@ It prevents version conflicts with other Python projects on your computer.
 python -m venv venv
 ```
 
-### Step 4 — Activate the virtual environment
+### Step 5 — Activate the virtual environment
 
 You must do this every time you open a new terminal to work on this project.
 You will know it is active when you see `(venv)` at the start of your prompt.
@@ -162,17 +183,17 @@ You will know it is active when you see `(venv)` at the start of your prompt.
 source venv/bin/activate
 
 # Confirm it worked — your prompt should now look like:
-# (venv) PS C:\Users\YourName\Downloads\MLModel\Model1>
+# (venv) PS C:\Users\YourName\Downloads\BlackJackML-main>
 ```
 
-### Step 5 — Install Python packages
+### Step 6 — Install Python packages
 
 ```bash
 pip install -r requirements.txt
 # PyTorch is ~200MB so this takes 2–5 minutes on a normal connection
 ```
 
-### Step 6 — Install Tesseract (OCR engine — NOT a pip package)
+### Step 7 — Install Tesseract (OCR engine — NOT a pip package)
 
 Tesseract is a text-recognition engine used as a fallback when YOLO is not available.
 It must be installed as a system program, not via pip.
@@ -193,14 +214,14 @@ tesseract --version
 # Should show: tesseract 5.x.x
 ```
 
-### Step 7 — Install YOLO (much better card detection than OCR)
+### Step 8 — Install YOLO (much better card detection than OCR)
 
 ```bash
 pip install ultralytics
 # This installs the YOLOv8 library and all its dependencies
 ```
 
-### Step 8 — Generate synthetic card training data for YOLO
+### Step 9 — Generate synthetic card training data for YOLO
 
 This creates thousands of realistic card scene images with automatic labels.
 No internet required — everything is generated on your computer.
@@ -213,7 +234,7 @@ python yolo/generate_dataset.py --images 10000
 python yolo/generate_dataset.py --images 25000
 ```
 
-### Step 9 — Train the YOLO card detector
+### Step 10 — Train the YOLO card detector
 
 ```bash
 python yolo/train_yolo.py
@@ -222,7 +243,7 @@ python yolo/train_yolo.py
 # Creates: models/card_detector.pt
 ```
 
-### Step 10 — Train the blackjack strategy AI
+### Step 11 — Train the blackjack strategy AI
 
 ```bash
 # Always run the quick test first — 2 minutes — confirms everything works:
@@ -234,7 +255,7 @@ python main.py train --hands 1000000
 # Creates: models/best_model.pt
 ```
 
-### Step 11 — Start the dashboard
+### Step 12 — Start the dashboard
 
 ```bash
 python main.py web
@@ -250,7 +271,7 @@ You should see the BlackjackML dashboard load immediately.
 Every file and folder explained so you know what does what.
 
 ```
-MLModel/
+BlackJackML-main/
 │
 ├── main.py                      # ← START HERE. The command-line entry point.
 │                                #   Runs: web / overlay / simulate / train
@@ -265,14 +286,20 @@ MLModel/
 ├── jsconfig.json                # Tells VS Code these .js files contain React JSX.
 │                                #   Stops VS Code showing false squiggly errors.
 │
+├── build.sh                     # ← FRONTEND BUILD SCRIPT (new)
+│                                #   Run this after editing any JS component file.
+│                                #   See "How the Frontend Build Works" section.
+│
+├── build-src/                   # ← FRONTEND BUILD TOOLS (new)
+│   ├── tsconfig.json            #   TypeScript compiler config — handles JSX transform
+│   └── minify.js                #   Node script that strips comments + whitespace
+│
 ├── overlay_settings.json        # Auto-created the first time you use overlay mode.
 │                                #   Saves your scan region and window position.
 │
 ├── yolo/                        # ── SYSTEM 1: Card Detection ──────────────────
 │   │
 │   ├── generate_dataset.py      # Creates synthetic card training images.
-│   │                            #   Renders all 52 cards at random sizes/angles
-│   │                            #   on casino-style backgrounds with augmentations.
 │   │                            #   Run: python yolo/generate_dataset.py --images 10000
 │   │
 │   ├── train_yolo.py            # Trains YOLOv8 on the generated dataset.
@@ -280,76 +307,69 @@ MLModel/
 │   │                            #   Output: models/card_detector.pt
 │   │
 │   └── dataset/                 # Auto-created by generate_dataset.py
-│       ├── images/train/        # 80% of generated scenes — used for training
-│       ├── images/val/          # 10% — checked during training to prevent overfitting
-│       ├── images/test/         # 10% — used for final accuracy measurement
-│       ├── labels/train/        # YOLO .txt files: one per image, one line per card
+│       ├── images/train/
+│       ├── images/val/
+│       ├── images/test/
+│       ├── labels/train/
 │       ├── labels/val/
 │       ├── labels/test/
-│       └── dataset.yaml         # YOLO config: image paths + 52 class names
+│       └── dataset.yaml
 │
 ├── blackjack/                   # ── Core Game Engine (pure Python, no ML) ──────
 │   ├── card.py                  # Card, Rank, Suit, Deck, Shoe objects
-│   │                            #   Also: 5 shuffle types (riffle, strip, overhand...)
 │   ├── game.py                  # Hand, Round, BlackjackTable, Action enum
-│   │                            #   Handles: splits, doubles, surrenders, insurance
 │   ├── counting.py              # CardCounter for all 4 systems
-│   │                            #   Hi-Lo: 2-6=+1, 7-9=0, 10-A=-1
-│   │                            #   KO, Omega II, Zen: different tag values
 │   ├── strategy.py              # Perfect basic strategy lookup tables
-│   │                            #   Hard hands, soft hands, pairs — every combination
 │   ├── deviations.py            # Illustrious 18 + Fab 4 count-based overrides
-│   │                            #   Example: Stand 16 vs 10 when TC >= 0
 │   ├── betting.py               # Kelly Criterion bet sizing + count-based spread
 │   └── side_bets.py             # EV calculation for optional side bets
-│                                #   Perfect Pairs, 21+3, Lucky Ladies
 │
 ├── ml_model/                    # ── SYSTEM 2: Strategy Neural Network ──────────
 │   ├── model.py                 # BlackjackNet v2 architecture
-│   │                            #   ResNet + Feature Attention + 3 decision heads
 │   ├── shuffle_tracker.py       # LSTM + Bayesian shuffle-resistant counter
-│   │                            #   Adjusts count estimate after imperfect shuffles
 │   ├── simulate.py              # Monte Carlo simulation engine
-│   │                            #   Generates training data by playing 1M+ hands
 │   └── train.py                 # Training pipeline
-│                                #   Adam optimiser, LR scheduling, checkpointing,
-│                                #   early stopping, per-epoch CSV logging
 │
 ├── app/                         # ── Web Dashboard ───────────────────────────────
 │   ├── server.py                # Flask + Socket.IO backend — the brain
-│   │                            #   Handles all WebSocket events: deal_card,
-│   │                            #   new_hand, shuffle, record_result, live_start...
-│   │
 │   ├── cv_detector.py           # Card detection: YOLO first, OCR fallback
-│   │                            #   Auto-loads models/card_detector.pt if present
-│   │                            #   Falls back to Tesseract if YOLO not available
-│   │
 │   ├── live_scanner.py          # Background screen capture thread
-│   │                            #   Captures screen using mss every ~200ms
-│   │                            #   Routes cards: left=player, centre=dealer,
-│   │                            #                 right=seen (other players)
-│   │
 │   ├── overlay.py               # Standalone desktop overlay (tkinter window)
-│   │                            #   Transparent, always-on-top, shows count + action
-│   │                            #   Launch: python main.py overlay
 │   │
-│   ├── templates/index.html     # HTML shell that loads the React app
+│   ├── templates/
+│   │   └── index.html           # HTML shell — loads bundle.min.js (not raw components)
 │   │
-│   └── static/components/       # React frontend — one file per UI panel
-│       ├── App.js               # Root: owns all state, opens WebSocket
-│       ├── LiveOverlayPanel.js  # 3-mode card scanner (Manual/Screenshot/Live)
-│       ├── ActionPanel.js       # Big HIT/STAND/DOUBLE recommendation
-│       ├── BettingPanel.js      # Bet sizing + WIN/LOSS/PUSH recording
-│       ├── HandDisplay.js       # Visual card display for player and dealer
-│       ├── CardGrid.js          # 52-button card entry grid
-│       ├── SideBetPanel.js      # Side bet EV display
-│       ├── ShoePanel.js         # Remaining cards bar chart by rank
-│       ├── EdgeMeter.js         # Player/house edge visual gauge
-│       ├── SessionStats.js      # Win rate, profit, hands played this session
-│       ├── CountHistory.js      # Count sparkline + log of every counted card
-│       ├── I18Panel.js          # Illustrious 18 reference — active deviations glow
-│       ├── StrategyRefTable.js  # Basic strategy grid — highlights current situation
-│       └── utils.js             # Deviation tooltips, helper functions
+│   └── static/
+│       ├── bundle.min.js        # ← THE COMPILED FRONTEND (new — do not edit directly)
+│       │                        #   Pre-compiled from all component files by build.sh
+│       │                        #   This is what the browser actually loads.
+│       │
+│       ├── style.css            # All CSS styles for the dashboard
+│       │
+│       └── components/          # ← EDIT THESE — source files for each UI panel
+│           ├── App.jsx          #   Root: owns all state, opens WebSocket
+│           ├── LiveOverlayPanel.jsx  # 3-mode card scanner
+│           ├── ActionPanel.js   #   Big HIT/STAND/DOUBLE recommendation
+│           ├── BettingPanel.js  #   Bet sizing + WIN/LOSS/PUSH recording
+│           ├── HandDisplay.js   #   Visual card display for player and dealer
+│           ├── CardGrid.js      #   52-button card entry grid
+│           ├── Widget.js        #   Reusable panel wrapper (all panels use this)
+│           ├── TopBar.js        #   Sticky top bar with count + controls
+│           ├── SideBetPanel.js  #   Side bet EV display
+│           ├── ShoePanel.js     #   Remaining cards bar chart by rank
+│           ├── EdgeMeter.js     #   Player/house edge visual gauge
+│           ├── SessionStats.js  #   Win rate, profit, hands played
+│           ├── CountHistory.js  #   Count sparkline + card log
+│           ├── I18Panel.js      #   Illustrious 18 reference
+│           ├── StrategyRefTable.js  # Basic strategy grid
+│           ├── CasinoRiskMeter.js   # Counter detection risk meter
+│           ├── StopAlerts.js    #   Stop-loss / stop-win alerts
+│           ├── SplitHandPanel.js    # Split hand management
+│           ├── SideCountPanel.js    # Ace + Ten side counts
+│           ├── ShuffleTracker.js    # ML shuffle tracker display
+│           ├── CenterToolBar.js     # Info strip below card grid
+│           ├── constants.js     #   Card ranks, suits, strategy tables
+│           └── utils.js         #   Helper functions, deviation tooltips
 │
 └── models/                      # Auto-created when you train
     ├── card_detector.pt         # YOLO card detection model (System 1)
@@ -357,6 +377,217 @@ MLModel/
     ├── last_checkpoint.pt       # Most recent epoch — used for --resume
     ├── training_log.csv         # Per-epoch loss + accuracy (open in Excel)
     └── training_summary.json    # Human-readable summary of the last training run
+```
+
+---
+
+## 🔨 How the Frontend Build Works (Read This If You Edit Any JS Files)
+
+This section is important. If you edit a component file and refresh the browser
+and see **no change**, this is why — and here is how to fix it.
+
+### The old way vs. the new way
+
+**Old way (how most tutorials show it):**
+The browser downloaded all 22 JavaScript files separately, plus a ~1.5 MB tool
+called Babel that compiled the JSX code in the browser on every page load.
+This worked, but it was slow — every page load spent 1–3 seconds just compiling
+code before anything appeared on screen.
+
+**New way (how this project now works):**
+All 22 component files are compiled in advance on your computer into a single
+file called `bundle.min.js`. The browser downloads that one pre-compiled file
+and runs it immediately — no compiling, no waiting.
+
+```
+Before (old):                         After (new):
+--------------------------            --------------------------
+Browser downloads:                    Browser downloads:
+  @babel/standalone  (~1.5 MB)          bundle.min.js   (~200 KB)
+  react.dev.js       (~1 MB)            react.min.js    (~130 KB)
+  react-dom.dev.js   (~1 MB)            react-dom.min.js (~30 KB)
+  22 component files (~200 KB)
+  --------------------------
+  Total: ~3.7 MB + 1-3s compile        Total: ~360 KB, 0s compile
+
+Result: Lighthouse Performance 59     Result: Lighthouse Performance ~85+
+```
+
+### Build scripts — which one to use
+
+This project includes two build scripts depending on your OS:
+
+| OS | Script | Command |
+|----|--------|---------|
+| **Windows** (PowerShell) | `build.ps1` | `.uild.ps1` |
+| **Windows** (watch mode) | `watch.ps1` | `.\watch.ps1` |
+| **Mac / Linux** | `build.sh` | `bash build.sh` |
+| **Mac / Linux** (watch mode) | `build.sh` | `bash build.sh --watch` |
+
+> **Important — Windows users:** Do NOT use `bash build.sh` in PowerShell.
+> `bash` is not available in PowerShell. Use `.uild.ps1` instead.
+> If you get a security error, run `Unblock-File .uild.ps1` first.
+
+### What this means when you edit a component
+
+When you open a `.js` file in `app/static/components/` and save a change,
+**the browser does not see your change yet.** You must rebuild the bundle first.
+
+```
+You edit a .js file
+        |
+        v
+Windows: .uild.ps1        Mac/Linux: bash build.sh
+        |
+        v
+build-src/src/ is wiped and refilled with fresh copies
+        |
+        v
+tsc compiles all JSX into plain JavaScript
+        |
+        v
+All 22 files are joined into bundle.js in load order
+        |
+        v
+Duplicate hook declarations fixed (const -> var)
+        |
+        v
+Comments and whitespace removed -> bundle.min.js
+        |
+        v
+Syntax checked with node --check
+        |
+        v
+You refresh the browser -> your change appears
+```
+
+### How to rebuild after editing (Windows)
+
+Open PowerShell in your project root and run:
+
+```powershell
+.uild.ps1
+```
+
+You will see:
+```
+BlackjackML Build Starting...
+Step 1: Syncing sources...
+Step 2: Compiling JSX...
+Step 3: Bundling files...
+Step 4: Fixing hook declarations...
+Step 5: Minifying...
+Step 6: Checking syntax...
+
+Build complete!  bundle.min.js = 203 KB
+Refresh your browser to see changes.
+```
+
+Then refresh your browser. The change will be there.
+
+### How to rebuild after editing (Mac / Linux)
+
+```bash
+bash build.sh
+```
+
+### Auto-rebuild on every save — Watch Mode
+
+Instead of running the build manually after every edit, use watch mode.
+It rebuilds automatically within ~2 seconds of every file save.
+
+**Windows (PowerShell):**
+```powershell
+.\watch.ps1
+# Rebuilds automatically whenever you save a component file.
+# Press Ctrl+C when you are done editing.
+```
+
+**Mac / Linux:**
+```bash
+bash build.sh --watch
+# Press Ctrl+C when you are done editing.
+```
+
+### What the build does step by step
+
+**Step 1 — Wipe and refill the build folder**
+`build-src/src/` is completely cleared before every build.
+This prevents "file already exists" errors when `.jsx` files were previously
+renamed to `.tsx` and the old `.tsx` is still sitting there from a prior run.
+Fresh copies of all component files are then copied in.
+
+**Step 2 — Compile JSX using TypeScript (`tsc`)**
+TypeScript reads `build-src/tsconfig.json` and transforms every file.
+The only thing `tsc` is doing here is converting JSX syntax like `<div>` into
+JavaScript function calls like `React.createElement("div", ...)`.
+It is not doing strict type checking — the `// @ts-nocheck` at the top of each
+file tells it to skip type errors and only transform the syntax.
+
+**Step 3 — Bundle in load order**
+The compiled files are concatenated into one file in the correct order — constants
+first, then utility functions, then base components, then panels, then App last.
+Order matters because each file uses functions defined in earlier files.
+
+**Step 4 — Fix duplicate hook declarations**
+Each component file declares `const { useState, useEffect } = React` at the top.
+This is fine when each file is a separate `<script>` tag (each has its own scope),
+but when all files are concatenated into one, duplicate `const` is a SyntaxError.
+`build-src/fix_hooks.js` converts all of them to `var` which allows redeclaration.
+
+**Step 5 — Minify**
+`build-src/minify.js` removes block comments and extra blank lines.
+`233 KB → 203 KB` — about 13% smaller.
+
+**Step 6 — Syntax check**
+`node --check bundle.min.js` verifies the output has no syntax errors before
+you refresh the browser. If this fails, the error message tells you exactly
+what line is broken.
+
+### What you should and should not edit
+
+| File/folder | Edit it? | Notes |
+|-------------|----------|-------|
+| `app/static/components/*.js` | Yes | These are the source files |
+| `app/static/components/*.jsx` | Yes | These are the source files |
+| `app/static/style.css` | Yes | CSS — just refresh browser, no rebuild needed |
+| `app/templates/index.html` | Yes | Rarely needed |
+| `app/static/bundle.min.js` | No | Auto-generated — overwritten on next build |
+| `app/static/bundle.js` | No | Auto-generated intermediate file |
+| `build-src/src/` | No | Wiped and refilled on every build |
+| `build-src/out/` | No | tsc output — regenerated on every build |
+
+### If you get a build error
+
+**`Rename-Item: Cannot create a file when that file already exists`**
+This was a bug in an older version of `build.ps1`. Get the latest `build.ps1`
+from the project — it now wipes `build-src/src/` before copying files in.
+
+**`build.ps1 is not digitally signed`**
+Run this once to unblock it:
+```powershell
+Unblock-File .uild.ps1
+Unblock-File .\watch.ps1
+```
+
+**`tsc: command not found`**
+TypeScript is not installed:
+```powershell
+npm install -g typescript
+```
+
+**`The term 'bash' is not recognized`**
+You are using PowerShell — use `.uild.ps1` not `bash build.sh`.
+
+**`Property 'X' does not exist`** during compilation
+This is a harmless TypeScript type warning, suppressed by `// @ts-nocheck`.
+If the bundle generates and the browser works, ignore it.
+
+**`Cannot find module`** or build runs from wrong folder
+Make sure you are in the project root (the folder containing `main.py`):
+```powershell
+cd C:\Users\YourName\Downloads\MLModel\Model1
+.uild.ps1
 ```
 
 ---
@@ -409,8 +640,7 @@ ev = (p_perfect * payouts["perfect"]
 
 ### Step 2 — Delete old model files
 
-This forces a completely clean start. You do not want to resume from a checkpoint
-that was saved using dirty training data.
+This forces a completely clean start.
 
 ```bash
 # Windows PowerShell:
@@ -435,8 +665,7 @@ rm -f models/training_log.csv models/training_summary.json
 ### Step 4 — Run training
 
 ```bash
-# ALWAYS run the quick test first. 2 minutes. Confirms everything is working
-# before you commit 25+ minutes to the full training run:
+# ALWAYS run the quick test first. 2 minutes. Confirms everything is working:
 python main.py train --hands 100000 --epochs 20
 
 # Once confirmed working, run full training:
@@ -445,8 +674,6 @@ python main.py train --hands 1000000
 
 ### Step 5 — Enable GPU acceleration (optional — 6× faster)
 
-If you have an NVIDIA graphics card with CUDA support, use it.
-
 ```bash
 # Check if your GPU is detected:
 python -c "import torch; print('GPU available:', torch.cuda.is_available())"
@@ -454,9 +681,6 @@ python -c "import torch; print('GPU available:', torch.cuda.is_available())"
 # If it prints True, install the GPU version of PyTorch:
 pip uninstall torch -y
 pip install torch --index-url https://download.pytorch.org/whl/cu121
-
-# Verify the GPU will be used:
-python -c "import torch; print(torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'No GPU')"
 ```
 
 ### What happens during training — explained step by step
@@ -477,8 +701,6 @@ For 1,000,000 simulated blackjack hands:
   5. Execute the action, deal more cards, keep going
 
 End result: ~2.8 million training samples
-(there are multiple decisions per hand — hit/stand decisions,
- then potentially double/split, etc.)
 ```
 
 **Phase 2 — Train the neural network** (handled by `ml_model/train.py`):
@@ -501,10 +723,6 @@ For each of 50 epochs (one full pass through all training data):
     ✔ 2,847,392 training samples
 
 🧠  Training BlackjackNet  |  device = cpu
-    Input features : 28
-    Train samples  : 2,277,913
-    Test  samples  :   569,479
-    Epochs         : 1 → 50
 
      Epoch  TrLoss    TeLoss      Acc     Best       LR
      ──────────────────────────────────────────────────
@@ -536,7 +754,6 @@ These labels come from `DeviationEngine.get_action()`, which checks in this orde
 
 2. Illustrious 18    — count-based play changes
    Example: Stand 16 vs 10 when True Count >= 0 (normally you hit)
-   Example: Take Insurance when True Count >= 3
 
 3. BasicStrategy     — fallback when no deviation applies
    Example: Hard 16 vs dealer 7 → HIT (at neutral count)
@@ -555,10 +772,7 @@ So the model learns: **basic strategy + count-based deviations + shoe compositio
 [5]  true_count / 10          The running count ÷ decks remaining — KEY feature
 [6]  shuffle_adjustment / 5   Bonus/penalty from the ML shuffle tracker
 [7]  penetration              How deep into the shoe (0 = fresh, 1 = nearly done)
-[8]  prob_of_2_remaining      Fraction of 2s left in the shoe
-[9]  prob_of_3_remaining      Fraction of 3s left
-...
-[17] prob_of_ace_remaining    Fraction of Aces left
+[8–17]  prob_of_X_remaining   Fraction of each rank left in the shoe
 [18] num_cards_in_hand / 10   How many cards the player holds
 [19] can_double               Is doubling down available right now?
 [20] can_split                Is splitting available right now?
@@ -582,35 +796,22 @@ The model picks the highest probability action.
 If its confidence is below the `CONFIDENCE_THRESHOLD` setting (default 70%),
 the system falls back to the rules-based DeviationEngine instead.
 
-### Why the model is not 100% accurate
-
-Some blackjack situations have near-identical expected values for two actions.
-For example, Hard 12 vs dealer 4 at TC ≈ 0 is a difference of less than 0.001% EV —
-a statistical coin flip. The model learns the marginally correct action but test accuracy
-is bounded by these genuinely ambiguous cases. 83–86% is close to the theoretical ceiling.
-
 ---
 
 ## 🔧 Fine-Tuning the Strategy Model
 
 Fine-tuning means continuing training from an existing checkpoint rather than
-starting from scratch. Use this to squeeze more accuracy out of an already-trained model.
+starting from scratch.
 
 ### Resume from last checkpoint
 
 ```bash
-# Picks up from models/last_checkpoint.pt
-# Restores model weights, optimiser state, and learning rate schedule:
 python main.py train --hands 1000000 --epochs 50 --resume
 ```
 
 ### Fine-tune with more data
 
 ```bash
-# Train normally first:
-python main.py train --hands 1000000 --epochs 50
-
-# Then add more data on top:
 python main.py train --hands 2000000 --epochs 20 --resume
 ```
 
@@ -622,31 +823,15 @@ DEFAULT_SYSTEM = "omega_ii"   # "hi_lo" | "ko" | "omega_ii" | "zen"
 ```
 
 > **⚠️ Important:** After changing `DEFAULT_SYSTEM` you MUST retrain from scratch —
-> do NOT use `--resume`. A model trained on Hi-Lo count values will be completely
-> wrong when run with Omega II values because the count scale and tags are different.
-
-### Adjust how often the model overrides basic strategy
-
-```python
-# In config.py → class MLConfig:
-CONFIDENCE_THRESHOLD = 0.65   # default is 0.70
-# Lower = model overrides basic strategy more aggressively
-# Higher = model only speaks up when very confident
-```
-
-### How to tell if fine-tuning is working
-
-Watch the training output:
-- `☆ NEW BEST` on a new epoch → model is still improving, keep going
-- No `NEW BEST` for 10+ epochs → model has converged, stop here
-- Validation loss going UP while training loss goes DOWN → overfitting, stop now
+> do NOT use `--resume`.
 
 ---
 
 ## 🎯 YOLO Card Detection — Full Setup Guide
 
-This trains **System 1** — the computer vision model that reads cards from screenshots
-or live screen captures.
+This section explains the full process from zero to a working card detector —
+including how to download the free 20,000-image Roboflow dataset and combine
+it with our synthetic data for the best possible accuracy.
 
 ### Why YOLO instead of just Tesseract OCR?
 
@@ -658,241 +843,534 @@ or live screen captures.
 | Unusual casino font | 92–97% | 40–75% |
 | Low light or blurry | 80–90% | 20–50% |
 
-YOLO detects card location AND reads rank+suit in a single forward pass.
-It is both faster and dramatically more accurate than the two-step OCR approach,
-especially for small or stylised cards.
+YOLO (You Only Look Once) finds card locations AND reads their rank+suit in a
+single pass over the image. OCR requires two separate steps (find the card,
+then read the text) and fails badly on small or overlapping cards.
 
-### Step 1 — Install ultralytics
+---
+
+## 📦 Training YOLO with the Roboflow 20,000-Image Dataset
+
+This is the **recommended training path** for best accuracy. You combine a free
+real-photo dataset from Roboflow with our generated synthetic images, then train
+YOLO on both together. The whole process takes about 30 minutes.
+
+> **Why combine both datasets?**
+> - Synthetic images give variety — hundreds of angles, sizes, and backgrounds.
+> - Real photos give authenticity — actual card textures, real casino fonts, real lighting.
+> - Together they produce a model that generalises to your specific casino far better
+>   than either dataset alone.
+
+---
+
+### Step 1 — Install ultralytics (if you haven't already)
 
 ```bash
+# Make sure your venv is active first (you should see (venv) in your prompt)
 pip install ultralytics
 ```
 
-### Step 2 — Generate synthetic training data
-
-The generator creates realistic casino scenes with playing cards at random sizes,
-angles, and positions. No real casino screenshots or manual labelling needed.
-
+Verify it installed correctly:
 ```bash
-python yolo/generate_dataset.py --images 5000    # quick test (~2 min)
-python yolo/generate_dataset.py --images 10000   # recommended (~5 min)
-python yolo/generate_dataset.py --images 25000   # best accuracy (~12 min)
+python -c "from ultralytics import YOLO; print('ultralytics OK')"
+# Should print: ultralytics OK
 ```
-
-**What each generated scene contains:**
-- All 52 cards rendered at random sizes (8%–28% of scene height) and rotation angles
-- 7 different casino table background colours (green felt, dark blue, navy, brown...)
-- Perspective distortion — cards viewed at realistic angles as if on a table
-- Random: blur, brightness variation, JPEG compression artefacts, drop shadows
-- 2–7 overlapping cards per scene (weighted towards realistic hand layouts)
-
-**YOLO label format** — what is inside each `.txt` label file:
-```
-class_id  cx  cy  width  height
-```
-All five values are normalised to 0–1 relative to the image dimensions.
-`cx, cy` is the centre of the card bounding box (not the top-left corner).
-`class_id` 0 = A_spades, 1 = A_hearts, 2 = A_diamonds ... 51 = K_clubs.
-
-### Step 3 — Train YOLO
-
-```bash
-# Default (recommended — yolov8s, 100 epochs, early stopping):
-python yolo/train_yolo.py
-
-# Larger model for better accuracy (needs more GPU VRAM):
-python yolo/train_yolo.py --model yolov8m
-
-# Faster training at smaller input size:
-python yolo/train_yolo.py --imgsz 416
-
-# Resume interrupted training:
-python yolo/train_yolo.py --resume
-
-# Evaluate trained model on test set and see per-class stats:
-python yolo/train_yolo.py --eval
-
-# Quick test on one screenshot:
-python yolo/train_yolo.py --test path/to/screenshot.png
-```
-
-### Step 4 — Model is automatically used
-
-After training, `models/card_detector.pt` is created automatically.
-The dashboard loads it at startup — no config changes needed:
-
-```bash
-python main.py web
-# Console will show: ✅ YOLO card detector loaded
-```
-
-If the model is missing, the system silently falls back to Tesseract OCR.
-
-### YOLO model size — which one to use
-
-| Model | Inference speed | Accuracy | Min VRAM | Use when |
-|-------|----------------|----------|----------|----------|
-| yolov8n | Very fast | Good | ~2GB | Weak laptop, no GPU |
-| **yolov8s** | Fast | **Better** | **~3GB** | **Default — good for most users** |
-| yolov8m | Moderate | High | ~5GB | Gaming laptop with GPU |
-| yolov8l | Slow | Higher | ~8GB | Desktop workstation |
-| yolov8x | Slowest | Highest | ~12GB | High-end GPU only |
 
 ---
 
-## 📦 Dataset Sources for YOLO
+### Step 2 — Create a free Roboflow account
 
-Combining our synthetic data with real photos dramatically improves accuracy on
-real casino screenshots. Here are the best free datasets:
+1. Open your browser and go to **https://roboflow.com**
+2. Click **Sign Up** in the top right
+3. Sign up with Google, GitHub, or an email address — it is completely free
+4. You do not need to enter a credit card
 
-### Free datasets ready to download
+> Roboflow is a platform for hosting and downloading computer vision datasets.
+> The playing cards dataset is publicly shared there under a free licence.
 
-| Dataset | Images | Format | License | Link |
-|---------|--------|--------|---------|------|
-| **Playing Cards Object Detection** | 20,000+ | YOLO ✅ | CC BY 4.0 | [roboflow.com — playing-cards-ow27d](https://universe.roboflow.com/augmented-startups/playing-cards-ow27d) |
-| **Card Detection Dataset** | 3,000+ | YOLO ✅ | MIT | [roboflow.com — card-detection-qbfp6](https://universe.roboflow.com/card-detection/card-detection-qbfp6) |
-| **Cards Image Dataset** | 7,624 | Class folders | CC0 | [kaggle.com — gpiosenka/cards](https://www.kaggle.com/datasets/gpiosenka/cards-image-datasetclassification) |
+---
 
-### How to download from Roboflow (free account required)
+### Step 3 — Find the Playing Cards dataset
 
-1. Create a free account at [roboflow.com](https://roboflow.com)
-2. Open either Roboflow link from the table above
-3. Click **Download Dataset** → select **YOLOv8** format → click Download
-4. Extract the zip file to a temporary folder (e.g. `roboflow_cards/`)
+1. After logging in, go to:
+   **https://universe.roboflow.com/augmented-startups/playing-cards-ow27d**
 
-### How to merge Roboflow data with our synthetic dataset
+2. You will see a page like this:
+
+   ```
+   Playing Cards Object Detection
+   by Augmented Startups
+   20,000+ images · 52 classes · CC BY 4.0 licence
+   ```
+
+3. The **52 classes** are the 52 cards: A_spades, 2_hearts, K_diamonds, etc.
+   This matches our project exactly — no relabelling needed.
+
+4. Click the blue **Download Dataset** button
+
+---
+
+### Step 4 — Download in YOLOv8 format
+
+A popup will appear asking which format to download in. This step is important —
+you must pick the right format or the files won't be compatible.
+
+1. In the **Format** dropdown, select **YOLOv8**
+
+   > YOLOv8 format gives you `.txt` label files alongside the images.
+   > Each label file has one line per card: `class_id cx cy width height`
+   > where all values are normalised to 0–1. This is exactly what our
+   > `train_yolo.py` script expects.
+
+2. Leave the **Split** setting as-is (train/valid/test is already configured)
+
+3. Click **Continue** → then click **Download zip to computer**
+
+4. A `.zip` file will download — it will be named something like
+   `playing-cards-ow27d.v12i.yolov8.zip`
+
+5. **Do not extract it yet** — we will do that in the next step
+
+---
+
+### Step 5 — Extract the Roboflow zip
+
+Extract the zip file to a temporary folder anywhere on your computer.
+You can name the folder anything — we will call it `roboflow_cards` here.
+
+```
+# After extracting, the folder structure should look like this:
+roboflow_cards/
+├── train/
+│   ├── images/          ← ~16,000 card photos (80% of the dataset)
+│   └── labels/          ← .txt label files, one per image
+├── valid/
+│   ├── images/          ← ~2,000 card photos (10% validation)
+│   └── labels/
+├── test/
+│   ├── images/          ← ~2,000 card photos (10% test)
+│   └── labels/
+└── data.yaml            ← dataset config file (we don't use this one)
+```
+
+> **What are the label files?**
+> Each `.txt` file has the same name as its image but with `.txt` extension.
+> Example: `card_001.jpg` has `card_001.txt` containing:
+> ```
+> 0 0.512 0.338 0.142 0.289
+> ```
+> This means: class 0 (A_spades), centre at 51.2% from left, 33.8% from top,
+> 14.2% wide, 28.9% tall. YOLO reads these automatically during training.
+
+---
+
+### Step 6 — Generate our synthetic dataset
+
+While we have the Roboflow data, we also generate synthetic images to add variety.
+Run this from the project root folder with your venv active:
+
+```bash
+# Recommended amount — takes about 5 minutes
+python yolo/generate_dataset.py --images 10000
+```
+
+This creates the `yolo/dataset/` folder:
+```
+yolo/dataset/
+├── images/
+│   ├── train/    ← ~8,000 synthetic card images
+│   ├── val/      ← ~1,000 validation images
+│   └── test/     ← ~1,000 test images
+├── labels/
+│   ├── train/    ← matching .txt label files
+│   ├── val/
+│   └── test/
+└── dataset.yaml  ← config file pointing to these folders
+```
+
+> **What does the generator create?**
+> It renders all 52 cards at random sizes and angles on casino-style
+> backgrounds with blur, brightness changes, and JPEG compression.
+> This teaches the model to handle real-world variation.
+
+---
+
+### Step 7 — Copy Roboflow images into our dataset folder
+
+Now we combine both datasets by copying the Roboflow images into the same
+folders as our synthetic images. Open a terminal in the **project root folder**.
+
+**Windows (PowerShell or CMD):**
+```powershell
+# Copy training images and labels
+xcopy "C:\Users\YourName\Downloads\roboflow_cards\train\images\*" "yolo\dataset\images\train\" /Y
+xcopy "C:\Users\YourName\Downloads\roboflow_cards\train\labels\*" "yolo\dataset\labels\train\" /Y
+
+# Copy validation images and labels
+xcopy "C:\Users\YourName\Downloads\roboflow_cards\valid\images\*" "yolo\dataset\images\val\" /Y
+xcopy "C:\Users\YourName\Downloads\roboflow_cards\valid\labels\*" "yolo\dataset\labels\val\" /Y
+
+# Copy test images and labels
+xcopy "C:\Users\YourName\Downloads\roboflow_cards\test\images\*" "yolo\dataset\images\test\" /Y
+xcopy "C:\Users\YourName\Downloads\roboflow_cards\test\labels\*" "yolo\dataset\labels\test\" /Y
+```
+
+> Replace `C:\Users\YourName\Downloads\roboflow_cards` with the actual path
+> where you extracted the zip file.
+
+**Mac / Linux:**
+```bash
+# Replace ~/Downloads/roboflow_cards with your actual extraction path
+cp ~/Downloads/roboflow_cards/train/images/* yolo/dataset/images/train/
+cp ~/Downloads/roboflow_cards/train/labels/* yolo/dataset/labels/train/
+
+cp ~/Downloads/roboflow_cards/valid/images/* yolo/dataset/images/val/
+cp ~/Downloads/roboflow_cards/valid/labels/* yolo/dataset/labels/val/
+
+cp ~/Downloads/roboflow_cards/test/images/*  yolo/dataset/images/test/
+cp ~/Downloads/roboflow_cards/test/labels/*  yolo/dataset/labels/test/
+```
+
+**Verify the copy worked** — check the image counts:
+```bash
+# Windows PowerShell:
+(Get-ChildItem yolo\dataset\images\train).Count
+# Should show roughly 26,000 (16,000 Roboflow + 8,000 synthetic + some variation)
+
+# Mac / Linux:
+ls yolo/dataset/images/train | wc -l
+# Should show roughly 26,000
+```
+
+---
+
+### Step 8 — Check the class names match
+
+This is the most common mistake — the Roboflow dataset might use different class
+names than our `dataset.yaml` expects. Let's verify before training.
+
+Open `yolo/dataset/dataset.yaml` in VS Code and check the `names` section:
+
+```yaml
+# It should look like this (52 card names):
+names:
+  0: A_clubs
+  1: A_diamonds
+  2: A_hearts
+  3: A_spades
+  4: 10_clubs
+  ...
+  51: K_spades
+```
+
+Now look at one label file from the Roboflow data to check the class IDs match:
 
 ```bash
 # Windows:
-xcopy roboflow_cards\train\images\* yolo\dataset\images\train\ /Y
-xcopy roboflow_cards\train\labels\* yolo\dataset\labels\train\ /Y
-xcopy roboflow_cards\valid\images\* yolo\dataset\images\val\ /Y
-xcopy roboflow_cards\valid\labels\* yolo\dataset\labels\val\ /Y
+type yolo\dataset\labels\train\card_001.txt
 
 # Mac / Linux:
-cp roboflow_cards/train/images/* yolo/dataset/images/train/
-cp roboflow_cards/train/labels/* yolo/dataset/labels/train/
-cp roboflow_cards/valid/images/* yolo/dataset/images/val/
-cp roboflow_cards/valid/labels/* yolo/dataset/labels/val/
-
-# Then train on the combined dataset:
-python yolo/train_yolo.py
+cat yolo/dataset/labels/train/$(ls yolo/dataset/labels/train | head -1)
 ```
 
-**Why combine synthetic and real?**
-Synthetic data gives variety — hundreds of different angles, sizes, backgrounds.
-Real data gives authenticity — actual card printing textures, real fonts, real lighting.
-Together they produce a model that handles real casino screenshots much better than either alone.
+You will see lines like `0 0.51 0.34 0.14 0.29`. The first number (0) is the
+class ID. It must match the index in your `dataset.yaml`. If the Roboflow dataset
+uses different ordering, the model will confuse card identities.
+
+> **If the class names don't match:**
+> Open `yolo/train_yolo.py` and look for a `CLASS_MAP` or `REMAP` dictionary
+> near the top. This is where you can translate Roboflow class IDs to our IDs.
+> If no such dictionary exists, re-download from Roboflow using the exact same
+> class list as in `dataset.yaml`.
 
 ---
 
-## 🔧 Fine-Tuning YOLO for Your Casino
+### Step 9 — Train YOLO on the combined dataset
 
-If your specific casino uses an unusual card style or font, fine-tune on real screenshots.
-
-### Step 1 — Collect 20–50 casino screenshots
-
-Open your casino and screenshot the table in various states — different hands,
-different numbers of players, close-up and full-table views.
-
-### Step 2 — Label them with Roboflow (free)
-
-1. Go to [roboflow.com](https://roboflow.com) → Create new project
-2. Upload your screenshots
-3. For each image, draw a bounding box around each visible card
-4. Label each box with the card name (e.g. `A_spades`, `K_hearts`, `10_diamonds`)
-5. Export the project → YOLOv8 format → Download zip
-
-### Step 3 — Fine-tune from existing weights
+With both datasets merged, train normally. The script automatically uses
+everything in `yolo/dataset/`:
 
 ```bash
-# Copy your labelled casino images into the dataset:
-cp my_casino/train/images/* yolo/dataset/images/train/
-cp my_casino/train/labels/* yolo/dataset/labels/train/
+# Standard training — recommended for most computers
+python yolo/train_yolo.py
+```
 
-# Fine-tune — starts from existing model, much faster than from scratch:
+What you will see while training:
+```
+Ultralytics YOLOv8s summary: 225 layers, 11,155,977 parameters
+Starting training for 100 epochs...
+
+      Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size
+       1/100      1.2G      1.842      2.341      1.204        142        640:
+       2/100      1.2G      1.621      2.108      1.187        138        640:
+      ...
+      50/100      1.2G      0.812      0.934      0.987        145        640:
+     100/100      1.2G      0.623      0.712      0.881        143        640: ✅
+
+Results saved to runs/detect/train
+```
+
+**How long will it take?**
+
+| Hardware | Training time |
+|----------|--------------|
+| No GPU (CPU only) | 4–8 hours |
+| Laptop with NVIDIA GPU | 25–45 minutes |
+| Desktop with NVIDIA GPU | 12–20 minutes |
+| Google Colab (free GPU) | 20–30 minutes |
+
+> **Training is slow on CPU?** See the GPU acceleration tip below, or
+> use Google Colab (free) — instructions in the next section.
+
+---
+
+### Step 10 — What good training output looks like
+
+After training finishes, check the results:
+
+```bash
+# The model file is automatically copied here:
+ls models/card_detector.pt
+# ✅ If this file exists, training succeeded
+
+# View accuracy metrics:
+cat runs/detect/train/results.csv
+```
+
+Good accuracy numbers to aim for:
+```
+mAP50      ≥ 0.92   ← finds 92%+ of cards with >50% overlap (good)
+mAP50-95   ≥ 0.78   ← finds 78%+ with strict overlap (great)
+```
+
+If your numbers are lower, see the troubleshooting section at the bottom of this guide.
+
+---
+
+### Step 11 — Verify the model works
+
+Run a quick test on a screenshot before using it live:
+
+```bash
+# Test on a screenshot you took of a casino table
+python yolo/train_yolo.py --test path/to/your/screenshot.png
+```
+
+This saves an annotated image at `runs/detect/test/` with coloured boxes drawn
+around every detected card. Open that folder in Explorer / Finder and check it
+visually — every card should have a box with the correct rank+suit label.
+
+---
+
+### Step 12 — Start the dashboard with your new model
+
+```bash
+python main.py web
+```
+
+In the terminal you will see:
+```
+✅ YOLO card detector loaded  (models/card_detector.pt)
+```
+
+If you see `⚠ YOLO not found — using OCR fallback` instead, the file path is
+wrong. Make sure `models/card_detector.pt` exists and you are running from the
+project root folder.
+
+---
+
+### 🆓 Training on Google Colab (free GPU — no installation needed)
+
+If your computer is slow or has no GPU, Google Colab gives you a free NVIDIA GPU
+in a browser tab. This reduces training time from hours to 20–30 minutes.
+
+**One-time setup:**
+
+1. Go to **https://colab.research.google.com**
+2. Sign in with your Google account (free)
+3. Click **File → New notebook**
+4. In the top menu click **Runtime → Change runtime type**
+5. Set **Hardware accelerator** to **T4 GPU** → click Save
+
+**Upload your dataset:**
+
+1. Zip up the merged dataset folder:
+   ```bash
+   # From the project root on your computer:
+   # Windows:
+   Compress-Archive yolo\dataset yolo_dataset.zip
+
+   # Mac / Linux:
+   zip -r yolo_dataset.zip yolo/dataset/
+   ```
+2. In Colab, click the folder icon on the left sidebar
+3. Click the upload icon and upload `yolo_dataset.zip`
+4. In a Colab code cell, run:
+   ```python
+   import zipfile, os
+   with zipfile.ZipFile('yolo_dataset.zip', 'r') as z:
+       z.extractall('.')
+   print("Dataset extracted")
+   ```
+
+**Train in Colab:**
+
+```python
+# Install ultralytics
+!pip install ultralytics -q
+
+# Train
+from ultralytics import YOLO
+model = YOLO('yolov8s.pt')
+model.train(
+    data='dataset/dataset.yaml',
+    epochs=100,
+    imgsz=640,
+    batch=16,
+    project='runs',
+    name='cards',
+)
+print("Training complete!")
+```
+
+**Download the trained model:**
+
+```python
+# After training, download the model file
+from google.colab import files
+files.download('runs/cards/weights/best.pt')
+```
+
+Save the downloaded file as `models/card_detector.pt` in your project folder.
+
+---
+
+### Troubleshooting YOLO Training
+
+**`CUDA out of memory` error during training**
+
+Your GPU does not have enough memory for the default batch size. Reduce it:
+```bash
+python yolo/train_yolo.py --batch 8
+# Or even smaller:
+python yolo/train_yolo.py --batch 4
+```
+
+**`No images found` error**
+
+The dataset path is wrong. Check that `yolo/dataset/images/train/` contains
+image files before running training:
+```bash
+# Windows:
+dir yolo\dataset\images\train | find /c ".jpg"
+
+# Mac / Linux:
+ls yolo/dataset/images/train/*.jpg | wc -l
+```
+If the count is 0, re-run Step 6 (generate) and Step 7 (copy Roboflow files).
+
+**`ModuleNotFoundError: No module named 'ultralytics'`**
+
+You forgot to activate the virtual environment or forgot to install ultralytics:
+```bash
+# Activate venv first:
+source venv/bin/activate   # Mac / Linux
+.\venv\Scripts\Activate.ps1  # Windows PowerShell
+
+# Then install:
+pip install ultralytics
+```
+
+**mAP50 is stuck below 0.70 after training**
+
+This usually means a class name mismatch between the Roboflow labels and
+`dataset.yaml`. Go back to Step 8 and carefully verify the class IDs match.
+If they do not match, every card will be labelled as the wrong card, and the
+model will never learn correctly no matter how long you train.
+
+**Training is taking forever on CPU**
+
+Normal — CPU training of 26,000 images for 100 epochs genuinely takes 4–8 hours.
+Options:
+- Use Google Colab (free, takes ~25 minutes) — instructions above
+- Train for fewer epochs as a test: add `--epochs 20` to the command
+- Train on only synthetic data first (skip the Roboflow copy) to verify
+  everything works, then add Roboflow data for the real training run
+
+---
+
+## 🔧 Fine-Tuning YOLO for Your Specific Casino
+
+After you have a working model from the steps above, you can improve it further
+by adding 20–50 screenshots from your specific casino. Even a small number of
+real screenshots from your exact casino dramatically improves accuracy for that
+casino's card style.
+
+### Step 1 — Take 20–50 screenshots of the casino table
+
+Use your OS screenshot tool (Win+Shift+S on Windows, Cmd+Shift+4 on Mac) while
+playing. Capture a variety of situations: different hand sizes, different numbers
+of cards dealt, close-up and full-table views.
+
+### Step 2 — Label them on Roboflow (free)
+
+1. Go to **https://roboflow.com** and sign in
+2. Click **Create new project** → name it anything (e.g. "my-casino")
+3. Set project type to **Object Detection**
+4. Upload your screenshots
+5. For each image, draw a rectangle around each visible card
+6. In the label box that appears, type the card name (e.g. `A_spades`, `K_hearts`)
+   — use the same names as in your `dataset.yaml`
+7. After labelling all images, click **Generate** → **Export Dataset**
+8. Choose **YOLOv8** format → download the zip
+9. Extract it to a folder (e.g. `my_casino_labels/`)
+
+### Step 3 — Add your labelled images to the dataset
+
+```bash
+# Mac / Linux:
+cp my_casino_labels/train/images/* yolo/dataset/images/train/
+cp my_casino_labels/train/labels/* yolo/dataset/labels/train/
+
+# Windows:
+xcopy "my_casino_labels\train\images\*" "yolo\dataset\images\train\" /Y
+xcopy "my_casino_labels\train\labels\*" "yolo\dataset\labels\train\" /Y
+```
+
+### Step 4 — Fine-tune from the existing model
+
+Instead of training from scratch (which wastes the 26,000-image training you
+already did), continue training from the existing model:
+
+```bash
 python yolo/train_yolo.py --resume --epochs 30
 ```
 
-Even 20 real images from your specific casino can noticeably improve detection accuracy
-on that casino's card style.
+Even 20 real images from your casino can noticeably improve detection accuracy
+on that casino's specific card style and layout.
 
 ---
 
 ## 📸 OpenCV + Tesseract OCR Fallback
 
 If no YOLO model is found, the system automatically falls back to this pipeline.
-It requires Tesseract (installed in Step 6 of Quick Start) but no training.
-
-### How it works
 
 ```
 Screenshot or screen frame
         ↓
 1. FIND CARDS (OpenCV)
-   • Convert to grayscale
-   • Threshold: pixels brighter than 185 = white (card face)
-   • Find contours (connected white regions)
-   • Filter: keep only regions with card-like aspect ratio (1.05–2.20)
-     and reasonable area (1,500–200,000 pixels)
-   → List of card bounding boxes [x, y, w, h]
+   → Threshold → find card-shaped white regions → bounding boxes
 
         ↓
 2. READ RANK (Tesseract OCR)
-   • Crop the top-left corner of each card
-   • Invert colours (dark text → white text for better OCR)
-   • Scale up 6× (Tesseract is more accurate on larger text)
-   • Run Tesseract with character whitelist: AaKkQqJj23456789T10
-   • Clean output: 'T' → '10', 'Kk' → 'K', etc.
+   → Crop top-left corner → scale up 6× → run OCR
 
         ↓
 3. IDENTIFY SUIT (colour + shape analysis)
-   • Count red pixels in HSV colour space
-   • Red → hearts or diamonds; no red → spades or clubs
-   • Analyse shape of suit symbol (solidity, aspect ratio, circularity)
-   • Diamonds: high solidity, low circularity
-   • Hearts: moderate solidity, more circular
-   • Spades: tall aspect ratio, moderate solidity
-   • Clubs: lower solidity (three-lobe shape)
+   → Red pixels = hearts/diamonds; analyse shape for spades/clubs
 
         ↓
 Result: [{rank: 'A', suit: 'spades', confidence: 0.75, bbox: [x,y,w,h]}, ...]
-```
-
-### OCR accuracy expectations
-
-| Situation | Expected accuracy |
-|-----------|------------------|
-| Clean online casino screenshot | 85–92% |
-| Good webcam, good lighting | 70–80% |
-| Phone camera at angle | 50–65% |
-| Physical cards, low light | 30–50% |
-
-The confirmation step in Screenshot mode lets you correct wrong detections before
-they affect the count.
-
-### Tips for best OCR accuracy
-
-- Cards must be at least 80×110 pixels in the screenshot
-- Dark background (green felt) gives the best contrast against white cards
-- Avoid screenshots where cards overlap significantly
-- If a specific rank is always misread, check `cv_detector.py` line ~140 and adjust
-  the Tesseract character whitelist
-
-### Test OCR without running the full dashboard
-
-```bash
-python -c "
-import cv2, sys
-sys.path.insert(0, '.')
-from app.cv_detector import detect_cards, get_backend
-
-img = cv2.imread('test.png')
-cards = detect_cards(img)
-print('Backend:', get_backend())
-for c in cards:
-    print(c['rank'], 'of', c['suit'], '--', f'{c[\"confidence\"]:.0%}', c['backend'])
-"
 ```
 
 ---
@@ -909,18 +1387,12 @@ python main.py web --port 8080
 
 # Allow other devices on your network to connect:
 python main.py web --host 0.0.0.0
-# Then other devices use: http://YOUR_IP:5000
-# Find your IP: ipconfig (Windows) or ifconfig (Mac/Linux)
 
-# Run the standalone desktop overlay (floats over casino window):
+# Run the standalone desktop overlay:
 python main.py overlay
-python main.py overlay --decks 6 --system hi_lo --interval 1500
 
 # Validate strategy performance with a simulation:
 python main.py simulate --hands 500000
-
-# See all available commands:
-python main.py --help
 ```
 
 ---
@@ -940,7 +1412,7 @@ python main.py --help
 4. Press D to target Dealer
    → Click the dealer's face-up card
 
-5. For other players' cards (important for accurate count):
+5. For other players' cards:
    → Select "Seen" in the target dropdown
    → Click their cards as they are revealed
    → These are counted but NOT shown in your hand display
@@ -949,36 +1421,14 @@ python main.py --help
    → Big coloured text shows: HIT / STAND / DOUBLE / SPLIT / SURRENDER
    → "WHY THIS ACTION?" explains the reasoning
    → Gold "DEVIATION" badge = Illustrious 18 or Fab 4 override is active
-   → Bet Sizing panel shows the recommended bet for this count level
 
 7. After the hand resolves:
    → Click WIN, PUSH, or LOSS to record the result
-   → Bankroll and session stats update automatically
 
 8. When the casino dealer physically reshuffles the shoe:
    → Click "Shuffle" (NOT New Hand)
    → This resets the running count to zero
-   → Do NOT click Shuffle between normal hands — that kills your count
 ```
-
-### Dashboard panels explained
-
-| Panel | Location | What it shows |
-|-------|----------|---------------|
-| **Count Display** | Top bar | Running count, True count, advantage % |
-| **AI Recommendation** | Left, top | Optimal action in large coloured text + plain English explanation |
-| **Bet Sizing** | Left, middle | Kelly-optimal bet, player edge, bankroll, risk of ruin |
-| **Side Bets** | Left, bottom | Real-time EV for Perfect Pairs, 21+3, Lucky Ladies |
-| **Strategy Table** | Left, bottom | Colour-coded basic strategy grid, highlights your current situation |
-| **Hand Display** | Centre, top | Your cards and dealer cards as visual card graphics |
-| **Card Grid** | Centre | 52-button grid — click to enter any card |
-| **Card Scanner** | Right, top | 3-mode scanner toggle (Manual / Screenshot / Live) |
-| **Shoe Composition** | Right | Bar chart of remaining cards by rank |
-| **Edge Meter** | Right | Visual gauge from house edge to player edge |
-| **Session Stats** | Right | Hands played, profit, win rate, hourly rate |
-| **Shuffle Tracker** | Right | ML Bayesian count adjustment after shuffles |
-| **Count History** | Right | Sparkline + log of every counted card |
-| **I18 Deviations** | Right, bottom | All 22 deviations — active ones glow gold |
 
 ### Keyboard shortcuts
 
@@ -993,190 +1443,54 @@ python main.py --help
 
 ## 🃏 Three Card Entry Modes
 
-The Card Scanner panel in the top-right has three modes. Click the toggle to switch
-instantly — no restart needed.
-
 ### ✋ Mode 1: Manual
 
 Click the 52-card grid to enter cards one at a time. Most reliable mode.
 Works without any CV or YOLO setup.
 
-**How to use:**
-- Press `P` → click your two starting cards
-- Press `D` → click the dealer upcard
-- Select **Seen** → click other players' cards (counted but not in your hand)
-- Press `N` for a new hand; press `S` when dealer reshuffles (count reset)
-
 ### 📋 Mode 2: Screenshot CV
 
-Take an OS screenshot of the casino window and paste it.
-YOLO reads all visible cards and shows you a preview with bounding boxes to confirm.
+Take an OS screenshot of the casino window and paste it into the dashboard.
+YOLO reads all visible cards and shows a preview for you to confirm.
 
-**Step-by-step:**
+**How to screenshot invisibly (casino cannot detect these):**
+- **Windows:** `Win + Shift + S`
+- **macOS:** `Cmd + Shift + 4`
+- **Linux:** Flameshot or PrtScn
 
-1. **Take a screenshot** using your OS — these are completely invisible to casino software:
-   - **Windows:** `Win + Shift + S` → drag to select just the card area
-   - **macOS:** `Cmd + Shift + 4` → drag to select
-   - **Linux:** Flameshot or PrtScn key
-
-2. **Switch** to the BlackjackML browser tab
-
-3. **Paste** with `Ctrl + V` (or `Cmd + V`) — the paste zone captures the image
-
-4. **YOLO detects cards** and draws coloured bounding boxes:
-   - Green box = high confidence (>80%)
-   - Yellow box = medium confidence (60–80%)
-   - Red box = low confidence (<60%) — check these carefully
-
-5. **Review the card list** — fix any wrong rank/suit using the dropdowns,
-   click × to remove false detections
-
-6. **Choose routing** using the "Assign to" dropdown:
-   - `Auto (1-2 Player, 3-4 Dealer)` — works when your cards are on the left
-   - `All → Seen` — for full table screenshots (counts all, adds none to your hand)
-   - `All → Player` — screenshot of only your cards
-   - `All → Dealer` — screenshot of only the dealer area
-
-7. **Click Apply** — cards are submitted with random human-like delays (150–950ms each)
-
-**Why this is undetectable by casinos:**
-- OS screenshot tools (`Win+Shift+S`, `Cmd+Shift+4`) are invisible to all software
-- No `getDisplayMedia()` — no screen-share banner in the browser
-- No `getUserMedia()` — no camera access light
-- Flask runs on `localhost:5000` — casino JavaScript cannot access `localhost`
-- Casino JS is sandboxed to its own tab; it cannot see other tabs, other processes,
-  or any local network ports
-- Random submission timing mimics a human clicking
+Then switch to the BlackjackML tab and press `Ctrl + V` to paste.
 
 ### 🔴 Mode 3: Live Auto-Scan
 
-The Flask server continuously captures your screen and routes cards automatically.
-You just watch as the count and recommendations update in real time.
-
-**One-time setup:**
 ```bash
 pip install mss
-
-# Linux only (built into Windows and macOS):
+# Linux only:
 sudo apt install python3-tk
 ```
 
-**How to use:**
-1. Open the casino in another browser tab or window
-2. Arrange so the table cards are visible (or use the casino's fullscreen)
-3. In Mode 3, optionally enter a **scan region** (x, y, width, height) to restrict
-   capture to just the casino table area — see the next section for how to set this
-4. Click **▶ Start Live Scan** — server begins scanning every ~200ms
-5. Cards appear automatically as they are dealt
-6. Click **■ Stop Scanning** when done
-
-**Why this is undetectable:**
-- `mss` captures the screen at the OS level — no browser API involved at all
-- Runs as a background Python thread in a separate process
-- Casino JavaScript cannot see OS processes, other applications, or localhost ports
+The Flask server continuously captures your screen and routes cards automatically.
 
 ---
 
 ## 🎯 How Card Routing Works (Your Cards vs Others)
 
-### The problem
-
-At a real blackjack table you can see multiple hands being played.
-If all detected cards were sent to your Player hand, your hand total would be wrong
-and every strategy recommendation would be meaningless.
-
-### The solution: position-based routing
-
-The live scanner divides the captured region into horizontal thirds based on the
-x-coordinate of each detected card:
+The live scanner divides the captured region into horizontal thirds:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                  Your Scan Region                            │
-│                                                              │
 │  ┌──────────────┬──────────────┬──────────────┐             │
 │  │  Left 33%    │  Centre 33%  │  Right 33%   │             │
-│  │              │              │              │             │
-│  │  YOUR        │  DEALER      │  OTHER       │             │
-│  │  CARDS       │  CARDS       │  PLAYERS     │             │
-│  │              │              │              │             │
-│  │ → player     │ → dealer     │ → seen       │             │
-│  │              │              │              │             │
-│  │ Shown in     │ Shown in     │ Counted      │             │
-│  │ your hand    │ dealer hand  │ but NOT in   │             │
-│  │ display      │ display      │ any hand     │             │
+│  │  YOUR CARDS  │ DEALER CARDS │ OTHER PLAYERS│             │
+│  │  → player    │  → dealer    │  → seen      │             │
 │  └──────────────┴──────────────┴──────────────┘             │
 └──────────────────────────────────────────────────────────────┘
-
-Counter.count_card() is called for ALL cards regardless of target.
-hand.add_card() is called ONLY for 'player' and 'dealer' targets.
 ```
 
-This means:
-- **Your cards** → appear in your hand display → strategy recommendation uses them
-- **Dealer cards** → appear in dealer display → triggers S17 draw rules
-- **Other players** → counted for the running count but NEVER shown in your hand
-
-### Setting up the scan region
-
-**Step 1 — Note your screen resolution**
-Right-click desktop → Display Settings → note width × height (e.g. 1920×1080).
-
-**Step 2 — Identify where the table is on screen**
-Open the casino fullscreen. Observe:
-- Where does YOUR seat appear? (usually bottom-left or bottom-centre)
-- Where is the DEALER? (usually top-centre)
-- Where are OTHER PLAYERS? (sides and top)
-
-**Step 3 — Enter region coordinates in Mode 3**
-The region (x, y, w, h) is a rectangle on your screen:
-```
-x = 0       ← start at the left edge of the screen
-y = 150     ← skip the casino menu/lobby at the top (~150px)
-w = 1920    ← capture full screen width
-h = 650     ← capture the playing area (adjust to cut off lobby at bottom)
-```
-
-**Step 4 — Verify by watching the terminal**
-After clicking Start Live Scan, watch the Flask server's console output.
-Each detected card prints which target it was routed to. Adjust x/y/w/h
-until your cards consistently route to `player` and the dealer routes to `dealer`.
-
-**Tip for side-seat positions:**
-If your seat is on the right side of the table, the thirds will be wrong.
-In that case, set the region to cover only your seat + dealer area and ignore
-the other players. Or use Mode 2 (screenshot) with `All → Seen` for the full table
-and separate screenshots of your cards with `All → Player`.
+All cards are counted. Only player/dealer cards appear in the hand display.
 
 ---
 
 ## 📊 Model Performance & Accuracy
-
-### Strategy model architecture (v2 ResNet + Attention)
-
-```
-Input: 28 features
-      ↓
-FeatureAttention gate
-  → learns which inputs matter per situation
-  → count matters more late-shoe; hand value matters more early-shoe
-      ↓
-Input projection: 28 → 256
-      ↓
-ResidualBlock(256 → 512)    expand for capacity
-ResidualBlock(512 → 512)    deep feature representation
-ResidualBlock(512 → 256)    compress back
-ResidualBlock(256 → 256)    refine
-      ↓ shared trunk output
-  ┌────────────┬────────────┬────────────┐
-  ↓            ↓            ↓
-hit/stand    double/split  surrender
-  head         head          head
-(uses hand   (uses count   (uses count
- + dealer)    + shoe)       + dealer)
-  ↓            ↓            ↓
-         combined logits (5 actions)
-```
 
 ### Strategy model accuracy by training size
 
@@ -1189,21 +1503,16 @@ hit/stand    double/split  surrender
 
 ### YOLO card detection accuracy by training size
 
-| Training data | mAP@50 | mAP@50-95 | Notes |
-|--------------|--------|-----------|-------|
-| 5k synthetic | ~0.87 | ~0.72 | Adequate for testing |
-| 10k synthetic | ~0.92 | ~0.78 | Good for general use |
-| 25k synthetic | ~0.95 | ~0.83 | Excellent |
-| **10k synth + Roboflow** | **~0.97** | **~0.88** | **Best — use this** |
-
-> mAP@50 means: what fraction of cards does the model find with its bounding box
-> overlapping the real card by at least 50%? Values above 0.90 are considered excellent.
+| Training data | mAP@50 | Notes |
+|--------------|--------|-------|
+| 5k synthetic | ~0.87 | Adequate for testing |
+| 10k synthetic | ~0.92 | Good for general use |
+| 25k synthetic | ~0.95 | Excellent |
+| **10k synth + Roboflow** | **~0.97** | **Best — use this** |
 
 ---
 
 ## 📈 Player Advantage Analysis
-
-### Where the edge comes from, broken down
 
 ```
 Starting point — house edge with perfect basic strategy:    −0.50%
@@ -1216,95 +1525,43 @@ Starting point — house edge with perfect basic strategy:    −0.50%
 FULL SYSTEM PLAYER EDGE:                          +0.20% to +0.50%
 ```
 
-Most players without a strategy tool play about 1.5% worse than perfect basic
-strategy. Just using this tool correctly without any counting is already worth ~+1.5%.
-
-### True count distribution (8-deck, 75% penetration)
-
-```
-TC ≤ -4  | ██ 4.2%
-TC = -3  | ████ 7.8%
-TC = -2  | ██████ 11.4%
-TC = -1  | ████████ 15.6%
-TC =  0  | ██████████ 19.8%  ← most hands happen near here
-TC = +1  | ████████ 15.2%
-TC = +2  | ██████ 10.8%
-TC = +3  | ████ 7.1%
-TC = +4  | ███ 4.9%
-TC ≥ +5  | ████ 7.3%
-```
-
-The edge comes from betting small at negative counts and large at positive counts —
-not from playing differently on most hands (most hands are at neutral count).
-
-### Risk of ruin vs. bankroll (1–16 spread, $10 base unit)
-
-| Bankroll | Risk of Ruin |
-|----------|--------------|
-| $1,000 | ~45% — very risky |
-| $3,000 | ~18% |
-| $5,000 | ~8% |
-| **$10,000** | **~2%** ← default config |
-| $20,000 | ~0.3% — very safe |
-
 ---
 
 ## ⚙️ Customising Settings
 
 All settings are in `config.py`. No other code changes are needed.
 
-### Table rules — change these to match your casino
+### Table rules
 
 ```python
 # config.py → class GameConfig
-
-NUM_DECKS                = 6      # Decks in the shoe: 1, 2, 4, 6, or 8
-DEALER_HITS_SOFT_17      = False  # Does dealer hit soft 17? H17 rule = True
-BLACKJACK_PAYS           = 3/2    # Blackjack payout. Avoid 6:5 tables (= 1.2)
-ALLOW_DOUBLE_AFTER_SPLIT = False  # Can you double down after a split?
-ALLOW_RESPLIT            = False  # Can you split a split hand again?
-ALLOW_LATE_SURRENDER     = True   # Can you surrender after dealer checks for BJ?
-PENETRATION              = 0.75   # Fraction of shoe dealt before reshuffling
-BURN_CARDS               = 1      # Cards discarded face-down at start of shoe
+NUM_DECKS                = 6
+DEALER_HITS_SOFT_17      = False
+BLACKJACK_PAYS           = 3/2
+ALLOW_DOUBLE_AFTER_SPLIT = False
+ALLOW_LATE_SURRENDER     = True
+PENETRATION              = 0.75
 ```
 
 ### Bankroll and bet sizing
 
 ```python
 # config.py → class BettingConfig
-
-TABLE_MIN        = 10      # Casino minimum bet ($)
-TABLE_MAX        = 500     # Casino maximum bet ($)
-BASE_UNIT        = 10      # One unit in your bet spread ($) — usually = TABLE_MIN
-INITIAL_BANKROLL = 10000   # Your total bankroll ($)
-BET_SPREAD       = 16      # Maximum bet = BASE_UNIT × BET_SPREAD
-KELLY_FRACTION   = 0.75    # Three-quarter Kelly (conservative and recommended)
-```
-
-### ML model settings
-
-```python
-# config.py → class MLConfig
-
-SIMULATION_HANDS     = 1_000_000  # Hands to simulate for training data
-EPOCHS               = 50         # Maximum training epochs
-CONFIDENCE_THRESHOLD = 0.70       # Min confidence for model to override rules
-TRUNK_DIM            = 512        # Width of neural network trunk
+TABLE_MIN        = 10
+BASE_UNIT        = 10
+INITIAL_BANKROLL = 10000
+BET_SPREAD       = 16
+KELLY_FRACTION   = 0.75
 ```
 
 ### Counting system
 
 ```python
 # config.py → class CountingConfig
-
-DEFAULT_SYSTEM      = "hi_lo"   # "hi_lo" | "ko" | "omega_ii" | "zen"
-INSURANCE_THRESHOLD = 3.0       # Take insurance when True Count reaches this
-WONGING_ENTER_TC    = 2.0       # Back-counting entry threshold
-WONGING_EXIT_TC     = -1.0      # Back-counting exit threshold
+DEFAULT_SYSTEM = "hi_lo"   # "hi_lo" | "ko" | "omega_ii" | "zen"
 ```
 
 > **⚠️ If you change DEFAULT_SYSTEM you MUST retrain from scratch.**
-> Do not use --resume. The count features in the training data will be wrong.
 
 ---
 
@@ -1314,14 +1571,6 @@ WONGING_EXIT_TC     = -1.0      # Back-counting exit threshold
 
 ```bash
 python main.py web
-# http://localhost:5000
-```
-
-### Local network (share on your WiFi)
-
-```bash
-python main.py web --host 0.0.0.0
-# Other devices: http://YOUR_LAN_IP:5000
 ```
 
 ### Production server (Linux VPS)
@@ -1344,29 +1593,16 @@ EXPOSE 5000
 CMD ["python", "main.py", "web", "--host", "0.0.0.0"]
 ```
 
-```bash
-docker build -t blackjackml .
-docker run -p 5000:5000 blackjackml
-```
-
-> **Note:** Live scan (Mode 3) does not work inside Docker — the container cannot
-> access the host screen. Use Modes 1 and 2 when running in Docker.
+> **Note:** Live scan (Mode 3) does not work inside Docker.
 
 ---
 
 ## ❓ Troubleshooting
 
-### `python is not recognized` or `python: command not found`
+### `python is not recognized`
 
 Reinstall Python from [python.org](https://python.org).
 During installation tick **"Add Python to PATH"**. Restart your terminal after.
-
-### `pip install fails` or package not found errors
-
-```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
 
 ### `Address already in use` (port 5000 is taken)
 
@@ -1376,90 +1612,54 @@ python main.py web --port 8080
 
 ### `ModuleNotFoundError: No module named 'blackjack'`
 
-You must run all commands from the project root folder, not a subfolder:
+You must run all commands from the project root folder:
 ```bash
-# Check where you are:
-pwd   # Mac/Linux   OR   cd   # Windows (shows current path)
-
-# Navigate to the project root:
-cd C:\Users\Rouna\Downloads\MLModel\Model1
+cd C:\Users\YourName\Downloads\BlackJackML-main
 python main.py web
 ```
 
 ### `tesseract is not installed or it's not in your PATH`
 
-You need the Tesseract binary installed on your system.
-`pip install pytesseract` alone is not enough — that is just a Python wrapper.
-
-- **Windows:** Download from https://github.com/UB-Mannheim/tesseract/wiki
-  During install tick "Add to PATH". Then reopen your terminal.
+- **Windows:** Download from https://github.com/UB-Mannheim/tesseract/wiki — tick "Add to PATH"
 - **macOS:** `brew install tesseract`
 - **Linux:** `sudo apt install tesseract-ocr`
 
-### `YOLO model not found — using OCR fallback`
+### I edited a component file but nothing changed in the browser
 
-The YOLO card detector has not been trained yet. Run:
+You need to rebuild the bundle after editing any `.js` or `.jsx` file:
+
+**Windows:**
+```powershell
+.\build.ps1
+```
+**Mac / Linux:**
 ```bash
-python yolo/generate_dataset.py --images 10000
-python yolo/train_yolo.py
+bash build.sh
+```
+Then refresh your browser. See the [How the Frontend Build Works](#-how-the-frontend-build-works-read-this-if-you-edit-any-js-files) section for a full explanation.
+
+### `tsc: command not found`
+
+TypeScript is not installed. Fix:
+```powershell
+npm install -g typescript
 ```
 
-### `ultralytics not installed`
+### `The term 'bash' is not recognized` (Windows)
 
-```bash
-pip install ultralytics
+Do not use `bash build.sh` in PowerShell. Use the PowerShell script instead:
+```powershell
+.\build.ps1
 ```
-
-### Live scan (Mode 3) shows "Screen capture unavailable"
-
-```bash
-pip install mss
-# Then restart the server:
-python main.py web
+For watch mode:
+```powershell
+.\watch.ps1
 ```
-
-### Other players' cards appearing in my hand display
-
-Your scan region is not set correctly. Two fixes:
-
-**Fix 1** — Narrow the region to only your seat + dealer area so other players
-are outside the capture rectangle entirely.
-
-**Fix 2** — Use Mode 2 (screenshot) with `All → Seen` for the full table view,
-then separate screenshots of just your seat with `All → Player`.
-
-### Count doesn't match what I'm tracking manually
-
-- Press **Shuffle** only when the dealer physically shuffles the cards.
-  Never press Shuffle between normal hands — it resets the count to zero.
-- Confirm you are using the same counting system.
-  Hi-Lo and KO use different count values for the same cards.
-- KO is an unbalanced system — its running count is not directly comparable
-  to Hi-Lo's true count.
-
-### Training is extremely slow (hours instead of minutes)
-
-```bash
-# First verify training works at all (2 min):
-python main.py train --hands 100000 --epochs 20
-
-# If you have an NVIDIA GPU, install CUDA PyTorch (6× faster):
-pip uninstall torch -y
-pip install torch --index-url https://download.pytorch.org/whl/cu121
-```
-
-### Dashboard loads but cards don't register when I click
-
-1. Press `F12` → Console tab → look for red JavaScript errors
-2. Confirm the Flask server is still running in your terminal (no crashed output)
-3. Refresh with `F5`
-4. Check you are at `http://localhost:5000` not `https://`
 
 ### VS Code shows squiggly underlines in .js files
 
-This is cosmetic — the code runs correctly regardless. To fix it:
-
-Make sure `jsconfig.json` exists in your project root (it is included in this repo):
+This is cosmetic only — the code runs correctly. To suppress it, make sure
+`jsconfig.json` exists in your project root (it is included in this repo):
 ```json
 {
   "compilerOptions": {
@@ -1468,25 +1668,37 @@ Make sure `jsconfig.json` exists in your project root (it is included in this re
   }
 }
 ```
-Then in VS Code: `Ctrl + Shift + P` → type **Reload Window** → press Enter.
+Then in VS Code: `Ctrl + Shift + P` → **Reload Window**.
+
+### Dashboard loads but cards don't register when I click
+
+1. Press `F12` → Console tab → look for red JavaScript errors
+2. Confirm the Flask server is still running in your terminal
+3. Refresh with `F5`
+4. Check you are at `http://localhost:5000` not `https://`
+5. If you recently edited a component, run `.\build.ps1` (Windows) or `bash build.sh` (Mac/Linux) and refresh
+
+### Training is extremely slow (hours instead of minutes)
+
+```bash
+# First verify training works at all (2 min):
+python main.py train --hands 100000 --epochs 20
+
+# Install CUDA PyTorch for GPU acceleration (6× faster):
+pip uninstall torch -y
+pip install torch --index-url https://download.pytorch.org/whl/cu121
+```
 
 ### Venv broken after moving or renaming the project folder
 
-Virtual environments store absolute paths internally. Any folder rename or move
-breaks them. The fix is to delete and recreate:
-
 ```bash
-# Windows PowerShell:
-Remove-Item -Recurse -Force .\venv
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-pip install ultralytics
+# Delete and recreate:
+rm -rf venv                        # Mac/Linux
+# OR: Remove-Item -Recurse -Force .\venv   (Windows PowerShell)
 
-# Mac / Linux:
-rm -rf venv
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate           # Mac/Linux
+# OR: .\venv\Scripts\Activate.ps1  (Windows)
 pip install -r requirements.txt
 pip install ultralytics
 ```
@@ -1525,58 +1737,11 @@ emit('state_update', full_state)
 React re-renders all panels
 ```
 
-### Live scanner card routing
-
-```
-For each detected card:
-
-  card_x = left edge of bounding box in pixels
-  rel_x  = card_x / region_width   (0.0 = left, 1.0 = right)
-
-  rel_x < 0.33  →  target = 'player'   (your seat — left third)
-  rel_x < 0.66  →  target = 'dealer'   (dealer area — centre third)
-  rel_x >= 0.66 →  target = 'seen'     (other players — right third)
-```
-
-### How count-based deviations override basic strategy
-
-```
-deviation_engine.get_action(hand, dealer_upcard, true_count):
-
-  Check Fab 4 surrenders first:
-    14 vs 10 at TC >= +3  → SURRENDER
-    15 vs 10 at TC >= 0   → SURRENDER
-    15 vs 9  at TC >= +2  → SURRENDER
-    15 vs A  at TC >= +1  → SURRENDER
-
-  Check Illustrious 18 next:
-    Insurance  at TC >= +3       → TAKE (normally skip)
-    16 vs 10   at TC >= 0        → STAND (normally HIT)
-    15 vs 10   at TC >= +4       → STAND (normally HIT)
-    10,10 vs 5 at TC >= +5       → SPLIT (normally STAND)
-    10,10 vs 6 at TC >= +4       → SPLIT
-    10 vs 10   at TC >= +4       → DOUBLE (normally HIT)
-    12 vs 3    at TC >= +2       → STAND (normally HIT)
-    12 vs 2    at TC >= +3       → STAND
-    11 vs A    at TC >= -1       → DOUBLE (normally HIT)
-    9  vs 2    at TC >= +1       → DOUBLE (normally HIT)
-    10 vs A    at TC >= +4       → DOUBLE
-    9  vs 7    at TC >= +3       → DOUBLE
-    16 vs 9    at TC >= +5       → STAND
-    13 vs 2    at TC >= -1       → STAND (normally HIT)
-    12 vs 4    at TC >= 0        → STAND
-    12 vs 5    at TC >= -2       → STAND
-    12 vs 6    at TC >= -1       → STAND
-    13 vs 3    at TC >= -2       → STAND
-
-  No deviation triggered → fall through to BasicStrategy lookup table
-```
-
 ### WebSocket event sequence from click to recommendation
 
 ```
 1. User clicks card button in CardGrid (or YOLO detects card)
-2. handleDealCard(rank, suit, target) called in App.js
+2. handleDealCard(rank, suit, target) called in App.jsx
 3. socketRef.current.emit('deal_card', {rank, suit, target})
 4. Flask receives event in @socketio.on('deal_card')
 5. counter.count_card(card)           → running count updates
@@ -1602,4 +1767,4 @@ in a casino is at your own risk. This software is not intended for illegal use.
 
 ---
 
-*Built with ♠ Python · PyTorch · YOLOv8 · Flask · React · OpenCV · Tesseract · Socket.IO*
+*Built with ♠ Python · PyTorch · YOLOv8 · Flask · React · OpenCV · Tesseract · Socket.IO · TypeScript*

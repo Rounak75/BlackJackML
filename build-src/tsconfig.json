@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2018",
+    "module": "ES2015",
+    "jsx": "react",
+    "jsxFactory": "React.createElement",
+    "jsxFragmentFactory": "React.Fragment",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": false,
+    "noEmit": false,
+    "noEmitOnError": false,
+    "outDir": "./out",
+    "rootDir": "./src",
+    "removeComments": true,
+    "skipLibCheck": true,
+    "noImplicitAny": false,
+    "lib": ["ES2018", "DOM"]
+  },
+  "include": ["./src/**/*"]
+}

@@ -139,6 +139,7 @@ function SideBetPanel({ sideBets }) {
                     </div>
                   </div>
                   <button
+                    aria-label={`Dismiss ${alert.bet || 'side bet'} opportunity alert`}
                     onClick={() => dismissAlert(alert.key)}
                     style={{ color: '#94a7c4', fontSize: '1rem', lineHeight: 1, padding: '2px 6px' }}
                   >

@@ -5,54 +5,72 @@
 # Install everything:
 #   pip install -r requirements.txt
 #
-# For GPU-accelerated training (6× faster — optional):
+# For GPU-accelerated training (6x faster — optional):
 #   pip uninstall torch -y
 #   pip install torch --index-url https://download.pytorch.org/whl/cu121
 #
-# SYSTEM DEPENDENCIES (not pip — install separately):
-#   Tesseract OCR:
+# ── SYSTEM DEPENDENCIES (install separately — NOT via pip) ───────────────────
+#
+#   Node.js 18+ (required for frontend build):
+#     Windows / macOS → https://nodejs.org  (download LTS)
+#     Linux           → sudo apt install nodejs npm
+#     Verify:           node --version   (should show v18 or higher)
+#
+#   TypeScript compiler (required for frontend build):
+#     All platforms   → npm install -g typescript
+#     Verify:           tsc --version
+#
+#   Tesseract OCR (OCR fallback when YOLO model is not trained yet):
 #     Windows → https://github.com/UB-Mannheim/tesseract/wiki
+#               During install: tick "Add Tesseract to system PATH"
 #     macOS   → brew install tesseract
 #     Linux   → sudo apt install tesseract-ocr
+#     Verify:   tesseract --version
 #
-#   tkinter (for live overlay desktop window — overlay.py):
-#     Windows → already included with Python
-#     macOS   → already included with Python
+#   tkinter (for live overlay desktop window — overlay.py only):
+#     Windows → already bundled with Python installer
+#     macOS   → already bundled with Python installer
 #     Linux   → sudo apt install python3-tk
 #
+# ── FRONTEND BUILD ────────────────────────────────────────────────────────────
+#
+#   The dashboard UI is pre-compiled into app/static/bundle.min.js
+#   You only need to rebuild if you edit files in app/static/components/
+#
+#   Windows (PowerShell):
+#     Unblock-File .\build.ps1
+#     .\build.ps1
+#
+#   Mac / Linux:
+#     bash build.sh
+#
+# ══════════════════════════════════════════════════════════════════════════════
+
 # ── Core ML & Neural Network ──────────────────────────────────────────────────
 numpy>=1.24.0          # array math — used by every module
-torch>=2.0.0           # PyTorch — neural network training + inference
+torch>=2.0.0           # PyTorch — neural network training and inference
                        # BlackjackNet v2: ResNet + Attention + 3 decision heads
 
 # ── Web Server & Real-Time Communication ─────────────────────────────────────
 flask>=3.0.0           # web framework — serves dashboard at localhost:5000
 flask-socketio>=5.3.0  # WebSocket support — real-time card updates to browser
-eventlet>=0.35.0       # async worker for flask-socketio (threading mode)
+eventlet>=0.35.0       # async worker for flask-socketio
 
 # ── Computer Vision — Card Detection ─────────────────────────────────────────
-opencv-python>=4.8.0   # image processing — card contour detection, preprocessing
-Pillow>=10.0.0         # image rendering — synthetic dataset generation + clipboard paste
+opencv-python>=4.8.0   # image processing — card contour detection + preprocessing
+Pillow>=10.0.0         # image rendering — synthetic dataset generation
 pytesseract>=0.3.10    # OCR wrapper — fallback rank reader when YOLO not available
                        # REQUIRES: tesseract binary installed separately (see above)
 
 # ── YOLO Card Detector ────────────────────────────────────────────────────────
 ultralytics>=8.0.0     # YOLOv8 — detects all 52 cards in one forward pass
-                       # Used by: yolo/generate_dataset.py, yolo/train_yolo.py,
-                       #          app/cv_detector.py (auto-loads if model exists)
-                       # Train:   python yolo/generate_dataset.py
+                       # Train:   python yolo/generate_dataset.py --images 10000
                        #          python yolo/train_yolo.py
+                       # Uses:    app/cv_detector.py (auto-loads if model exists)
 
 # ── Live Screen Capture (Mode 3 — Live Auto-Scan) ────────────────────────────
 mss>=9.0.0             # OS-level screen capture — invisible to casino browsers
-                       # Used by: app/live_scanner.py (background capture thread)
-                       # tkinter for the overlay window is stdlib — no pip needed
+                       # Used by: app/live_scanner.py
 
 # ── Testing ───────────────────────────────────────────────────────────────────
-pytest>=7.4.0          # unit test runner
-
-# ── REMOVED FROM ORIGINAL (not used anywhere in the codebase) ────────────────
-# pandas        — train.py uses stdlib csv module, not pandas
-# scikit-learn  — torch DataLoader handles train/test split internally
-# matplotlib    — not imported anywhere (training log saved as CSV, not plotted)
-# seaborn       — not imported anywhere
+pytest>=7.4.0          # unit test runner — run with: pytest

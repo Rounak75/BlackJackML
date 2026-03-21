@@ -261,6 +261,8 @@ function BettingPanel({
       <div className="relative mb-3">
         <button
           onClick={() => setShowCurrencyPicker(p => !p)}
+          aria-label={`Currency: ${cur.code} — ${cur.name}. Click to change`}
+          aria-expanded={showCurrencyPicker}
           className="w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-semibold"
           style={{
             background: '#111827',
@@ -291,6 +293,7 @@ function BettingPanel({
                 autoFocus
                 value={currencySearch}
                 onChange={e => setCurrencySearch(e.target.value)}
+                aria-label="Search currencies and cryptocurrencies"
                 placeholder="Search currency or crypto…"
                 className="w-full rounded-lg px-3 py-1.5 text-xs"
                 style={{
@@ -309,6 +312,8 @@ function BettingPanel({
                   </div>
                   {fiat.map(c => (
                     <button key={c.code}
+                      aria-label={`Select currency: ${c.name} (${c.code})`}
+                      aria-pressed={cur.code === c.code}
                       onClick={() => { onCurrencyChange(c); setShowCurrencyPicker(false); setCurrencySearch(''); }}
                       className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-white/5"
                       style={{ color: cur.code === c.code ? '#6aafff' : '#ccdaec', textAlign: 'left' }}>
@@ -327,6 +332,8 @@ function BettingPanel({
                   </div>
                   {crypto.map(c => (
                     <button key={c.code}
+                      aria-label={`Select cryptocurrency: ${c.name} (${c.code})`}
+                      aria-pressed={cur.code === c.code}
                       onClick={() => { onCurrencyChange(c); setShowCurrencyPicker(false); setCurrencySearch(''); }}
                       className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-white/5"
                       style={{ color: cur.code === c.code ? '#ffd447' : '#ccdaec', textAlign: 'left' }}>
@@ -359,6 +366,7 @@ function BettingPanel({
             <input
               ref={inputRef}
               type="number"
+              aria-label={`Bet amount in ${cur.code}`}
               value={activeBet}
               min="0"
               step={cur.isCrypto ? Math.pow(10, -dec) : 1}
@@ -371,7 +379,8 @@ function BettingPanel({
           {[0.5, 1, 2, 5].map(mult => (
             <button
               key={mult}
-              onClick={() => onCustomBetChange(parseFloat((activeBet * mult).toFixed(dec)))}
+              aria-label={`Multiply bet by ${mult}`}
+            onClick={() => onCustomBetChange(parseFloat((activeBet * mult).toFixed(dec)))}
               className="text-[10px] px-2 py-1.5 rounded-md font-semibold"
               style={{
                 background: '#212d45',
@@ -398,6 +407,8 @@ function BettingPanel({
         {/* Doubled toggle */}
         <button
           onClick={() => onIsDoubledChange(!isDoubled)}
+          aria-pressed={isDoubled}
+          aria-label={isDoubled ? "Undo double down" : "Mark hand as doubled down"}
           className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-bold transition-all"
           style={{
             background: isDoubled ? 'rgba(255,212,71,0.15)' : '#111827',
@@ -413,6 +424,8 @@ function BettingPanel({
         {insurance?.available ? (
           <button
             onClick={() => onTookInsuranceChange(!tookInsurance)}
+            aria-pressed={tookInsurance}
+            aria-label={tookInsurance ? "Undo insurance bet" : "Mark insurance bet as placed"}
             className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg font-bold transition-all"
             style={{
               fontSize: 13,
@@ -503,6 +516,7 @@ function BettingPanel({
           ].map(({ label, result, color, bg, border }) => (
             <button
               key={result}
+              aria-label={`Record hand result as ${result} — bet ${cur.symbol}${fmtBet(effectiveBet)}`}
               onClick={() => {
                 // Manual override — calculate profit based on result type
                 let profit;

@@ -2,21 +2,16 @@
  * components/CardGrid.js
  * ─────────────────────────────────────────────────────────
  * 52-button card deal grid (4 suits × 13 ranks).
- * Clicking a card emits it to the server.
  *
- * Features:
- *   • Suit filter tabs (All / ♠ / ♥ / ♦ / ♣)
- *   • Hi-Lo count indicators on each button (+/-)
- *   • Depletion fading when <20% of a rank remains
- *   • Target selector (Player / Dealer / Seen)
- *   • Undo button
- *
- * Props:
- *   target           — 'player' | 'dealer' | 'seen'
- *   onTargetChange   — callback(target)
- *   remainingByRank  — map of count-key → remaining cards
- *   onDealCard       — callback(rank, suitName)
- *   onUndo           — callback
+ * ACCESSIBILITY IMPROVEMENTS:
+ *   • Every card button has a descriptive aria-label:
+ *     e.g. "Deal Ace of Spades to player"
+ *   • Suit filter tabs have aria-pressed for selected state
+ *   • Target selector buttons have aria-pressed + aria-label
+ *   • The card grid has role="group" + aria-label
+ *   • Dealer alert banners use role="alert" for immediate AT announcement
+ *   • Depleted cards have aria-disabled="true" (screen reader info)
+ *   • Split/Undo have descriptive aria-labels
  */
 
 function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands }) {
@@ -27,39 +22,47 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
   const maxByKey  = { 2: 24, 3: 24, 4: 24, 5: 24, 6: 24, 7: 24, 8: 24, 9: 24, 10: 96, 11: 24 };
 
   const suitFilters = [
-    { key: 'all',      label: 'All' },
-    { key: 'spades',   label: '♠' },
-    { key: 'hearts',   label: '♥', red: true },
-    { key: 'diamonds', label: '♦', red: true },
-    { key: 'clubs',    label: '♣' },
+    { key: 'all',      label: 'All',  ariaLabel: 'Show all suits' },
+    { key: 'spades',   label: '♠',   ariaLabel: 'Spades only' },
+    { key: 'hearts',   label: '♥',   ariaLabel: 'Hearts only',   red: true },
+    { key: 'diamonds', label: '♦',   ariaLabel: 'Diamonds only', red: true },
+    { key: 'clubs',    label: '♣',   ariaLabel: 'Clubs only' },
   ];
 
   const targets = [
-    { t: 'player', label: '👤 Player' },
-    { t: 'dealer', label: dealerMustDraw ? '🏦 Dealer ←' : '🏦 Dealer' },
-    { t: 'seen',   label: '👁 Seen' },
+    { t: 'player', label: '👤 Player', ariaLabel: 'Deal next card to player hand' },
+    { t: 'dealer', label: dealerMustDraw ? '🏦 Dealer ←' : '🏦 Dealer', ariaLabel: dealerMustDraw ? 'Deal next card to dealer (dealer must draw)' : 'Deal next card to dealer hand' },
+    { t: 'seen',   label: '👁 Seen',   ariaLabel: 'Mark card as seen (count only, no hand)' },
   ];
+
+  // Human-readable suit name for aria-labels
+  const suitFullName = { spades: 'Spades', hearts: 'Hearts', diamonds: 'Diamonds', clubs: 'Clubs' };
 
   return (
     <div
       className="rounded-xl p-3"
       style={{ background: '#1a2236', border: '1.5px solid rgba(255,255,255,0.12)' }}
+      role="group"
+      aria-label="Card entry panel"
     >
       {/* Header row */}
       <div className="flex items-center justify-between mb-3">
         <span
           className="font-display font-bold text-[10px] uppercase tracking-widest"
           style={{ color: '#b8ccdf' }}
+          aria-hidden="true"
         >
           Click to Deal
         </span>
 
         {/* Suit filter tabs */}
-        <div className="flex gap-1">
-          {suitFilters.map(({ key, label, red }) => (
+        <div className="flex gap-1" role="group" aria-label="Filter cards by suit">
+          {suitFilters.map(({ key, label, red, ariaLabel }) => (
             <button
               key={key}
               onClick={() => setSuitFilter(key)}
+              aria-pressed={suitFilter === key}
+              aria-label={ariaLabel}
               className="text-xs px-2 py-0.5 rounded-md transition-all"
               style={{
                 background: suitFilter === key ? '#212d45' : 'transparent',
@@ -76,9 +79,10 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
         </div>
       </div>
 
-      {/* Dealer must-draw banner */}
+      {/* Dealer must-draw banner — role="alert" so AT announces immediately */}
       {dealerMustDraw && (
         <div
+          role="alert"
           className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg text-xs font-semibold"
           style={{
             background: 'rgba(255, 160, 40, 0.15)',
@@ -87,7 +91,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             animation: 'pulse 1.5s ease-in-out infinite',
           }}
         >
-          <span>🏦</span>
+          <span aria-hidden="true">🏦</span>
           <span>DEALER MUST DRAW — click a card to deal to dealer</span>
         </div>
       )}
@@ -95,6 +99,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
       {/* Dealer stands banner */}
       {dealerStands && (
         <div
+          role="status"
           className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg text-xs font-semibold"
           style={{
             background: 'rgba(50, 200, 120, 0.12)',
@@ -102,7 +107,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             color: '#5eead4',
           }}
         >
-          <span>✓</span>
+          <span aria-hidden="true">✓</span>
           <span>Dealer stands — record the result</span>
         </div>
       )}
@@ -111,10 +116,12 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
       <div
         className="flex items-center gap-2 mb-2 p-2 rounded-lg"
         style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)' }}
+        role="group"
+        aria-label="Select deal target"
       >
-        <span className="text-[10px] font-semibold" style={{ color: '#b8ccdf', flexShrink: 0 }}>To:</span>
+        <span className="text-[10px] font-semibold" style={{ color: '#b8ccdf', flexShrink: 0 }} aria-hidden="true">To:</span>
         <div className="flex gap-1 flex-1">
-          {targets.map(({ t, label }) => {
+          {targets.map(({ t, label, ariaLabel }) => {
             const isDealer = t === 'dealer';
             const mustDraw = isDealer && dealerMustDraw;
             const isActive = target === t;
@@ -122,6 +129,8 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
               <button
                 key={t}
                 onClick={() => onTargetChange(t)}
+                aria-pressed={isActive}
+                aria-label={ariaLabel}
                 className="flex-1 text-xs py-1.5 rounded-md font-semibold transition-all"
                 style={{
                   background: isActive
@@ -146,11 +155,10 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
 
       {/* Action buttons row: Split + Undo */}
       <div className="flex gap-2 mb-3">
-
-        {/* SPLIT button — only shown when player has a splittable pair */}
         {canSplit ? (
           <button
             onClick={onSplit}
+            aria-label="Split pair into two separate hands"
             className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-bold transition-all"
             style={{
               background: 'rgba(185,155,255,0.15)',
@@ -160,19 +168,18 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
               boxShadow: '0 0 14px rgba(185,155,255,0.3)',
               animation: 'split-pulse 1.8s ease-in-out infinite',
             }}
-            title="Split your pair into two separate hands"
           >
-            <span style={{ fontSize: 16 }}>✂</span>
+            <span aria-hidden="true" style={{ fontSize: 16 }}>✂</span>
             <span>SPLIT PAIR</span>
-            <span style={{ fontSize: 10, opacity: 0.8, fontWeight: 500 }}>→ 2 hands</span>
+            <span style={{ fontSize: 10, opacity: 0.8, fontWeight: 500 }} aria-hidden="true">→ 2 hands</span>
           </button>
         ) : (
-          <div style={{ flex: 1 }} /> 
+          <div style={{ flex: 1 }} aria-hidden="true" />
         )}
 
-        {/* UNDO button — always visible, removes last card dealt */}
         <button
           onClick={onUndo}
+          aria-label="Undo last card dealt"
           className="flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-bold transition-all"
           style={{
             background: 'rgba(255,92,92,0.10)',
@@ -189,9 +196,8 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             e.currentTarget.style.background = 'rgba(255,92,92,0.10)';
             e.currentTarget.style.borderColor = 'rgba(255,92,92,0.35)';
           }}
-          title="Undo last card dealt (removes mistake)"
         >
-          <span style={{ fontSize: 14 }}>↩</span>
+          <span aria-hidden="true" style={{ fontSize: 14 }}>↩</span>
           <span>Undo Card</span>
         </button>
       </div>
@@ -207,6 +213,8 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
       <div
         className="card-grid-inner"
         style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 1fr)', gap: '3px' }}
+        role="group"
+        aria-label="Card selection grid — click to deal a card"
       >
         {SUITS.map(suit =>
           RANKS.map(rank => {
@@ -218,18 +226,21 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             const rem      = remainingByRank ? (remainingByRank[key] || 0) : 0;
             const max      = maxByKey[key] || 24;
             const depleted = rem < max * 0.2;
+            const countHint = hv > 0 ? ', Hi-Lo +1' : hv < 0 ? ', Hi-Lo -1' : '';
+            const suitName  = suitFullName[suit.name] || suit.name;
 
             return (
               <button
                 key={`${rank}-${suit.name}`}
                 onClick={() => onDealCard(rank, suit.name)}
+                aria-label={`Deal ${rank} of ${suitName} to ${target}${countHint}${depleted ? ' (low supply)' : ''}`}
+                aria-disabled={depleted ? 'true' : undefined}
                 className={`card-btn ${suit.isRed ? 'red-card' : ''} ${depleted ? 'depleted' : ''} ${hv > 0 ? 'count-pos' : hv < 0 ? 'count-neg' : ''}`}
-                title={`${rank}${suit.icon} → ${target}`}
               >
                 <span>{rank}</span>
-                <span className="btn-suit">{suit.icon}</span>
+                <span className="btn-suit" aria-hidden="true">{suit.icon}</span>
                 {hv !== 0 && (
-                  <span style={{
+                  <span aria-hidden="true" style={{
                     position: 'absolute', top: '2px', right: '3px',
                     fontSize: '0.5rem', lineHeight: 1,
                     color: hv > 0 ? 'var(--jade)' : 'var(--ruby)',

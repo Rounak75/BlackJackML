@@ -205,7 +205,7 @@ function ModeToggle({ scanMode, onSetMode }) {
       {modes.map(({ id, icon, label, col, hint }) => {
         const active = scanMode === id;
         return (
-          <button key={id} onClick={() => onSetMode(id)} title={hint}
+          <button key={id} onClick={() => onSetMode(id)} aria-label={hint} aria-pressed={scanMode === id}
             style={{
               padding:'7px 4px', fontSize:10, fontWeight:700, borderRadius:6,
               cursor:'pointer', textAlign:'center', transition:'all 0.15s',
@@ -271,13 +271,13 @@ function CardRow({ card, index, onChange, onRemove }) {
         display:'flex', alignItems:'center', justifyContent:'center',
       }}>{index + 1}</span>
 
-      <select value={card.rank} onChange={e => onChange(index, {...card, rank:e.target.value})}
+      <select aria-label={`Card ${index + 1} rank`} value={card.rank} onChange={e => onChange(index, {...card, rank:e.target.value})}
         style={{background:C.base4, color:C.text, width:50, fontSize:13, fontWeight:700,
           borderRadius:4, padding:'2px 3px', border:'1px solid rgba(255,255,255,0.1)'}}>
         {VALID_RANKS.map(r => <option key={r} value={r}>{r}</option>)}
       </select>
 
-      <select value={card.suit} onChange={e => onChange(index, {...card, suit:e.target.value})}
+      <select aria-label={`Card ${index + 1} suit`} value={card.suit} onChange={e => onChange(index, {...card, suit:e.target.value})}
         style={{background:C.base4, color:SUIT_RED[card.suit]?'#ff7070':C.text,
           width:60, fontSize:13, borderRadius:4, padding:'2px 3px',
           border:'1px solid rgba(255,255,255,0.1)'}}>
@@ -294,7 +294,7 @@ function CardRow({ card, index, onChange, onRemove }) {
         borderRadius:3, padding:'1px 4px', fontFamily:'monospace',
       }}>{lbl}</span>
 
-      <button onClick={() => onRemove(index)}
+      <button aria-label={`Remove card ${index + 1}`} onClick={() => onRemove(index)}
         style={{marginLeft:'auto', background:'transparent', border:'none',
           color:C.muted, cursor:'pointer', fontSize:16, lineHeight:1, padding:'0 2px'}}>
         ×
@@ -440,7 +440,7 @@ function ScreenshotMode({ onDealCard, dealTarget }) {
       <div style={{display:'flex', gap:6, marginBottom:10}}>
         <div style={{flex:1}}>
           <div style={{fontSize:9, color:C.muted, marginBottom:3, textTransform:'uppercase', letterSpacing:'0.08em'}}>Assign to</div>
-          <select value={applyTarget} onChange={e => setApplyTarget(e.target.value)}
+          <select aria-label="Deal detected cards to" value={applyTarget} onChange={e => setApplyTarget(e.target.value)}
             disabled={isApplying}
             style={{width:'100%', padding:'5px 6px', fontSize:11,
               background:C.base4, color:C.text, borderRadius:5,
@@ -453,7 +453,7 @@ function ScreenshotMode({ onDealCard, dealTarget }) {
         </div>
         <div style={{flex:1}}>
           <div style={{fontSize:9, color:C.muted, marginBottom:3, textTransform:'uppercase', letterSpacing:'0.08em'}}>Timing</div>
-          <select value={timing} onChange={e => setTiming(e.target.value)}
+          <select aria-label="Card timing interval" value={timing} onChange={e => setTiming(e.target.value)}
             disabled={isApplying}
             style={{width:'100%', padding:'5px 6px', fontSize:11,
               background:C.base4, color:C.text, borderRadius:5,
@@ -513,7 +513,7 @@ function ScreenshotMode({ onDealCard, dealTarget }) {
             ))}
           </div>
           <div style={{display:'flex', gap:6, marginBottom:6}}>
-            <button onClick={handleApply} disabled={!cards.length}
+            <button aria-label="Apply detected cards to hand" onClick={handleApply} disabled={!cards.length}
               style={{
                 flex:2, padding:'9px 0', fontSize:12, fontWeight:700, borderRadius:7,
                 background: cards.length ? C.jadeD : 'transparent',
@@ -523,7 +523,7 @@ function ScreenshotMode({ onDealCard, dealTarget }) {
               }}>
               ✓ Apply {cards.length} Card{cards.length!==1?'s':''}
             </button>
-            <button onClick={handleReset}
+            <button aria-label="Reset detected cards" onClick={handleReset}
               style={{flex:1, padding:'9px 0', background:'transparent',
                 border:'1px solid rgba(255,255,255,0.1)', borderRadius:7,
                 color:C.muted, fontSize:12, cursor:'pointer'}}>
@@ -593,7 +593,7 @@ function FpsSelector({ value, onChange }) {
       {opts.map(({fps, label}, i) => {
         const active = value === fps;
         return (
-          <button key={fps} onClick={() => onChange(fps)}
+          <button key={fps} aria-label={`Set scan rate to ${fps} FPS`} aria-pressed={value === fps} onClick={() => onChange(fps)}
             style={{
               padding:'4px 10px', fontSize:10, fontWeight: active ? 700 : 400,
               cursor:'pointer', whiteSpace:'nowrap',
@@ -704,7 +704,7 @@ function SetupGuide({ available }) {
         fontSize:10, color:C.gold,
       }}>
         ⚠ Screen capture not installed.
-        <button onClick={() => setOpen(o => !o)}
+        <button aria-label={open ? 'Collapse live overlay panel' : 'Expand live overlay panel'} aria-expanded={open} onClick={() => setOpen(o => !o)}
           style={{marginLeft:6, background:'transparent', border:'none',
             color:C.gold, cursor:'pointer', fontSize:10, textDecoration:'underline'}}>
           {open ? 'hide' : 'setup'}
@@ -736,7 +736,7 @@ function SetupGuide({ available }) {
 // (socket) to update the scanner ROI to that window's screen coordinates.
 // Browser windows (Chrome/Edge/Firefox/Stake etc.) are sorted to the top.
 
-function WindowPicker({ socket, onWindowSelect }) {
+function WindowPicker({ socket, onWindowSelect = null }) {
   const { useState, useEffect } = React;
   const [open,    setOpen]    = useState(false);
   const [windows, setWindows] = useState([]);
@@ -800,6 +800,8 @@ function WindowPicker({ socket, onWindowSelect }) {
       {/* Trigger button */}
       <button
         onClick={handleOpen}
+        aria-label={selected ? `Selected: ${selected.title || 'window'} — click to change` : 'Select window to scan'}
+        aria-haspopup="listbox"
         style={{
           width: '100%', display: 'flex', alignItems: 'center', gap: 6,
           padding: '6px 10px', fontSize: 11, borderRadius: 6, cursor: 'pointer',
@@ -863,6 +865,7 @@ function WindowPicker({ socket, onWindowSelect }) {
           {!loading && (
             <button
               onClick={() => handlePick({ title: 'Full Screen', x: 0, y: 0, w: 0, h: 0 })}
+              aria-label="Use full screen as scan region"
               style={{
                 width: '100%', padding: '8px 12px', fontSize: 11, textAlign: 'left',
                 background: !selected ? 'rgba(106,175,255,0.08)' : 'transparent',
@@ -885,7 +888,7 @@ function WindowPicker({ socket, onWindowSelect }) {
               const browser  = isBrowser(win.title);
               const isActive = selected && selected.id === win.id;
               return (
-                <button key={win.id || i} onClick={() => handlePick(win)}
+                <button key={win.id || i} aria-label={`Select window: ${win.title || win.name || 'window'}`} onClick={() => handlePick(win)}
                   style={{
                     width: '100%', padding: '7px 12px', fontSize: 10, textAlign: 'left',
                     background: isActive ? 'rgba(106,175,255,0.10)' : 'transparent',
@@ -903,7 +906,7 @@ function WindowPicker({ socket, onWindowSelect }) {
                     {win.url && (
                       <div style={{ fontSize: 8, color: C.muted, overflow:'hidden',
                         textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                        {win.url.replace(/^https?:\/\//, '').slice(0, 50)}
+                        {win.url.replace('https://','').replace('http://','').slice(0, 50)}
                       </div>
                     )}
                   </div>
@@ -1115,7 +1118,7 @@ function LiveMode({ socket, count }) {
 
       {/* Optional region */}
       <div style={{marginBottom:8}}>
-        <button onClick={() => setShowRegion(r => !r)}
+        <button aria-label={showRegion ? 'Hide scan region settings' : 'Show scan region settings'} aria-expanded={!!showRegion} onClick={() => setShowRegion(r => !r)}
           style={{width:'100%', padding:'4px', fontSize:10, borderRadius:4,
             background:showRegion ? C.base3 : 'transparent',
             border:'1px solid rgba(255,255,255,0.08)',
@@ -1129,7 +1132,7 @@ function LiveMode({ socket, count }) {
             {['x','y','w','h'].map(k => (
               <div key={k}>
                 <div style={{fontSize:9, color:C.muted, marginBottom:2}}>{k.toUpperCase()}</div>
-                <input type="number" value={region[k]}
+                <input type="number" aria-label={`Scan region ${k}`} value={region[k]}
                   onChange={e => setRegion(r => ({...r, [k]:e.target.value}))}
                   placeholder={k==='w'?'1920':k==='h'?'1080':'0'}
                   style={{width:'100%', padding:'3px 4px', fontSize:11,
@@ -1146,7 +1149,7 @@ function LiveMode({ socket, count }) {
 
       {/* Start / Stop */}
       {!running ? (
-        <button onClick={start}
+        <button aria-label="Start live card scanning" onClick={start}
           style={{width:'100%', padding:'10px', fontSize:13, fontWeight:700,
             background:C.jadeD, border:`1px solid ${C.jade}70`,
             borderRadius:7, color:C.jade, cursor:'pointer',
@@ -1154,7 +1157,7 @@ function LiveMode({ socket, count }) {
           ▶ Start Live Scan
         </button>
       ) : (
-        <button onClick={stop}
+        <button aria-label="Stop live card scanning" onClick={stop}
           style={{width:'100%', padding:'10px', fontSize:13, fontWeight:700,
             background:C.rubyD, border:`1px solid ${C.ruby}70`,
             borderRadius:7, color:C.ruby, cursor:'pointer',

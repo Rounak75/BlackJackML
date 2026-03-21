@@ -99,12 +99,12 @@ function StopAlerts({ session, currency }) {
             You're down {sym}{Math.abs(profit).toLocaleString()} — limit was {sym}{Math.abs(stopLoss).toLocaleString()}. Stop playing now.
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={snooze} style={{
+            <button onClick={snooze} aria-label="Snooze stop-loss alert for 10 hands" style={{
               flex: 1, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
               background: 'rgba(255,92,92,0.2)', border: '1px solid rgba(255,92,92,0.4)',
               color: '#ff5c5c',
             }}>Snooze 10 hands</button>
-            <button onClick={() => dismiss('loss')} style={{
+            <button onClick={() => dismiss('loss')} aria-label="Dismiss stop-loss alert" style={{
               flex: 1, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
               background: 'transparent', border: '1px solid rgba(255,255,255,0.12)',
               color: '#94a7c4',
@@ -126,12 +126,12 @@ function StopAlerts({ session, currency }) {
             You're up {sym}{profit.toLocaleString()} — target was {sym}{stopWin.toLocaleString()}. Lock in your profit.
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={snooze} style={{
+            <button onClick={snooze} aria-label="Continue playing for 10 more hands" style={{
               flex: 1, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
               background: 'rgba(68,232,130,0.15)', border: '1px solid rgba(68,232,130,0.4)',
               color: '#44e882',
             }}>Continue 10 more hands</button>
-            <button onClick={() => dismiss('win')} style={{
+            <button onClick={() => dismiss('win')} aria-label="Dismiss stop-win alert" style={{
               flex: 1, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
               background: 'transparent', border: '1px solid rgba(255,255,255,0.12)',
               color: '#94a7c4',
@@ -191,6 +191,7 @@ function StopAlerts({ session, currency }) {
       {/* Settings */}
       {!editing ? (
         <button onClick={() => { setTempLoss(stopLoss); setTempWin(stopWin); setEditing(true); }}
+          aria-label="Edit stop-loss and stop-win limits"
           style={{
             width: '100%', padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
             background: 'transparent', border: '1px solid rgba(255,255,255,0.08)',
@@ -207,6 +208,7 @@ function StopAlerts({ session, currency }) {
             <div key={l}>
               <div style={{ fontSize: 8, color: '#94a7c4', marginBottom: 2 }}>{l} ({sym})</div>
               <input type="number"
+                aria-label={l}
                 value={isNeg ? Math.abs(val) : val}
                 onChange={e => set(isNeg ? -(parseFloat(e.target.value)||0) : (parseFloat(e.target.value)||0))}
                 style={{
@@ -219,11 +221,13 @@ function StopAlerts({ session, currency }) {
           ))}
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={() => { setStopLoss(tempLoss); setStopWin(tempWin); setEditing(false); setDismissed({ loss: false, win: false }); }}
+              aria-label="Save limits"
               style={{ flex: 2, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
                 background: 'rgba(68,232,130,0.12)', border: '1px solid rgba(68,232,130,0.3)', color: '#44e882' }}>
               Save
             </button>
             <button onClick={() => setEditing(false)}
+              aria-label="Cancel"
               style={{ flex: 1, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
                 background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', color: '#94a7c4' }}>
               Cancel

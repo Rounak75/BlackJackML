@@ -260,7 +260,7 @@ function HandDisplay({
                       e.currentTarget.style.filter = '';
                       e.currentTarget.style.transform = '';
                     }}
-                    title="I placed the insurance bet on the table"
+                    aria-label="Take insurance — I placed the insurance side bet"
                   >
                     ✓ Take Insurance
                   </button>
@@ -286,7 +286,7 @@ function HandDisplay({
                       e.currentTarget.style.filter = '';
                       e.currentTarget.style.transform = '';
                     }}
-                    title="Skip insurance — continue playing"
+                    aria-label="Decline insurance — continue without insurance bet"
                   >
                     ✗ Decline
                   </button>
@@ -308,6 +308,7 @@ function HandDisplay({
                   </div>
                   <button
                     onClick={() => onInsuranceChange && onInsuranceChange(false)}
+                    aria-label="Undo — I did not actually take insurance"
                     style={{
                       width: '100%', padding: '5px', borderRadius: 6, cursor: 'pointer',
                       fontSize: 10, fontWeight: 600,
@@ -316,7 +317,7 @@ function HandDisplay({
                       color: '#94a7c4',
                     }}
                   >
-                    ↩ Undo — I did not take insurance
+                    ↩ Undo insurance
                   </button>
                 </div>
               )}

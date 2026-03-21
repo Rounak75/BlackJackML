@@ -1,11 +1,26 @@
 {
   "compilerOptions": {
+    "target": "ES2018",
     "jsx": "react",
+    "jsxFactory": "React.createElement",
+    "jsxFragmentFactory": "React.Fragment",
     "checkJs": false,
     "noImplicitAny": false,
-    "strict": false
+    "strict": false,
+    "lib": ["ES2018", "DOM"],
+    "allowJs": true,
+    "moduleDetection": "force",
+    "module": "commonjs"
   },
+  "include": [
+    "app/static/components/**/*",
+    "app/static/globals.d.ts"
+  ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "venv",
+    "app/static/bundle.js",
+    "app/static/bundle.min.js",
+    "build-src"
   ]
 }

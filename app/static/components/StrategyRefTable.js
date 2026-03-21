@@ -143,6 +143,8 @@ function StrategyRefTable({ playerHand, dealerUpcard }) {
               <button
                 key={t}
                 onClick={() => setTab(t)}
+                aria-pressed={tab === t}
+                aria-label={`Show ${t} strategy table`}
                 className="text-[10px] uppercase font-semibold px-2.5 py-1 rounded-md transition-all"
                 style={{
                   background: tab === t ? '#212d45' : 'transparent',

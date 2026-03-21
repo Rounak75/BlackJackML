@@ -222,6 +222,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
             <select
               value={activeSystem}
               onChange={handleSystemChange}
+              aria-label="Card counting system"
               className="topbar-select"
             >
               {Object.entries(COUNTING_SYSTEMS).map(([k, v]) => (
@@ -235,7 +236,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
           </div>
         </div>
 
-        <button onClick={onNewHand} className="topbar-btn" style={{ alignSelf: 'center' }}>
+        <button onClick={onNewHand} aria-label="Start a new hand (count continues)" className="topbar-btn" style={{ alignSelf: 'center' }}>
           ⬆ New Hand
         </button>
 
@@ -266,7 +267,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
             </InfoTooltip>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={onShuffle} className="topbar-btn danger" style={{ whiteSpace: 'nowrap' }}>
+            <button onClick={onShuffle} aria-label="Trigger casino shuffle and reset count" className="topbar-btn danger" style={{ whiteSpace: 'nowrap' }}>
               ⇄ Shuffle
             </button>
             {/* Hidden select kept for App.js getElementById compat */}
@@ -274,6 +275,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
             <select
               value={activeShuffle}
               onChange={handleShuffleTypeChange}
+              aria-label="Select shuffle type"
               className="topbar-select"
             >
               {Object.entries(SHUFFLE_TYPES).map(([k, v]) => (

@@ -139,7 +139,7 @@ function SplitHandZone({ hand, handNumber, isActive, dealerUpcard, onComplete })
 
       {/* Done button — when active hand is complete */}
       {isActive && !isBust && hand.cards.length >= 2 && onComplete && (
-        <button onClick={onComplete} style={{
+        <button onClick={onComplete} aria-label={`Done with split hand ${handNumber}`} style={{
           width: '100%', marginTop: 8, padding: '6px', fontSize: 10, fontWeight: 700,
           borderRadius: 6, cursor: 'pointer',
           background: 'rgba(106,175,255,0.12)', border: '1px solid rgba(106,175,255,0.4)',

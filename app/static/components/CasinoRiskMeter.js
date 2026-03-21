@@ -114,7 +114,7 @@ function CasinoRiskMeter({ casinoRisk }) {
       {/* Detected signals — expandable */}
       {signals && signals.length > 0 && (
         <div>
-          <button onClick={() => setExpanded(e => !e)} style={{
+          <button onClick={() => setExpanded(e => !e)} aria-expanded={expanded} aria-label={expanded ? 'Collapse casino risk details' : 'Expand casino risk details'} style={{
             width: '100%', padding: '4px 8px', fontSize: 9, borderRadius: 5,
             background: 'transparent', border: '1px solid rgba(255,255,255,0.08)',
             color: '#94a7c4', cursor: 'pointer', textAlign: 'left',

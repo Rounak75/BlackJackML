@@ -1,11 +1,30 @@
 /*
- * components/utils.js
- * ─────────────────────────────────────────────────────────
- * Utility / helper functions shared across all components.
- * No React — pure JS.
+ * utils.js — Shared Helper Functions
+ * ─────────────────────────────────────────────────────────────────────
+ *
+ * WHAT THIS FILE IS:
+ *   Small utility functions used by multiple components. By putting them
+ *   here once, we avoid copy-pasting the same code into 10 different files.
+ *
+ * FUNCTIONS IN THIS FILE:
+ *   countClass()         → CSS class name for colourising count numbers
+ *   cellClass()          → CSS class name for strategy table cells
+ *   actionClass()        → CSS class name for the big HIT/STAND text
+ *   showToast()          → Shows a pop-up notification message
+ *   formatMoney()        → Formats a number as "+$150" or "-$50"
+ *   DEVIATION_TOOLTIPS   → Explanations for each Illustrious 18 deviation
+ *   getDeviationTooltip()→ Looks up the tooltip for the active deviation
+ *   buildExplanation()   → Builds the "Why this action?" text array
  */
 
-/** CSS class for count colouring (running/true count numbers) */
+
+// ── countClass ────────────────────────────────────────────────────────
+// Returns a CSS class name based on the count value.
+// These classes are defined in style.css and change the text colour:
+//   count-hot     → gold/yellow  (TC > 2 — very favourable shoe)
+//   count-pos     → green        (TC > 0 — slightly favourable)
+//   count-neg     → red          (TC < 0 — unfavourable)
+//   count-neutral → grey         (TC = 0 — neutral)
 function countClass(val) {
   if (val > 2)  return 'count-hot';
   if (val > 0)  return 'count-pos';
@@ -13,7 +32,15 @@ function countClass(val) {
   return 'count-neutral';
 }
 
-/** CSS class for a strategy table cell by action code */
+// ── cellClass ─────────────────────────────────────────────────────────
+// Returns the CSS class for a strategy table cell based on the action code.
+// Each class has a different background colour so the table is easy to read:
+//   s-H   → green   (Hit)
+//   s-S   → blue    (Stand)
+//   s-D   → yellow  (Double)
+//   s-Ds  → orange  (Double or Stand)
+//   s-SP  → purple  (Split)
+//   s-SUR → red     (Surrender)
 function cellClass(code) {
   const map = {
     H: 's-H', S: 's-S', D: 's-D', Ds: 's-Ds',
@@ -22,20 +49,36 @@ function cellClass(code) {
   return map[code] || '';
 }
 
-/** CSS class for the big action recommendation text */
+// ── actionClass ───────────────────────────────────────────────────────
+// Returns the CSS class for the big action recommendation text.
+// Each action gets a different colour defined in style.css:
+//   action-hit        → green    (HIT)
+//   action-stand      → blue     (STAND)
+//   action-double     → yellow   (DOUBLE)
+//   action-split      → purple   (SPLIT)
+//   action-surrender  → red      (SURRENDER)
 function actionClass(action) {
   const map = {
-    HIT: 'action-hit',
-    STAND: 'action-stand',
-    DOUBLE: 'action-double',
-    'DOUBLE DOWN': 'action-double',
-    SPLIT: 'action-split',
-    SURRENDER: 'action-surrender',
+    HIT:          'action-hit',
+    STAND:        'action-stand',
+    DOUBLE:       'action-double',
+    'DOUBLE DOWN':'action-double',
+    SPLIT:        'action-split',
+    SURRENDER:    'action-surrender',
   };
   return map[action] || '';
 }
 
-/** Show a toast notification — direct DOM manipulation */
+// ── showToast ─────────────────────────────────────────────────────────
+// Shows a small notification message that appears in the top-right corner
+// and fades out after 3.5 seconds.
+//
+// Parameters:
+//   msg   — the text to display
+//   type  — 'info' (blue) | 'success' (green) | 'warning' (yellow) | 'error' (red)
+//
+// The toast container <div id="toasts"> is in index.html.
+// The CSS for .toast is in style.css.
 function showToast(msg, type = 'info') {
   const container = document.getElementById('toasts');
   if (!container) return;
@@ -43,6 +86,7 @@ function showToast(msg, type = 'info') {
   el.className = `toast ${type}`;
   el.textContent = msg;
   container.appendChild(el);
+  // After 3.5 seconds: fade out, then remove the element from the DOM
   setTimeout(() => {
     el.style.opacity = '0';
     el.style.transform = 'translateX(20px)';
@@ -50,24 +94,30 @@ function showToast(msg, type = 'info') {
   }, 3500);
 }
 
-/**
- * Format a dollar amount with sign prefix.
- * formatMoney(150)  → "+$150"
- * formatMoney(-50)  → "-$50"
- */
+// ── formatMoney ───────────────────────────────────────────────────────
+// Formats a number with a sign prefix and dollar sign.
+// Examples:
+//   formatMoney(150)  → "+$150"
+//   formatMoney(-50)  → "-$50"
+//   formatMoney(0)    → "+$0"
 function formatMoney(n) {
   const abs = Math.abs(n || 0);
   return `${(n || 0) >= 0 ? '+' : '-'}$${abs.toFixed(0)}`;
 }
 
-/**
- * Per-deviation tooltip database.
- * Key: "hand_value:dealer_upcard:action"  e.g. "16:10:STAND"
- * Each entry has:
- *   why     — one sentence: what the shoe composition means right now
- *   mechanic — one sentence: how that changes the math for this play
- *   tip     — one sentence: what the player should be aware of
- */
+
+// ── DEVIATION_TOOLTIPS ────────────────────────────────────────────────
+// Detailed plain-English explanations for each Illustrious 18 / Fab 4
+// deviation. Shown in the ActionPanel when a deviation is active.
+//
+// KEY FORMAT:  "player_hand_value:dealer_upcard:action"
+// EXAMPLE KEY: "16:10:STAND"
+//   → Player has hard 16, dealer shows 10, and the deviation says STAND
+//
+// Each entry has three fields:
+//   why      — what the current shoe composition looks like
+//   mechanic — the math reason why the deviation is correct right now
+//   tip      — a practical note for the player
 const DEVIATION_TOOLTIPS = {
   // ── Illustrious 18 ─────────────────────────────────────────────────
   '16:10:STAND': {
@@ -161,7 +211,6 @@ const DEVIATION_TOOLTIPS = {
     mechanic: 'Dealer 6 has the highest bust rate of any upcard. Splitting your 10s means two bets are working against the dealer\'s near-guaranteed bust, while the 10-rich shoe makes each new hand likely to land another 20.',
     tip:      'Splitting 10s is the most attention-drawing deviation at a casino. Use sparingly.',
   },
-
   // ── Fab 4 Surrenders ───────────────────────────────────────────────
   '14:10:SURRENDER': {
     why:      'At TC ≥ +3 there are many 10-value cards remaining.',
@@ -185,12 +234,21 @@ const DEVIATION_TOOLTIPS = {
   },
 };
 
-/**
- * Look up the tooltip for the active deviation.
- * Falls back to a generic explanation if no specific entry exists.
- */
+// ── getDeviationTooltip ───────────────────────────────────────────────
+// Looks up the tooltip for the currently active deviation and returns a
+// formatted object with trigger, why, mechanic, and tip fields.
+//
+// Parameters:
+//   dev    — the deviation_info object from the server
+//   action — the recommended action string (e.g. 'STAND')
+//   basic  — the basic strategy action (what we'd do without deviation)
+//   tc     — current True Count number
+//
+// Returns: { trigger, why, mechanic, tip } or null if no deviation
 function getDeviationTooltip(dev, action, basic, tc) {
   if (!dev) return null;
+
+  // Build the lookup key: "hand_value:dealer_upcard:action"
   const key = `${dev.hand_value}:${dev.dealer_upcard}:${action}`;
   const entry = DEVIATION_TOOLTIPS[key];
   const tcStr = typeof tc === 'number' ? tc.toFixed(1) : tc;
@@ -204,7 +262,7 @@ function getDeviationTooltip(dev, action, basic, tc) {
     };
   }
 
-  // Generic fallback for any deviation not in the table
+  // Generic fallback for any deviation not in the table above
   return {
     trigger:  `TC ${dev.direction} ${dev.tc_threshold} (current: ${tcStr})`,
     why:      `The current true count (${tcStr}) has shifted the card composition enough to change the optimal play.`,
@@ -213,10 +271,17 @@ function getDeviationTooltip(dev, action, basic, tc) {
   };
 }
 
-/**
- * Build the explanation lines for the AI action recommendation.
- * Returns an array of plain strings.
- */
+// ── buildExplanation ──────────────────────────────────────────────────
+// Builds the array of explanation lines shown in the ActionPanel under
+// "Why this action?". Returns an array of plain strings.
+//
+// Parameters:
+//   action — the recommended action string (e.g. 'STAND')
+//   rec    — the full recommendation object from the server
+//   count  — the count object from the server
+//
+// The returned array is rendered line-by-line in ActionPanel.js.
+// The first line of a deviation gets purple styling; tip lines get gold.
 function buildExplanation(action, rec, count) {
   const tc    = count ? count.true : 0;
   const tcStr = count ? count.true.toFixed(1) : '?';
@@ -227,6 +292,7 @@ function buildExplanation(action, rec, count) {
   let lines = [];
 
   if (isDev && rec.deviation_info) {
+    // Deviation is active — show the deviation-specific explanation
     const tooltip = getDeviationTooltip(rec.deviation_info, action, basic, tc);
     if (tooltip) {
       lines.push(`🔀 Deviation active (${tooltip.trigger})`);
@@ -235,6 +301,7 @@ function buildExplanation(action, rec, count) {
       lines.push(`💡 ${tooltip.tip}`);
     }
   } else {
+    // No deviation — show the standard basic strategy explanation
     lines.push(`Basic strategy recommends ${action} for this situation.`);
     const guidance = {
       HIT:       'Your total is low enough that the risk of busting is outweighed by the chance to improve. Take another card.',
@@ -247,7 +314,7 @@ function buildExplanation(action, rec, count) {
     if (guidance[action]) lines.push(guidance[action]);
   }
 
-  // Count context line
+  // Add a count context line at the bottom when the count is notable
   if (count && tc > 2)
     lines.push(`📈 Count is very favourable (TC ${tcStr}) — shoe is rich in high cards.`);
   else if (count && tc < -1)
