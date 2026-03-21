@@ -425,8 +425,8 @@ This project includes two build scripts depending on your OS:
 | **Mac / Linux** (watch mode) | `build.sh` | `bash build.sh --watch` |
 
 > **Important — Windows users:** Do NOT use `bash build.sh` in PowerShell.
-> `bash` is not available in PowerShell. Use `.uild.ps1` instead.
-> If you get a security error, run `Unblock-File .uild.ps1` first.
+> `bash` is not available in PowerShell. Use `.build.ps1` instead.
+> If you get a security error, run `Unblock-File .build.ps1` first.
 
 ### What this means when you edit a component
 
@@ -437,7 +437,7 @@ When you open a `.js` file in `app/static/components/` and save a change,
 You edit a .js file
         |
         v
-Windows: .uild.ps1        Mac/Linux: bash build.sh
+Windows: .build.ps1        Mac/Linux: bash build.sh
         |
         v
 build-src/src/ is wiped and refilled with fresh copies
@@ -466,7 +466,7 @@ You refresh the browser -> your change appears
 Open PowerShell in your project root and run:
 
 ```powershell
-.uild.ps1
+.build.ps1
 ```
 
 You will see:
@@ -566,7 +566,7 @@ from the project — it now wipes `build-src/src/` before copying files in.
 **`build.ps1 is not digitally signed`**
 Run this once to unblock it:
 ```powershell
-Unblock-File .uild.ps1
+Unblock-File .build.ps1
 Unblock-File .\watch.ps1
 ```
 
@@ -577,7 +577,7 @@ npm install -g typescript
 ```
 
 **`The term 'bash' is not recognized`**
-You are using PowerShell — use `.uild.ps1` not `bash build.sh`.
+You are using PowerShell — use `.build.ps1` not `bash build.sh`.
 
 **`Property 'X' does not exist`** during compilation
 This is a harmless TypeScript type warning, suppressed by `// @ts-nocheck`.
@@ -587,7 +587,7 @@ If the bundle generates and the browser works, ignore it.
 Make sure you are in the project root (the folder containing `main.py`):
 ```powershell
 cd C:\Users\YourName\Downloads\MLModel\Model1
-.uild.ps1
+.build.ps1
 ```
 
 ---
