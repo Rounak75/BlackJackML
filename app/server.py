@@ -497,8 +497,6 @@ def get_full_state():
         dealer_upcard_card,
     )
 
-    # ── Bet recommendation — now includes penetration for accurate sizing ──
-    # ── Bet recommendation — now includes penetration for accurate sizing ──
     # Use Ace-adjusted TC for bet sizing — more accurate than plain TC
     ace_adj_tc = counter.ace_adjusted_tc
     bet_rec = betting_engine.get_bet_recommendation(ace_adj_tc, penetration=penetration)
@@ -875,12 +873,22 @@ def handle_change_system(data):
     system = data.get('system', 'hi_lo')
 
     if system in CountingConfig.SYSTEMS:
-        old_log = counter._card_log
+        # Save the rank-key log from the old counter so we can replay it
+        old_log = list(counter._card_log)
+
+        # Create a fresh counter with the new system
         counter = CardCounter(system, game_config.NUM_DECKS)
+
+        # Replay every card seen so far through the new system's tag values.
+        # count_card() updates running_count, cards_seen, AND _card_log correctly,
+        # so true_count and penetration calculations remain accurate after the switch.
         for key in old_log:
-            counter.running_count += counter.values.get(key, 0)
-            counter.cards_seen    += 1
-            counter._card_log.append(key)
+            # Reconstruct a minimal Card-like object with just count_key
+            class _FakeCard:
+                def __init__(self, k):
+                    self.count_key = k
+                    self.is_ace    = (k == 11)
+            counter.count_card(_FakeCard(key))
 
         _safe_emit('state_update', get_full_state())
 
@@ -917,10 +925,10 @@ def _apply_card(rank, suit, target='seen'):
                 current_player_hand.add_card(card)
             elif target == 'dealer':
                 current_dealer_hand.add_card(card)
-            counter.add_card(card)
+            counter.count_card(card)
             socketio.emit('state_update', _json.loads(_json.dumps(get_full_state(), cls=_SafeEncoder)))
     except Exception as e:
-        log.warning(f'[Live] apply_card error: {e}')
+        print("[WARNING]",f'[Live] apply_card error: {e}')
 
 def _reset_hand():
     """Bridge: scanner new-hand signal."""
@@ -1118,7 +1126,7 @@ def _list_windows():
             user32.EnumWindows(cb_ref, 0)
 
         except Exception as e:
-            log.warning(f'[Win] EnumWindows: {e}')
+            print("[WARNING]",f'[Win] EnumWindows: {e}')
 
         # ── Fallback: simple PowerShell one-liner (no complex PS objects) ─────
         # Only runs if EnumWindows produced nothing (rare edge case)
@@ -1146,7 +1154,7 @@ def _list_windows():
                                 'x': 0, 'y': 0, 'w': 1920, 'h': 1080,
                             })
             except Exception as e:
-                log.warning(f'[Win] PS fallback: {e}')
+                print("[WARNING]",f'[Win] PS fallback: {e}')
         # ── 2. Chrome / Edge tab list via remote debugging port ───────────────
         # Chrome/Edge must be launched with --remote-debugging-port=9222
         # (or user can enable it). This gives us individual tab titles + URLs.
@@ -1207,7 +1215,7 @@ def _list_windows():
                     except ValueError:
                         pass
         except Exception as e:
-            log.warning(f'[macOS] window list error: {e}')
+            print("[WARNING]",f'[macOS] window list error: {e}')
 
     else:  # Linux — try wmctrl then xdotool
         try:
@@ -1229,7 +1237,7 @@ def _list_windows():
         except FileNotFoundError:
             pass
         except Exception as e:
-            log.warning(f'[Linux] wmctrl error: {e}')
+            print("[WARNING]",f'[Linux] wmctrl error: {e}')
 
         if not wins:
             try:
