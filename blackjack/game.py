@@ -97,7 +97,11 @@ class Hand:
 
     @property
     def is_soft(self) -> bool:
-        """Whether the hand contains a usable ace."""
+        """Whether the hand contains a usable ace (counts as 11 without busting).
+        Note: Blackjack (A+10-value on initial 2 cards) is NOT considered soft
+        for strategy purposes — it resolves immediately as BJ."""
+        if self.is_blackjack:
+            return False
         total = sum(11 if c.is_ace else c.value for c in self.cards)
         if total > 21:
             return False

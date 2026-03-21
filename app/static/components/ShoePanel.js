@@ -12,7 +12,7 @@ function ShoePanel({ shoe }) {
   if (!shoe) {
     return (
       <Widget title="Shoe Composition">
-        <div className="text-xs" style={{ color: '#7a8eab' }}>Loading…</div>
+        <div className="text-xs" style={{ color: '#b8ccdf' }}>Loading…</div>
       </Widget>
     );
   }
@@ -33,7 +33,7 @@ function ShoePanel({ shoe }) {
     <Widget title="Shoe Composition">
       {/* Meta row */}
       <div className="flex items-center justify-between mb-3">
-        <span className="font-mono text-[11px]" style={{ color: '#b0bfd8' }}>
+        <span className="font-mono text-[11px]" style={{ color: '#ccdaec' }}>
           {shoe.cards_remaining} cards · {shoe.decks_remaining} decks
         </span>
         <span
@@ -61,7 +61,7 @@ function ShoePanel({ shoe }) {
             <div key={key} className="text-center">
               <div
                 className="text-[9px] font-mono mb-1"
-                style={{ color: '#b0bfd8', fontWeight: 600 }}
+                style={{ color: '#ccdaec', fontWeight: 600 }}
               >
                 {ranks[i]}
               </div>
@@ -78,7 +78,7 @@ function ShoePanel({ shoe }) {
               </div>
               <div
                 className="text-[9px] font-mono mt-1"
-                style={{ color: '#7a8eab' }}
+                style={{ color: '#b8ccdf' }}
               >
                 {rem}
               </div>
@@ -95,9 +95,9 @@ function ShoePanel({ shoe }) {
         const isRich  = tenRem / totalRem > 0.308;  // above baseline 30.8%
         return (
           <div className="flex items-center justify-between mb-2 text-[10px] font-mono"
-            style={{ color: isRich ? '#ffd447' : '#7a8eab' }}>
+            style={{ color: isRich ? '#ffd447' : '#b8ccdf' }}>
             <span>10-value cards</span>
-            <span style={{ fontWeight: 700, color: isRich ? '#ffd447' : '#b0bfd8' }}>
+            <span style={{ fontWeight: 700, color: isRich ? '#ffd447' : '#ccdaec' }}>
               {tenPct}% {isRich ? '↑ Rich' : ''}
             </span>
           </div>
@@ -110,7 +110,7 @@ function ShoePanel({ shoe }) {
       >
         <div className="pen-fill" style={{ width: `${pct}%` }} />
       </div>
-      <div className="font-mono text-[10px]" style={{ color: '#b0bfd8' }}>
+      <div className="font-mono text-[10px]" style={{ color: '#ccdaec' }}>
         {pct}% penetration
       </div>
     </Widget>

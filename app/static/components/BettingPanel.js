@@ -228,7 +228,7 @@ function BettingPanel({
   if (!betting) {
     return (
       <Widget title="Bet Sizing" badge="KELLY">
-        <div className="text-xs" style={{ color: '#7a8eab' }}>Waiting for count data…</div>
+        <div className="text-xs" style={{ color: '#b8ccdf' }}>Waiting for count data…</div>
       </Widget>
     );
   }
@@ -249,7 +249,7 @@ function BettingPanel({
           <span style={{ fontSize: '1rem', flexShrink: 0 }}>💰</span>
           <div>
             <div className="font-bold mb-0.5">Cashout Suggested</div>
-            <div className="font-normal" style={{ color: '#b0bfd8' }}>
+            <div className="font-normal" style={{ color: '#ccdaec' }}>
               Count has turned negative (TC {tc.toFixed(1)}) while you're ahead.
               Consider leaving the table or dropping to minimum bet.
             </div>
@@ -271,7 +271,7 @@ function BettingPanel({
           <span style={{ color: cur.isCrypto ? '#ffd447' : '#6aafff' }}>
             {cur.isCrypto ? '🔐' : '💱'} {cur.code} — {cur.name}
           </span>
-          <span style={{ color: '#7a8eab' }}>{showCurrencyPicker ? '▲' : '▼'}</span>
+          <span style={{ color: '#b8ccdf' }}>{showCurrencyPicker ? '▲' : '▼'}</span>
         </button>
 
         {showCurrencyPicker && (
@@ -311,9 +311,9 @@ function BettingPanel({
                     <button key={c.code}
                       onClick={() => { onCurrencyChange(c); setShowCurrencyPicker(false); setCurrencySearch(''); }}
                       className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-white/5"
-                      style={{ color: cur.code === c.code ? '#6aafff' : '#b0bfd8', textAlign: 'left' }}>
+                      style={{ color: cur.code === c.code ? '#6aafff' : '#ccdaec', textAlign: 'left' }}>
                       <span className="font-mono font-bold w-10" style={{ color: '#6aafff' }}>{c.code}</span>
-                      <span style={{ color: '#7a8eab' }}>{c.symbol}</span>
+                      <span style={{ color: '#b8ccdf' }}>{c.symbol}</span>
                       <span>{c.name}</span>
                       {cur.code === c.code && <span style={{ marginLeft: 'auto', color: '#6aafff' }}>✓</span>}
                     </button>
@@ -329,9 +329,9 @@ function BettingPanel({
                     <button key={c.code}
                       onClick={() => { onCurrencyChange(c); setShowCurrencyPicker(false); setCurrencySearch(''); }}
                       className="w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-white/5"
-                      style={{ color: cur.code === c.code ? '#ffd447' : '#b0bfd8', textAlign: 'left' }}>
+                      style={{ color: cur.code === c.code ? '#ffd447' : '#ccdaec', textAlign: 'left' }}>
                       <span className="font-mono font-bold w-10" style={{ color: '#ffd447' }}>{c.code}</span>
-                      <span style={{ color: '#7a8eab' }}>{c.symbol}</span>
+                      <span style={{ color: '#b8ccdf' }}>{c.symbol}</span>
                       <span>{c.name}</span>
                       {cur.code === c.code && <span style={{ marginLeft: 'auto', color: '#ffd447' }}>✓</span>}
                     </button>
@@ -345,7 +345,7 @@ function BettingPanel({
 
       {/* ── Custom bet input ──────────────────────────────────────────── */}
       <div className="mb-3">
-        <div className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{ color: '#7a8eab' }}>
+        <div className="text-[10px] uppercase tracking-widest font-bold mb-1" style={{ color: '#b8ccdf' }}>
           Your Bet
         </div>
         <div className="flex items-center gap-2">
@@ -376,14 +376,14 @@ function BettingPanel({
               style={{
                 background: '#212d45',
                 border: '1px solid rgba(255,255,255,0.12)',
-                color: '#b0bfd8',
+                color: '#ccdaec',
               }}
             >
               ×{mult}
             </button>
           ))}
         </div>
-        <div className="text-[10px] mt-1" style={{ color: '#7a8eab' }}>
+        <div className="text-[10px] mt-1" style={{ color: '#b8ccdf' }}>
           Recommended: {cur.symbol}{fmtBet(betting.recommended_bet)} · {betting.units} unit{betting.units !== 1 ? 's' : ''}
         </div>
       </div>
@@ -402,7 +402,7 @@ function BettingPanel({
           style={{
             background: isDoubled ? 'rgba(255,212,71,0.15)' : '#111827',
             border: `1.5px solid ${isDoubled ? 'rgba(255,212,71,0.6)' : 'rgba(255,255,255,0.12)'}`,
-            color: isDoubled ? '#ffd447' : '#7a8eab',
+            color: isDoubled ? '#ffd447' : '#b8ccdf',
           }}
         >
           <span>×2</span>
@@ -417,7 +417,7 @@ function BettingPanel({
             style={{
               background: tookInsurance ? 'rgba(106,175,255,0.15)' : '#111827',
               border: `1.5px solid ${tookInsurance ? 'rgba(106,175,255,0.6)' : 'rgba(255,255,255,0.12)'}`,
-              color: tookInsurance ? '#6aafff' : '#7a8eab',
+              color: tookInsurance ? '#6aafff' : '#b8ccdf',
             }}
           >
             <span>🛡️</span>
@@ -458,7 +458,7 @@ function BettingPanel({
       )}
 
       {/* Bet action label */}
-      <div className="text-xs font-medium mb-3" style={{ color: '#b0bfd8' }}>
+      <div className="text-xs font-medium mb-3" style={{ color: '#ccdaec' }}>
         {betting.action || '—'}
       </div>
 
@@ -480,10 +480,10 @@ function BettingPanel({
           wants to manually correct — e.g. surrender was taken mid-hand */}
       <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10, marginTop: 10 }}>
         <div className="flex items-center justify-between mb-2">
-          <div className="text-[10px] uppercase tracking-widest font-display font-bold" style={{ color: '#7a8eab' }}>
+          <div className="text-[11px] uppercase tracking-widest font-display font-bold" style={{ color: '#ccdaec' }}>
             Manual override:
           </div>
-          <div className="text-[9px]" style={{ color: '#4a5568' }}>
+          <div className="text-[9px]" style={{ color: '#ccdaec' }}>
             Auto-resolves when outcome is known
           </div>
         </div>
@@ -512,7 +512,7 @@ function BettingPanel({
                 onRecordResult(result === 'surrender' ? 'loss' : result, effectiveBet, profit);
                 // Toggles reset in App.handleRecordResult
               }}
-              className="flex-1 rounded-lg py-1.5 text-[10px] font-mono font-bold transition-all"
+              className="flex-1 rounded-lg py-2 text-[11px] font-mono font-bold transition-all"
               style={{ color, background: bg, border: `1.5px solid ${border}` }}
               onMouseEnter={e => { e.currentTarget.style.background = bg.replace('0.1', '0.2'); }}
               onMouseLeave={e => { e.currentTarget.style.background = bg; }}
@@ -523,10 +523,13 @@ function BettingPanel({
         </div>
 
         {/* Bet preview */}
-        <div className="mt-2 text-center text-[10px] font-mono" style={{ color: '#7a8eab' }}>
-          Base {cur.symbol}{fmtBet(activeBet)}
-          {isDoubled && <span style={{ color: '#ffd447' }}> → doubled {cur.symbol}{fmtBet(effectiveBet)}</span>}
-          {' '}· win = +{cur.symbol}{fmtBet(effectiveBet)} · loss = -{cur.symbol}{fmtBet(effectiveBet)}
+        <div className="mt-2 text-center text-[10px] font-mono" style={{ color: '#c8d4e8', lineHeight: 1.8 }}>
+          <div>
+            Base {cur.symbol}{fmtBet(activeBet)}
+            {isDoubled && <span style={{ color: '#ffd447' }}> → doubled {cur.symbol}{fmtBet(effectiveBet)}</span>}
+            {' '}· win = <span style={{ color: '#44e882' }}>+{cur.symbol}{fmtBet(effectiveBet)}</span>
+          </div>
+          <div>loss = <span style={{ color: '#ff5c5c' }}>-{cur.symbol}{fmtBet(effectiveBet)}</span></div>
         </div>
       </div>
     </Widget>

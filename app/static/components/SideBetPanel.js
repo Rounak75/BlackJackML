@@ -140,7 +140,7 @@ function SideBetPanel({ sideBets }) {
                   </div>
                   <button
                     onClick={() => dismissAlert(alert.key)}
-                    style={{ color: '#7a8eab', fontSize: '1rem', lineHeight: 1, padding: '2px 6px' }}
+                    style={{ color: '#94a7c4', fontSize: '1rem', lineHeight: 1, padding: '2px 6px' }}
                   >
                     ✕
                   </button>
@@ -151,7 +151,7 @@ function SideBetPanel({ sideBets }) {
                   <span className="font-mono font-extrabold text-2xl" style={{ color: alert.color }}>
                     +{(alert.ev || 0).toFixed(1)}%
                   </span>
-                  <span className="text-xs" style={{ color: '#7a8eab' }}>Expected Value</span>
+                  <span className="text-xs" style={{ color: '#94a7c4' }}>Expected Value</span>
                 </div>
 
                 {/* Description */}
@@ -163,7 +163,7 @@ function SideBetPanel({ sideBets }) {
                 {alert.reason && (
                   <div
                     className="text-[10px] px-2 py-1 rounded-lg font-mono"
-                    style={{ background: 'rgba(255,255,255,0.05)', color: '#7a8eab' }}
+                    style={{ background: 'rgba(255,255,255,0.05)', color: '#94a7c4' }}
                   >
                     {alert.reason}
                   </div>
@@ -207,20 +207,20 @@ function SideBetPanel({ sideBets }) {
                 )}
                 <div style={{ fontSize:13, marginBottom:4 }}>{icon}</div>
                 <div style={{ fontSize:9, fontWeight:700, textTransform:'uppercase',
-                  letterSpacing:'0.06em', color: rec ? color : '#7a8eab', marginBottom:5 }}>
+                  letterSpacing:'0.06em', color: rec ? color : '#94a7c4', marginBottom:5 }}>
                   {short}
                 </div>
                 <div style={{ fontSize:18, fontWeight:800, fontFamily:'DM Mono,monospace',
                   lineHeight:1, marginBottom:4,
-                  color: ev !== null ? (isPos ? '#44e882' : '#ff5c5c') : '#4a5568' }}>
+                  color: ev !== null ? (isPos ? '#44e882' : '#ff5c5c') : '#6b7fa3' }}>
                   {ev !== null ? `${ev >= 0 ? '+' : ''}${ev.toFixed(1)}%` : '—'}
                 </div>
-                <div style={{ fontSize:8, color:'#7a8eab', marginBottom:6 }}>{payout}</div>
+                <div style={{ fontSize:8, color:'#94a7c4', marginBottom:6 }}>{payout}</div>
                 {rec
                   ? <span style={{ fontSize:8, fontWeight:700, color,
                       background:`${color}20`, border:`1px solid ${color}40`,
                       borderRadius:4, padding:'2px 6px' }}>✓ BET</span>
-                  : <span style={{ fontSize:8, color:'#4a5568' }}>skip</span>
+                  : <span style={{ fontSize:8, color:'#6b7fa3' }}>skip</span>
                 }
               </div>
             );
@@ -249,7 +249,7 @@ function SideBetPanel({ sideBets }) {
                     +{(data.ev||0).toFixed(1)}% EV
                   </div>
                   {data.reason && (
-                    <div style={{ fontSize:9, color:'#7a8eab' }}>{data.reason}</div>
+                    <div style={{ fontSize:9, color:'#94a7c4' }}>{data.reason}</div>
                   )}
                 </div>
               </div>
@@ -257,7 +257,7 @@ function SideBetPanel({ sideBets }) {
           ) : (
             /* All negative — show EV summary table so space is used */
             <div style={{ display:'flex', flexDirection:'column', gap:4 }}>
-              <div style={{ fontSize:9, color:'#7a8eab', fontWeight:700,
+              <div style={{ fontSize:9, color:'#94a7c4', fontWeight:700,
                 textTransform:'uppercase', letterSpacing:'0.07em', marginBottom:2 }}>
                 Expected Value Summary
               </div>
@@ -279,14 +279,14 @@ function SideBetPanel({ sideBets }) {
                         color: ev !== null && ev >= 0 ? '#44e882' : '#ff5c5c' }}>
                         {ev !== null ? `${ev >= 0 ? '+' : ''}${ev.toFixed(1)}%` : '—'}
                       </span>
-                      <span style={{ fontSize:8, color:'#4a5568',
+                      <span style={{ fontSize:8, color:'#6b7fa3',
                         background:'rgba(255,255,255,0.04)', padding:'1px 5px',
                         borderRadius:3 }}>SKIP</span>
                     </div>
                   </div>
                 );
               })}
-              <div style={{ fontSize:9, color:'#4a5568', textAlign:'center', marginTop:4 }}>
+              <div style={{ fontSize:9, color:'#6b7fa3', textAlign:'center', marginTop:4 }}>
                 No +EV opportunities — all side bets negative
               </div>
             </div>

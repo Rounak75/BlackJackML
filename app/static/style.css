@@ -8,21 +8,21 @@
    CSS CUSTOM PROPERTIES
    ══════════════════════════════════════════════════════════ */
 :root {
-  /* Backgrounds — slightly lighter for better contrast */
+  /* Backgrounds */
   --bg-0: #0a0e18;
   --bg-1: #111827;
   --bg-2: #1a2236;
   --bg-3: #212d45;
   --bg-4: #2a3a58;
 
-  /* Borders — more visible */
-  --border:        rgba(255, 255, 255, 0.12);
-  --border-bright: rgba(255, 255, 255, 0.22);
+  /* Borders — visible at a glance */
+  --border:        rgba(255, 255, 255, 0.15);
+  --border-bright: rgba(255, 255, 255, 0.28);
 
-  /* Text — significantly brighter */
-  --text-0: #f0f4ff;   /* Primary — near white */
-  --text-1: #b0bfd8;   /* Secondary */
-  --text-2: #7a8eab;   /* Muted / labels */
+  /* Text — high contrast, readable at any size */
+  --text-0: #ffffff;   /* Primary — pure white for max contrast */
+  --text-1: #d0ddf0;   /* Secondary — bright blue-white */
+  --text-2: #a8bcd4;   /* Labels / muted — still clearly readable */
 
   /* Accent colours — brighter, more saturated */
   --gold:   #ffd447;
@@ -52,7 +52,7 @@
 }
 
 html {
-  font-size: 14px;
+  font-size: 15px;  /* bumped for readability */
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
 }
@@ -104,8 +104,8 @@ body {
   background: var(--bg-2);
   border: 1.5px solid var(--border-bright);
   font-family: 'DM Mono', monospace;
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 1.1rem;
+  font-weight: 800;
   color: var(--text-0);
   box-shadow: 0 3px 14px rgba(0, 0, 0, 0.55);
   animation: cardDeal 0.22s var(--ease);
@@ -137,8 +137,8 @@ body {
   border-radius: 6px;
   background: var(--bg-1);
   font-family: 'DM Mono', monospace;
-  font-size: 0.72rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+  font-weight: 800;
   color: var(--text-0);
   cursor: pointer;
   transition: all var(--t);
@@ -193,26 +193,26 @@ body {
   border-collapse: collapse;
   width: 100%;
   font-family: 'DM Mono', monospace;
-  font-size: 0.65rem;
+  font-size: 0.72rem;
 }
 
 .strat-table th,
 .strat-table td {
-  padding: 4px 5px;
+  padding: 5px 6px;
   text-align: center;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.10);
 }
 
-.strat-table th    { background: var(--bg-1); color: var(--text-1); font-weight: 700; }
-.strat-table .rlbl { background: var(--bg-1); color: var(--text-0); font-weight: 700; }
+.strat-table th    { background: var(--bg-1); color: var(--text-0); font-weight: 800; }
+.strat-table .rlbl { background: var(--bg-1); color: var(--text-0); font-weight: 800; }
 
-.s-H   { background: rgba(68, 232, 130, 0.18); color: #5df59a; }
-.s-S   { background: rgba(106, 175, 255, 0.18); color: #7dc0ff; }
-.s-D   { background: rgba(255, 212, 71, 0.18); color: #ffd447; }
-.s-Ds  { background: rgba(255, 160, 70, 0.18); color: #ffb060; }
-.s-SP  { background: rgba(185, 155, 255, 0.18); color: #c4a8ff; }
-.s-SY  { background: rgba(185, 155, 255, 0.10); color: #b99bff; }
-.s-SUR { background: rgba(255, 92, 92, 0.18);  color: #ff7070; }
+.s-H   { background: rgba(68, 232, 130, 0.25); color: #6fffa8; font-weight: 700; }
+.s-S   { background: rgba(106, 175, 255, 0.25); color: #90d0ff; font-weight: 700; }
+.s-D   { background: rgba(255, 212, 71,  0.25); color: #ffe066; font-weight: 700; }
+.s-Ds  { background: rgba(255, 160, 70,  0.25); color: #ffc070; font-weight: 700; }
+.s-SP  { background: rgba(185, 155, 255, 0.25); color: #d0b8ff; font-weight: 700; }
+.s-SY  { background: rgba(185, 155, 255, 0.15); color: #c4acff; font-weight: 700; }
+.s-SUR { background: rgba(255, 92,  92,  0.25); color: #ff8888; font-weight: 700; }
 
 .cell-hl {
   outline: 2px solid var(--gold);
@@ -288,30 +288,33 @@ body {
    KEYBOARD SHORTCUT BAR
    ══════════════════════════════════════════════════════════ */
 .shortcut-hint {
-  position: fixed;
-  bottom: 12px;
-  left: 50%;
-  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 0 14px;
   font-size: 0.65rem;
-  color: var(--text-1);
-  background: rgba(17, 24, 39, 0.9);
-  border: 1px solid var(--border-bright);
-  border-radius: 999px;
-  padding: 4px 16px;
-  backdrop-filter: blur(12px);
-  pointer-events: none;
+  color: var(--text-2);
   white-space: nowrap;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
+  flex-wrap: wrap;
 }
 
 .shortcut-hint kbd {
-  background: var(--bg-4);
+  background: var(--bg-3);
   border: 1px solid var(--border-bright);
-  border-radius: 4px;
-  padding: 1px 6px;
+  border-radius: 5px;
+  padding: 2px 7px;
   font-family: 'DM Mono', monospace;
   font-size: 0.6rem;
-  color: var(--text-0);
+  font-weight: 700;
+  color: #ffd447;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.1);
+}
+
+.shortcut-hint .sep {
+  color: var(--text-3);
+  margin: 0 2px;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -344,12 +347,12 @@ body {
 
 .widget-title {
   font-family: 'Syne', sans-serif;
-  font-weight: 700;
-  font-size: 0.65rem;
+  font-weight: 800;
+  font-size: 0.72rem;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-1);
-  margin-bottom: 10px;
+  letter-spacing: 0.09em;
+  color: var(--text-0);
+  margin-bottom: 12px;
 }
 
 /* ══════════════════════════════════════════════════════════

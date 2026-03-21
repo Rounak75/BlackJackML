@@ -92,7 +92,7 @@ const C = {
   sapph:'#6aafff', sapphD:'rgba(106,175,255,0.10)',
   ameth:'#b99bff', amethD:'rgba(185,155,255,0.10)',
   base1:'#111827', base2:'#1a2236', base3:'#212d45', base4:'#2a3a58',
-  text:'#f0f4ff',  sec:'#b0bfd8',   muted:'#7a8eab',
+  text:'#f0f4ff',  sec:'#b0bfd8',   muted:'#94a7c4',
 };
 
 // Maps action names to their display colours:

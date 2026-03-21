@@ -169,17 +169,20 @@ class BasicStrategy:
         col = _dc(upcard_val)
         hand_val = hand.best_value
 
-        # Check surrender first
-        if Action.SURRENDER in available_actions:
-            if self._should_surrender(hand_val, upcard_val):
-                return Action.SURRENDER
-
-        # Check pair splitting
+        # Check pair splitting FIRST — before surrender.
+        # Pairs must be evaluated against PAIR_TABLE before anything else.
+        # Example: 8-8 vs 10 has best_value=16 which would trigger
+        # surrender, but PAIR_TABLE says always split 8s — correct play.
         if hand.is_pair and Action.SPLIT in available_actions:
             pair_val = hand.cards[0].count_key
             action = self._pair_action(pair_val, col, available_actions)
             if action is not None:
                 return action
+
+        # Check surrender (only for non-pair hands, or pairs where split is unavailable)
+        if Action.SURRENDER in available_actions:
+            if self._should_surrender(hand_val, upcard_val):
+                return Action.SURRENDER
 
         # Check soft totals
         if hand.is_soft and hand_val in SOFT_TABLE:
@@ -227,7 +230,8 @@ class BasicStrategy:
         return None
 
     def _resolve_action(self, table_action, available_actions: list) -> Action:
-        """Resolve chart action codes (D, Ds) to actual actions."""
+        """Resolve chart action codes (D, Ds, SUR) to actual actions,
+        respecting which actions are currently available."""
         if table_action == "D":
             if Action.DOUBLE in available_actions:
                 return Action.DOUBLE
@@ -236,6 +240,12 @@ class BasicStrategy:
             if Action.DOUBLE in available_actions:
                 return Action.DOUBLE
             return Action.STAND
+        elif table_action == Action.SURRENDER:
+            # Surrender is only available on initial 2-card non-split hands.
+            # If not available, fall back: hard 15/16 vs strong dealer → Hit
+            if Action.SURRENDER in available_actions:
+                return Action.SURRENDER
+            return Action.HIT
         elif isinstance(table_action, Action):
             return table_action
         return Action.STAND

@@ -19,7 +19,7 @@
  *   onUndo           — callback
  */
 
-function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, dealerMustDraw, dealerStands }) {
+function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands }) {
   const { useState } = React;
   const [suitFilter, setSuitFilter] = useState('all');
 
@@ -49,7 +49,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
       <div className="flex items-center justify-between mb-3">
         <span
           className="font-display font-bold text-[10px] uppercase tracking-widest"
-          style={{ color: '#7a8eab' }}
+          style={{ color: '#b8ccdf' }}
         >
           Click to Deal
         </span>
@@ -66,7 +66,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
                 border: `1.5px solid ${suitFilter === key ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.1)'}`,
                 color: suitFilter === key
                   ? (red ? '#ff7a7a' : '#f0f4ff')
-                  : (red ? '#ff9999aa' : '#7a8eab'),
+                  : (red ? '#ff9999aa' : '#b8ccdf'),
                 fontWeight: suitFilter === key ? 700 : 400,
               }}
             >
@@ -107,12 +107,12 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
         </div>
       )}
 
-      {/* Target selector + undo */}
+      {/* Target selector */}
       <div
-        className="flex items-center gap-2 mb-3 p-2 rounded-lg"
+        className="flex items-center gap-2 mb-2 p-2 rounded-lg"
         style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)' }}
       >
-        <span className="text-[10px]" style={{ color: '#7a8eab' }}>To:</span>
+        <span className="text-[10px] font-semibold" style={{ color: '#b8ccdf', flexShrink: 0 }}>To:</span>
         <div className="flex gap-1 flex-1">
           {targets.map(({ t, label }) => {
             const isDealer = t === 'dealer';
@@ -132,7 +132,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
                       ? (mustDraw ? '#ff9a20' : '#ffd447')
                       : (mustDraw ? 'rgba(255,154,32,0.5)' : 'rgba(255,255,255,0.15)')
                   }`,
-                  color: isActive ? '#0a0e18' : (mustDraw ? '#ffb347' : '#b0bfd8'),
+                  color: isActive ? '#0a0e18' : (mustDraw ? '#ffb347' : '#ccdaec'),
                   fontWeight: mustDraw ? 700 : 600,
                   boxShadow: mustDraw && isActive ? '0 0 10px rgba(255,154,32,0.5)' : 'none',
                 }}
@@ -142,20 +142,66 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             );
           })}
         </div>
+      </div>
+
+      {/* Action buttons row: Split + Undo */}
+      <div className="flex gap-2 mb-3">
+
+        {/* SPLIT button — only shown when player has a splittable pair */}
+        {canSplit ? (
+          <button
+            onClick={onSplit}
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg font-bold transition-all"
+            style={{
+              background: 'rgba(185,155,255,0.15)',
+              border: '2px solid rgba(185,155,255,0.7)',
+              color: '#c4a8ff',
+              fontSize: 13,
+              boxShadow: '0 0 14px rgba(185,155,255,0.3)',
+              animation: 'split-pulse 1.8s ease-in-out infinite',
+            }}
+            title="Split your pair into two separate hands"
+          >
+            <span style={{ fontSize: 16 }}>✂</span>
+            <span>SPLIT PAIR</span>
+            <span style={{ fontSize: 10, opacity: 0.8, fontWeight: 500 }}>→ 2 hands</span>
+          </button>
+        ) : (
+          <div style={{ flex: 1 }} /> 
+        )}
+
+        {/* UNDO button — always visible, removes last card dealt */}
         <button
           onClick={onUndo}
-          className="text-xs px-2 py-1.5 rounded-md transition-all"
+          className="flex items-center justify-center gap-2 py-2 px-4 rounded-lg font-bold transition-all"
           style={{
-            background: 'transparent',
-            border: '1.5px solid rgba(255,255,255,0.15)',
-            color: '#7a8eab',
+            background: 'rgba(255,92,92,0.10)',
+            border: '1.5px solid rgba(255,92,92,0.35)',
+            color: '#ff8888',
+            fontSize: 12,
+            minWidth: 110,
           }}
-          onMouseEnter={e => { e.target.style.color = '#ff5c5c'; e.target.style.borderColor = 'rgba(255,92,92,0.4)'; }}
-          onMouseLeave={e => { e.target.style.color = '#7a8eab'; e.target.style.borderColor = 'rgba(255,255,255,0.15)'; }}
+          onMouseEnter={e => {
+            e.currentTarget.style.background = 'rgba(255,92,92,0.20)';
+            e.currentTarget.style.borderColor = 'rgba(255,92,92,0.7)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.background = 'rgba(255,92,92,0.10)';
+            e.currentTarget.style.borderColor = 'rgba(255,92,92,0.35)';
+          }}
+          title="Undo last card dealt (removes mistake)"
         >
-          ↩
+          <span style={{ fontSize: 14 }}>↩</span>
+          <span>Undo Card</span>
         </button>
       </div>
+
+      <style>{`
+        @keyframes split-pulse {
+          0%, 100% { box-shadow: 0 0 10px rgba(185,155,255,0.3); }
+          50%       { box-shadow: 0 0 22px rgba(185,155,255,0.6); }
+        }
+      `}</style>
 
       {/* 13-column card grid */}
       <div

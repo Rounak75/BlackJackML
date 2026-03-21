@@ -107,7 +107,7 @@ function StrategyRefTable({ playerHand, dealerUpcard }) {
       >
         <span
           className="font-display font-bold text-[10px] uppercase tracking-widest"
-          style={{ color: '#7a8eab' }}
+          style={{ color: '#94a7c4' }}
         >
           Basic Strategy Ref
         </span>
@@ -123,7 +123,7 @@ function StrategyRefTable({ playerHand, dealerUpcard }) {
             style={{
               background: '#212d45',
               border: '1.5px solid rgba(255,255,255,0.15)',
-              color: '#7a8eab',
+              color: '#94a7c4',
               transition: 'transform 0.2s',
               display: 'inline-block',
               transform: collapsed ? 'rotate(0deg)' : 'rotate(180deg)',
@@ -147,7 +147,7 @@ function StrategyRefTable({ playerHand, dealerUpcard }) {
                 style={{
                   background: tab === t ? '#212d45' : 'transparent',
                   border: `1.5px solid ${tab === t ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.1)'}`,
-                  color: tab === t ? '#f0f4ff' : '#7a8eab',
+                  color: tab === t ? '#f0f4ff' : '#94a7c4',
                 }}
               >
                 {t === 'hard' ? 'Hard' : t === 'soft' ? 'Soft' : 'Pairs'}

@@ -26,11 +26,12 @@ function ActionPanel({ recommendation, count }) {
       <div className="my-4 text-center">
         <div
           className={`action-text-base ${action ? actionClass(action) : ''}`}
-          style={{ fontSize: '2.6rem', lineHeight: 1, color: action ? undefined : '#7a8eab' }}
+          title={action ? `Best play: ${action}` : 'Deal cards to see recommendation'}
+          style={{ fontSize: '2.6rem', lineHeight: 1, color: action ? undefined : '#b8ccdf' }}
         >
           {action || 'DEAL CARDS'}
         </div>
-        <div className="text-xs mt-2" style={{ color: '#b0bfd8' }}>
+        <div className="text-xs mt-2" style={{ color: '#ccdaec' }}>
           {action
             ? `True Count: ${count ? count.true.toFixed(1) : '—'}`
             : 'Enter your hand and dealer upcard to get advice'}
@@ -72,7 +73,7 @@ function ActionPanel({ recommendation, count }) {
         <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10, marginTop: 10 }}>
           <div
             className="text-[10px] uppercase tracking-widest font-display font-bold mb-2"
-            style={{ color: '#7a8eab' }}
+            style={{ color: '#b8ccdf' }}
           >
             Why this action?
           </div>
@@ -84,11 +85,11 @@ function ActionPanel({ recommendation, count }) {
             return (
               <p
                 key={i}
-                className="text-xs leading-relaxed mb-2"
+                className="text-xs leading-relaxed mb-2" style={{ fontSize: "12px" }}
                 style={{
                   color: isTrigger ? '#b99bff'
                        : isTip     ? '#ffd447'
-                       : '#b0bfd8',
+                       : '#ccdaec',
                   background: isTrigger
                     ? 'rgba(185,155,255,0.08)'
                     : isTip

@@ -71,6 +71,10 @@ class Deviation:
                 return True
             return False
         else:  # hard
+            # Exclude pairs — they are handled by PAIR_TABLE, never by hard deviations.
+            # e.g. 8-8 vs 10 is hard 16 but should SPLIT, not trigger the hard 16 Stand deviation.
+            if hand.is_pair:
+                return False
             if not hand.is_soft and hand.best_value == self.hand_value:
                 return True
             return False
@@ -98,8 +102,8 @@ ILLUSTRIOUS_18 = [
     # 1. 16 vs 10: Stand at TC >= 0 (basic says Hit)
     Deviation("hard", 16, 10, Action.STAND, 0, ">="),
 
-    # 2. 15 vs 10: Stand at TC >= +4
-    Deviation("hard", 15, 10, Action.STAND, 4, ">="),
+    # 2. 15 vs 10: Covered by FAB_4 surrender at TC >= 0 (which is better)
+    #    When surrender unavailable: basic strategy = H, no stand deviation needed
 
     # 3. 10,10 vs 5: Split at TC >= +5
     Deviation("pair", 10, 5, Action.SPLIT, 5, ">="),

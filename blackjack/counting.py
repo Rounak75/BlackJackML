@@ -54,7 +54,15 @@ class CardCounter:
         self.running_count = 0      # The live count you keep in your head
         self.cards_seen = 0         # Total cards counted (for true count calc)
         self.count_history: List[Dict] = []
-        self._card_log: List[int] = []  # Rank keys of every card seen (for estimating remaining composition)
+        self._card_log: List[int] = []  # Rank keys of every card seen
+
+        # ── Side counts ────────────────────────────────────────────────────
+        # Track Aces and 10-value cards separately from the main count.
+        # Hi-Lo treats Aces as -1 (same as 10s) but Aces are uniquely powerful
+        # because they enable Blackjack (3:2 payout). Tracking them separately
+        # lets us compute an "Ace-adjusted TC" for betting decisions.
+        self.aces_seen = 0          # How many Aces have been dealt
+        self.tens_seen = 0          # How many 10/J/Q/K have been dealt
 
     def count_card(self, card: Card):
         """Process a single dealt card."""
@@ -62,6 +70,11 @@ class CardCounter:
         self.running_count += val
         self.cards_seen += 1
         self._card_log.append(card.count_key)
+        # Side counts — tracked independently of main counting system
+        if card.is_ace:
+            self.aces_seen += 1
+        if card.is_ten:
+            self.tens_seen += 1
         self.count_history.append({
             "card": str(card),
             "count_value": val,
@@ -99,6 +112,86 @@ class CardCounter:
         total = self.num_decks * 52
         return self.cards_seen / total if total > 0 else 0.0
 
+    # ── Side count properties ───────────────────────────────────────────────
+
+    @property
+    def aces_remaining(self) -> int:
+        """How many Aces are still in the shoe."""
+        return max(0, self.num_decks * 4 - self.aces_seen)
+
+    @property
+    def tens_remaining(self) -> int:
+        """How many 10-value cards (10/J/Q/K) are still in the shoe."""
+        return max(0, self.num_decks * 16 - self.tens_seen)
+
+    @property
+    def aces_expected(self) -> float:
+        """Expected Aces remaining based on cards_seen (null hypothesis)."""
+        total_cards = self.num_decks * 52
+        total_aces  = self.num_decks * 4
+        remaining   = total_cards - self.cards_seen
+        return total_aces * (remaining / total_cards) if total_cards > 0 else 0.0
+
+    @property
+    def tens_expected(self) -> float:
+        """Expected 10-value cards remaining based on cards_seen."""
+        total_cards = self.num_decks * 52
+        total_tens  = self.num_decks * 16
+        remaining   = total_cards - self.cards_seen
+        return total_tens * (remaining / total_cards) if total_cards > 0 else 0.0
+
+    @property
+    def ace_adjustment(self) -> float:
+        """
+        How many extra/fewer Aces remain vs expectation, normalised per deck.
+        Positive = Ace-rich shoe (add to TC for betting decisions).
+        Negative = Ace-poor shoe (subtract from TC for betting decisions).
+        Rule of thumb: each +1 Ace-per-deck above expectation ≈ +0.4 TC units.
+        """
+        decks_left = self.decks_remaining
+        if decks_left <= 0:
+            return 0.0
+        extra_aces = self.aces_remaining - self.aces_expected
+        return round(extra_aces / decks_left * 0.4, 2)
+
+    @property
+    def ten_adjustment(self) -> float:
+        """
+        How many extra/fewer 10-value cards remain vs expectation per deck.
+        Positive = Ten-rich shoe. Negative = Ten-poor.
+        Each extra 10 per deck ≈ +0.1 TC units (less impactful than Aces).
+        """
+        decks_left = self.decks_remaining
+        if decks_left <= 0:
+            return 0.0
+        extra_tens = self.tens_remaining - self.tens_expected
+        return round(extra_tens / decks_left * 0.1, 2)
+
+    @property
+    def ace_adjusted_tc(self) -> float:
+        """
+        True Count adjusted for Ace richness/poorness.
+        Use THIS for bet sizing decisions (not for strategy plays).
+        For strategy plays, always use plain true_count.
+        """
+        return round(self.true_count + self.ace_adjustment + self.ten_adjustment, 2)
+
+    def get_side_count_state(self) -> dict:
+        """Full side count state for the frontend."""
+        return {
+            "aces_seen":       self.aces_seen,
+            "aces_remaining":  self.aces_remaining,
+            "aces_expected":   round(self.aces_expected, 1),
+            "ace_rich":        self.aces_remaining > self.aces_expected,
+            "ace_adjustment":  self.ace_adjustment,
+            "tens_seen":       self.tens_seen,
+            "tens_remaining":  self.tens_remaining,
+            "tens_expected":   round(self.tens_expected, 1),
+            "ten_rich":        self.tens_remaining > self.tens_expected,
+            "ten_adjustment":  self.ten_adjustment,
+            "ace_adjusted_tc": self.ace_adjusted_tc,
+        }
+
     @property
     def advantage(self) -> float:
         """
@@ -129,10 +222,12 @@ class CardCounter:
 
     def reset(self):
         """Reset for a new shoe."""
-        self.running_count = 0      # The live count you keep in your head
-        self.cards_seen = 0         # Total cards counted (for true count calc)
+        self.running_count = 0
+        self.cards_seen = 0
         self.count_history = []
         self._card_log = []
+        self.aces_seen = 0
+        self.tens_seen = 0
 
     def get_remaining_estimate(self) -> Dict[int, float]:
         """

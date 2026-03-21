@@ -40,7 +40,7 @@ function EdgeMeter({ count }) {
       {/* Labels */}
       <div
         className="flex justify-between mb-3 font-mono"
-        style={{ fontSize: '0.62rem', color: '#b0bfd8' }}
+        style={{ fontSize: '0.62rem', color: '#ccdaec' }}
       >
         <span>House −2%</span>
         <span>Break Even</span>
@@ -55,11 +55,11 @@ function EdgeMeter({ count }) {
         >
           {adv >= 0 ? '+' : ''}{adv.toFixed(2)}%
         </span>
-        <span className="text-xs" style={{ color: '#b0bfd8' }}>
+        <span className="text-xs" style={{ color: '#ccdaec' }}>
           {isPos ? 'Player Edge' : 'House Edge'}
         </span>
       </div>
-      <div className="font-mono text-[10px] mt-1" style={{ color: '#7a8eab' }}>
+      <div className="font-mono text-[10px] mt-1" style={{ color: '#b8ccdf' }}>
         RTP: {(100 + adv).toFixed(2)}% · Base house edge: 0.50%
       </div>
     </Widget>

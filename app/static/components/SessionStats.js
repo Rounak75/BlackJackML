@@ -41,7 +41,7 @@ function SessionStats({ session, currency }) {
       <div className="mb-3">
         <div className="flex justify-between text-[10px] font-mono mb-1">
           <span style={{ color: '#44e882' }}>You {playerWinPct}%</span>
-          <span style={{ color: '#7a8eab' }}>Push {pushPct}%</span>
+          <span style={{ color: '#b8ccdf' }}>Push {pushPct}%</span>
           <span style={{ color: '#ff5c5c' }}>Dealer {dealerWinPct}%</span>
         </div>
         <div className="flex rounded-full overflow-hidden" style={{ height: 8, background: '#111827' }}>
@@ -62,7 +62,7 @@ function SessionStats({ session, currency }) {
           <div key={l} className="rounded-lg p-2.5 text-center"
             style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)' }}>
             <div className="font-mono text-base font-bold" style={{ color: c }}>{n}</div>
-            <div className="text-[9px] uppercase tracking-wide mt-0.5" style={{ color: '#7a8eab' }}>{l}</div>
+            <div className="text-[9px] uppercase tracking-wide mt-0.5" style={{ color: '#b8ccdf' }}>{l}</div>
           </div>
         ))}
       </div>
@@ -75,7 +75,7 @@ function SessionStats({ session, currency }) {
           <span className="font-semibold" style={{ color: '#44e882' }}>🏆 You Won</span>
           <div className="flex items-center gap-3">
             <span className="font-mono font-bold" style={{ color: '#44e882' }}>{wins} hands</span>
-            <span className="font-mono text-[10px]" style={{ color: '#7a8eab' }}>{playerWinPct}%</span>
+            <span className="font-mono text-[10px]" style={{ color: '#b8ccdf' }}>{playerWinPct}%</span>
           </div>
         </div>
 
@@ -84,7 +84,7 @@ function SessionStats({ session, currency }) {
           <span className="font-semibold" style={{ color: '#ff5c5c' }}>🏦 Dealer Won</span>
           <div className="flex items-center gap-3">
             <span className="font-mono font-bold" style={{ color: '#ff5c5c' }}>{losses} hands</span>
-            <span className="font-mono text-[10px]" style={{ color: '#7a8eab' }}>{dealerWinPct}%</span>
+            <span className="font-mono text-[10px]" style={{ color: '#b8ccdf' }}>{dealerWinPct}%</span>
           </div>
         </div>
 
@@ -93,7 +93,7 @@ function SessionStats({ session, currency }) {
           <span className="font-semibold" style={{ color: '#6aafff' }}>🤝 Push</span>
           <div className="flex items-center gap-3">
             <span className="font-mono font-bold" style={{ color: '#6aafff' }}>{pushes} hands</span>
-            <span className="font-mono text-[10px]" style={{ color: '#7a8eab' }}>{pushPct}%</span>
+            <span className="font-mono text-[10px]" style={{ color: '#b8ccdf' }}>{pushPct}%</span>
           </div>
         </div>
 

@@ -65,7 +65,7 @@ function App() {
 
   // Currency display settings (symbol, code) — user can change in BettingPanel.
   const [currency, setCurrency] = useState({
-    code: 'USD', symbol: '$', name: 'US Dollar', isCrypto: false
+    code: 'INR', symbol: '₹', name: 'Indian Rupee', isCrypto: false
   })
 
   // Whether the player doubled down this hand.
@@ -194,6 +194,15 @@ function App() {
    * The running count accumulates across ALL hands within the same shoe.
    * Only a real casino reshuffle should reset the count (see handleShuffle).
    */
+  const handleSplit = useCallback(() => {
+    // Emit split event to server — server creates two hands
+    socketRef.current?.emit('player_split')
+  }, [])
+
+  const handleNextSplitHand = useCallback(() => {
+    socketRef.current?.emit('next_split_hand')
+  }, [])
+
   const handleNewHand = useCallback(() => {
     undoStack.current = []           // clear undo stack — new hand, fresh start
     dealTargetRef.current = 'player' // every new hand starts by dealing to player
@@ -327,7 +336,11 @@ function App() {
   const playerHand = gameState?.player_hand      // player's cards + total + flags
   const dealerUp   = gameState?.dealer_upcard    // dealer's face-up card (string)
   const dealerHand = gameState?.dealer_hand      // full dealer hand (all cards)
-  const history    = gameState?.count_history    // last 60 count snapshots
+  const history        = gameState?.count_history       // last 60 count snapshots
+  const sideCounts     = gameState?.side_counts         // ace + ten side count state
+  const casinoRisk     = gameState?.casino_risk         // counter detection risk meter
+  const splitHands     = gameState?.split_hands    ?? []// split hand array
+  const activeHandIdx  = gameState?.active_hand_index ?? 0
 
   // Insurance is a core game mechanic (not a side bet) — it's its own key.
   // It's only populated when the dealer's upcard is an Ace.
@@ -379,10 +392,10 @@ function App() {
             style={{ color: '#ffd447', filter: 'drop-shadow(0 0 20px rgba(255,212,71,0.6))' }}>
             ♠
           </div>
-          <div className="text-base font-semibold mb-2" style={{ color: '#b0bfd8' }}>
+          <div className="text-base font-semibold mb-2" style={{ color: '#ccdaec' }}>
             Connecting to BlackjackML server…
           </div>
-          <div className="text-xs" style={{ color: '#7a8eab' }}>
+          <div className="text-xs" style={{ color: '#b8ccdf' }}>
             Make sure{' '}
             <code style={{ background:'#1a2236', padding:'2px 6px', borderRadius:4, color:'#ffd447' }}>
               python main.py web
@@ -469,7 +482,19 @@ function App() {
             isDoubled={isDoubled}
             tookInsurance={tookInsurance}
             activeBet={customBet}
+            currency={currency}
           />
+
+          {/* Split hand panel — shown only when player has split */}
+          {splitHands && splitHands.length > 0 && (
+            <SplitHandPanel
+              splitHands={splitHands}
+              activeHandIndex={activeHandIdx}
+              dealerUpcard={dealerUp}
+              socket={socketRef.current}
+              onNextHand={() => {}}
+            />
+          )}
 
           {/* Card entry grid */}
           <CardGrid
@@ -478,11 +503,13 @@ function App() {
             remainingByRank={shoe?.remaining_by_rank}
             onDealCard={handleDealCard}
             onUndo={handleUndo}
+            onSplit={handleSplit}
+            canSplit={!!(playerHand?.can_split && splitHands.length === 0)}
             dealerMustDraw={dealerMustDraw}
             dealerStands={dealerStandsFlag}
           />
 
-          {/* Compact info strip */}
+          {/* Compact info strip — now includes side counts + casino risk */}
           <CenterToolbar
             recommendation={rec}
             count={count}
@@ -492,6 +519,8 @@ function App() {
             history={history}
             session={session}
             currency={currency}
+            sideCounts={sideCounts}
+            casinoRisk={casinoRisk}
           />
 
           {/* ── Center data grid — fills empty space below cards */}
@@ -534,16 +563,28 @@ function App() {
 
           {/* ML shuffle tracker */}
           <ShuffleTrackerPanel tracker={tracker} />
+
+          {/* Ace + Ten side count — Ace-adjusted TC for bet sizing */}
+          <SideCountPanel sideCounts={sideCounts} count={count} />
+
+          {/* Casino counter detection risk meter */}
+          <CasinoRiskMeter casinoRisk={casinoRisk} />
+
+          {/* Stop-loss / stop-win alerts with audio */}
+          <StopAlerts session={session} currency={currency} />
         </div>
 
       </div>
 
       {/* Keyboard shortcut reminder at the bottom of the page */}
       <div className="shortcut-hint">
-        <kbd>N</kbd> New Hand &nbsp;·&nbsp;
-        <kbd>S</kbd> Real Shuffle &nbsp;·&nbsp;
-        <kbd>P</kbd> → Player &nbsp;·&nbsp;
-        <kbd>D</kbd> → Dealer
+        <kbd>N</kbd> <span>New Hand</span>
+        <span className="sep">·</span>
+        <kbd>S</kbd> <span>Real Shuffle</span>
+        <span className="sep">·</span>
+        <kbd>P</kbd> <span>Player</span>
+        <span className="sep">·</span>
+        <kbd>D</kbd> <span>Dealer</span>
       </div>
     </div>
   )

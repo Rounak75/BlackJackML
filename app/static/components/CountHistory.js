@@ -73,7 +73,7 @@ function CountHistoryPanel({ history }) {
       {/* Card log */}
       <div style={{ maxHeight: 100, overflowY: 'auto' }}>
         {recent.length === 0 ? (
-          <div className="text-xs italic" style={{ color: '#7a8eab' }}>
+          <div className="text-xs italic" style={{ color: '#b8ccdf' }}>
             No cards counted yet
           </div>
         ) : (
@@ -86,14 +86,14 @@ function CountHistoryPanel({ history }) {
                 className="flex justify-between text-[10px] py-0.5 font-mono"
                 style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}
               >
-                <span style={{ color: '#b0bfd8', minWidth: 32 }}>{h.card}</span>
-                <span style={{ color: pos ? '#44e882' : neg ? '#ff5c5c' : '#7a8eab', minWidth: 28, textAlign: 'right' }}>
+                <span style={{ color: '#ccdaec', minWidth: 32 }}>{h.card}</span>
+                <span style={{ color: pos ? '#44e882' : neg ? '#ff5c5c' : '#b8ccdf', minWidth: 28, textAlign: 'right' }}>
                   {h.count_value > 0 ? '+' : ''}{h.count_value}
                 </span>
-                <span style={{ color: '#7a8eab', minWidth: 44, textAlign: 'right' }}>
+                <span style={{ color: '#b8ccdf', minWidth: 44, textAlign: 'right' }}>
                   RC {h.running_count}
                 </span>
-                <span style={{ color: '#7a8eab', minWidth: 44, textAlign: 'right' }}>
+                <span style={{ color: '#b8ccdf', minWidth: 44, textAlign: 'right' }}>
                   TC {h.true_count.toFixed(1)}
                 </span>
               </div>

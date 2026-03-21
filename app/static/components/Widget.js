@@ -48,9 +48,9 @@ function Widget({ title, badge, badgeColor = 'text-ameth', children, className =
  */
 function KV({ label, value, valueClass = '' }) {
   return (
-    <div className="flex justify-between items-center text-xs py-1">
-      <span style={{ color: '#b0bfd8' }}>{label}</span>
-      <span className={`font-mono font-semibold ${valueClass}`} style={{ color: valueClass ? undefined : '#f0f4ff' }}>
+    <div className="flex justify-between items-center py-1" style={{ fontSize: 12 }}>
+      <span style={{ color: '#ccdaec', fontWeight: 500 }}>{label}</span>
+      <span className={`font-mono font-bold ${valueClass}`} style={{ color: valueClass ? undefined : '#ffffff', fontSize: 13 }}>
         {value}
       </span>
     </div>

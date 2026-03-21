@@ -36,7 +36,7 @@ function I18Panel({ count }) {
             >
               <span
                 className={`font-mono dev-sit font-semibold ${active ? '' : ''}`}
-                style={{ color: active ? '#ffd447' : '#b0bfd8', minWidth: 80 }}
+                style={{ color: active ? '#ffd447' : '#ccdaec', minWidth: 80 }}
               >
                 {d.sit}
               </span>
@@ -46,7 +46,7 @@ function I18Panel({ count }) {
               >
                 {d.act}
               </span>
-              <span style={{ color: '#7a8eab', fontSize: '0.6rem' }}>{d.tc}</span>
+              <span style={{ color: '#b8ccdf', fontSize: '0.7rem' }}>{d.tc}</span>
             </div>
           );
         })}

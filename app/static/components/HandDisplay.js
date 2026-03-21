@@ -91,9 +91,10 @@ function HandDisplay({
     push: { label: '🤝 PUSH',     color: '#6aafff', bg: 'rgba(106,175,255,0.15)', border: 'rgba(106,175,255,0.5)' },
   }
 
+  const sym = currency?.symbol ?? '₹'
   const fmt = (n) => {
     const abs = Math.abs(n || 0)
-    return `${n >= 0 ? '+' : '-'}${abs.toFixed(2)}`
+    return `${n >= 0 ? '+' : '-'}${sym}${abs.toFixed(0)}`
   }
 
   return (
@@ -114,7 +115,7 @@ function HandDisplay({
         <div className="flex items-center gap-2 mb-2">
           <div
             className="text-[10px] uppercase tracking-widest font-display font-bold"
-            style={{ color: '#7a8eab' }}
+            style={{ color: '#b8ccdf' }}
           >
             Dealer Hand
           </div>
@@ -132,7 +133,7 @@ function HandDisplay({
                   dealerBj   ? 'rgba(255,212,71,0.5)'
                   : dealerBust ? 'rgba(255,92,92,0.5)'
                   : 'rgba(255,255,255,0.2)'}`,
-                color: dealerBj ? '#ffd447' : dealerBust ? '#ff5c5c' : '#b0bfd8',
+                color: dealerBj ? '#ffd447' : dealerBust ? '#ff5c5c' : '#ccdaec',
               }}
             >
               {dealerBj ? 'BLACKJACK' : dealerBust ? 'BUST' : `${dealerValue}${dealerSoft ? ' soft' : ''}`}
@@ -182,7 +183,7 @@ function HandDisplay({
             }}
           >
             <div className="font-bold mb-0.5 flex items-center gap-1.5"
-              style={{ color: insurance.recommended ? '#6aafff' : '#7a8eab' }}>
+              style={{ color: insurance.recommended ? '#6aafff' : '#b8ccdf' }}>
               🛡️ Insurance offered · Pays 2:1 · Costs ½ your bet
               {/* Badge showing whether user toggled insurance ON */}
               {tookInsurance && (
@@ -194,11 +195,11 @@ function HandDisplay({
                 </span>
               )}
             </div>
-            <div className="text-[10px] mb-1" style={{ color: '#b0bfd8' }}>
+            <div className="text-[10px] mb-1" style={{ color: '#ccdaec' }}>
               {insurance.reason}
             </div>
             {insurance.ev !== null && (
-              <div className="text-[10px] font-mono" style={{ color: '#7a8eab' }}>
+              <div className="text-[10px] font-mono" style={{ color: '#b8ccdf' }}>
                 EV: <span style={{ color: insurance.ev >= 0 ? '#44e882' : '#ff5c5c', fontWeight: 700 }}>
                   {insurance.ev >= 0 ? '+' : ''}{insurance.ev?.toFixed(1)}%
                 </span>
@@ -245,7 +246,7 @@ function HandDisplay({
         {/* Cards */}
         <div className="flex items-center gap-2 flex-wrap" style={{ minHeight: 64 }}>
           {dealerCards.length === 0 ? (
-            <span className="text-xs italic" style={{ color: '#7a8eab' }}>
+            <span className="text-xs italic" style={{ color: '#b8ccdf' }}>
               Click a card with "Dealer" selected
             </span>
           ) : (
@@ -264,7 +265,7 @@ function HandDisplay({
 
         {/* Dealer card count indicator */}
         {dealerCards.length > 0 && (
-          <div className="mt-1.5 text-[10px] font-mono" style={{ color: '#7a8eab' }}>
+          <div className="mt-1.5 text-[10px] font-mono" style={{ color: '#b8ccdf' }}>
             {dealerCards.length === 1
               ? 'Upcard shown · add hole card when revealed'
               : `${dealerCards.length} cards — enter next dealer card (S17: stand on 17+)`}
@@ -299,7 +300,7 @@ function HandDisplay({
         <div className="flex items-center gap-2 mb-2">
           <div
             className="text-[10px] uppercase tracking-widest font-display font-bold"
-            style={{ color: '#7a8eab' }}
+            style={{ color: '#b8ccdf' }}
           >
             Your Hand
           </div>
@@ -316,7 +317,7 @@ function HandDisplay({
                   bj   ? 'rgba(255,212,71,0.5)'
                   : bust ? 'rgba(255,92,92,0.5)'
                   : 'rgba(255,255,255,0.2)'}`,
-                color: bj ? '#ffd447' : bust ? '#ff5c5c' : '#b0bfd8',
+                color: bj ? '#ffd447' : bust ? '#ff5c5c' : '#ccdaec',
               }}
             >
               {bj ? 'BLACKJACK' : bust ? 'BUST' : `${bv}${playerHand?.is_soft ? ' soft' : ''}`}
@@ -342,7 +343,7 @@ function HandDisplay({
           {playerHand?.cards?.length > 0 ? (
             playerHand.cards.map((c, i) => <MiniCard key={i} str={c} />)
           ) : (
-            <span className="text-xs italic" style={{ color: '#7a8eab' }}>
+            <span className="text-xs italic" style={{ color: '#b8ccdf' }}>
               Click cards with "Player" selected
             </span>
           )}
@@ -413,7 +414,7 @@ function HandDisplay({
           return (
             <div className="mt-3 space-y-1.5">
               <div className="text-[9px] uppercase tracking-widest font-bold"
-                style={{ color: '#7a8eab' }}>
+                style={{ color: '#b8ccdf' }}>
                 +EV Side Bets
               </div>
               {active.map(({ key, icon, name, color }) => (
@@ -458,7 +459,7 @@ function MiniCardBack({ label = '?' }) {
       className="mini-card"
       style={{
         background: 'linear-gradient(135deg, #1e2c48 25%, #26395c 75%)',
-        color: '#7a8eab',
+        color: '#b8ccdf',
         fontSize: '1.2rem',
         border: '1.5px solid rgba(255,255,255,0.15)',
       }}

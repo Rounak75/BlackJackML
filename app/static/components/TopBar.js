@@ -90,7 +90,7 @@ function InfoTooltip({ children }) {
           width: 16, height: 16, borderRadius: '50%',
           background: visible ? 'rgba(255,212,71,0.25)' : 'rgba(255,255,255,0.1)',
           border: `1px solid ${visible ? 'rgba(255,212,71,0.6)' : 'rgba(255,255,255,0.2)'}`,
-          color: visible ? '#ffd447' : '#7a8eab',
+          color: visible ? '#ffd447' : '#b8ccdf',
           fontSize: 9, fontWeight: 'bold',
           cursor: 'pointer', userSelect: 'none',
           transition: 'all 0.15s',
@@ -168,7 +168,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
           <div className="font-display font-extrabold text-sm tracking-tight" style={{ color: '#f0f4ff' }}>
             BlackjackML
           </div>
-          <div className="text-[10px] uppercase tracking-widest" style={{ color: '#7a8eab' }}>
+          <div className="text-[10px] uppercase tracking-widest" style={{ color: '#b8ccdf' }}>
             Live Counter & AI Advisor
           </div>
         </div>
@@ -179,11 +179,11 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
         className="flex items-center gap-5 rounded-xl px-6 py-2.5 flex-1 justify-center max-w-xl"
         style={{ background: '#111827', border: '1.5px solid rgba(255,255,255,0.14)' }}
       >
-        <CountBlock label="Running"     value={rc}             colorVal={rc}  mono />
+        <CountBlock label="Running" title="Running Count: raw sum of all card tags seen (+1 low, -1 high)" value={rc} colorVal={rc} mono />
         <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.15)' }} />
-        <CountBlock label="True Count"  value={tc.toFixed(1)}  colorVal={tc}  large mono />
+        <CountBlock label="True Count" title="True Count: Running Count ÷ Decks Remaining. Use this for strategy decisions." value={tc.toFixed(1)} colorVal={tc} large mono />
         <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.15)' }} />
-        <CountBlock label="ML Enhanced" value={etc.toFixed(1)} colorVal={etc} mono />
+        <CountBlock label="ML Enhanced" title="ML-enhanced true count: adjusts for shuffle patterns tracked by LSTM model" value={etc.toFixed(1)} colorVal={etc} mono />
         <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.15)' }} />
         <CountBlock
           label="Advantage"
@@ -199,20 +199,20 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
         {/* ── Counting System ───────────────────────────── */}
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1 mb-0.5">
-            <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: '#7a8eab' }}>
+            <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: '#b8ccdf' }}>
               Counting System
             </span>
             <InfoTooltip>
               <div className="text-[10px] font-bold mb-1" style={{ color: '#ffd447' }}>
                 What is a counting system?
               </div>
-              <div className="text-[10px] leading-relaxed" style={{ color: '#b0bfd8' }}>
+              <div className="text-[10px] leading-relaxed" style={{ color: '#ccdaec' }}>
                 Card counting assigns a tag to each card you see. You keep a running total — when it's high, the shoe favours you and you bet more.
               </div>
               <div className="mt-2 space-y-1">
                 {Object.entries(COUNTING_SYSTEMS).map(([k, v]) => (
-                  <div key={k} className="text-[9px]" style={{ color: '#7a8eab' }}>
-                    <span style={{ color: '#b0bfd8', fontWeight: 600 }}>{v.label}</span> {v.level} — {v.desc.split('.')[0]}.
+                  <div key={k} className="text-[9px]" style={{ color: '#b8ccdf' }}>
+                    <span style={{ color: '#ccdaec', fontWeight: 600 }}>{v.label}</span> {v.level} — {v.desc.split('.')[0]}.
                   </div>
                 ))}
               </div>
@@ -230,7 +230,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
             </select>
           </div>
           {/* Active system description — one-liner under the select */}
-          <div className="text-[9px] leading-tight mt-0.5" style={{ color: '#4a5568', maxWidth: 150 }}>
+          <div className="text-[9px] leading-tight mt-0.5" style={{ color: '#9ab0c8', maxWidth: 150 }}>
             {sysMeta.level} · {sysMeta.desc.split('.')[0]}
           </div>
         </div>
@@ -242,25 +242,25 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
         {/* ── Shuffle ───────────────────────────────────── */}
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1 mb-0.5">
-            <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: '#7a8eab' }}>
+            <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: '#b8ccdf' }}>
               Shuffle Type
             </span>
             <InfoTooltip>
               <div className="text-[10px] font-bold mb-1" style={{ color: '#ffd447' }}>
                 Why does shuffle type matter?
               </div>
-              <div className="text-[10px] leading-relaxed mb-2" style={{ color: '#b0bfd8' }}>
+              <div className="text-[10px] leading-relaxed mb-2" style={{ color: '#ccdaec' }}>
                 The ML Shuffle Tracker remembers card patterns across shuffles. Different shuffle types destroy different amounts of that memory.
               </div>
               <div className="space-y-1">
                 {Object.entries(SHUFFLE_TYPES).map(([k, v]) => (
                   <div key={k} className="flex justify-between text-[9px] gap-2">
-                    <span style={{ color: '#b0bfd8', fontWeight: 600 }}>{v.label}</span>
+                    <span style={{ color: '#ccdaec', fontWeight: 600 }}>{v.label}</span>
                     <span style={{ color: '#44e882' }}>{v.retention} memory</span>
                   </div>
                 ))}
               </div>
-              <div className="mt-2 text-[9px]" style={{ color: '#4a5568' }}>
+              <div className="mt-2 text-[9px]" style={{ color: '#9ab0c8' }}>
                 Select the type matching what you observe at the table, then click Shuffle.
               </div>
             </InfoTooltip>
@@ -282,7 +282,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
             </select>
           </div>
           {/* Memory retention one-liner */}
-          <div className="text-[9px] leading-tight mt-0.5" style={{ color: '#4a5568', maxWidth: 150 }}>
+          <div className="text-[9px] leading-tight mt-0.5" style={{ color: '#9ab0c8', maxWidth: 150 }}>
             {shufMeta.retention} card memory · {shufMeta.desc.split('.')[0]}
           </div>
         </div>
@@ -295,13 +295,13 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
 /*
  * CountBlock — single stat cell inside the top bar count display.
  */
-function CountBlock({ label, value, colorVal, large, mono }) {
+function CountBlock({ label, value, colorVal, large, mono, title }) {
   const cls = countClass(colorVal);
   return (
     <div className="text-center">
       <div
         className="text-[9px] uppercase tracking-widest font-semibold mb-1"
-        style={{ color: '#7a8eab' }}
+        style={{ color: '#b8ccdf' }}
       >
         {label}
       </div>

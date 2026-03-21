@@ -182,9 +182,9 @@ class BettingConfig:
       Conservative (1% RoR): ~$20,000
     """
 
-    TABLE_MIN = 10       # Minimum bet at your table ($)
-    TABLE_MAX = 500      # Maximum bet at your table ($)
-    BASE_UNIT = 10       # One "unit" — should equal TABLE_MIN
+    TABLE_MIN = 100      # Minimum bet at your table (₹)
+    TABLE_MAX = 10000    # Maximum bet at your table (₹)
+    BASE_UNIT = 100      # One "unit" — should equal TABLE_MIN
 
     # 8-deck games have lower penetration variance so a wider spread is safer
     # to use without being as detectable as in single/double deck games.
@@ -195,7 +195,7 @@ class BettingConfig:
     KELLY_FRACTION = 0.75
 
     # Your total bankroll. Update this to your actual amount.
-    INITIAL_BANKROLL = 10000
+    INITIAL_BANKROLL = 100000  # ₹1,00,000 starting bankroll
 
     # Target maximum probability of going broke.
     # 0.05 = willing to accept a 5% chance of ruin.

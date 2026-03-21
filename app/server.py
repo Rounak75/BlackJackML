@@ -125,8 +125,16 @@ else:
     print(f"  ⚠️   ML model not found at {_model_path} — using rule-based engine only")
 
 # FIX BUG 1: dealer now has a full Hand, not just a single upcard Card.
-current_player_hand = Hand()
-current_dealer_hand = Hand()   # was: current_dealer_upcard = None
+current_player_hand  = Hand()
+current_dealer_hand  = Hand()   # was: current_dealer_upcard = None
+
+# Split hand tracking
+# When the player splits, current_player_hand becomes hand[0] and a new
+# Hand() is created as hand[1]. active_hand_index tracks which hand is
+# currently being played. Strategy is computed independently for each hand.
+split_hands:         list  = []    # [] = no split; [Hand, Hand] = after split
+active_hand_index:   int   = 0     # 0 = first hand, 1 = second hand (post-split)
+num_splits_done:     int   = 0     # how many splits have occurred this hand
 
 session_history = []
 
@@ -283,6 +291,127 @@ def _get_ml_recommendation(player_hand, dealer_upcard_card):
 
 
 # ══════════════════════════════════════════════════════════════
+# CASINO DETECTION RISK METER
+# ══════════════════════════════════════════════════════════════
+
+def _get_casino_risk() -> dict:
+    """
+    Estimate how detectable the player's counting pattern is to casino surveillance.
+
+    Casinos flag counters using these signals:
+      1. Bet spread ratio — ratio of max bet to min bet this session
+      2. Bet-TC correlation — bets consistently rising with TC (dead giveaway)
+      3. Win rate at high counts — winning significantly more when TC>2
+      4. Session length — long sessions increase exposure
+      5. Table changes — leaving tables after negative shoes
+
+    Returns a heat level: 0=Cold, 1=Warm, 2=Hot, 3=Critical
+    """
+    history = betting_engine.bet_history
+    if len(history) < 5:
+        return {
+            'level':   0,
+            'label':   'LOW',
+            'color':   '#44e882',
+            'score':   0,
+            'spread':  1.0,
+            'hands':   len(history),
+            'signals': [],
+            'advice':  f'Play {5 - len(history)} more hand(s) to enable risk tracking',
+        }
+
+    bets    = [h['bet']    for h in history]
+    profits = [h['profit'] for h in history]
+    score   = 0
+    signals = []
+
+    # ── Signal 1: Bet spread ratio ───────────────────────────────────────
+    min_bet = min(bets)
+    max_bet = max(bets)
+    spread  = max_bet / min_bet if min_bet > 0 else 1
+    if spread >= 8:
+        score += 3
+        signals.append(f'Spread {spread:.0f}:1 — very wide (threshold: 8:1)')
+    elif spread >= 5:
+        score += 2
+        signals.append(f'Spread {spread:.0f}:1 — noticeable')
+    elif spread >= 3:
+        score += 1
+        signals.append(f'Spread {spread:.0f}:1 — mild')
+
+    # ── Signal 2: Bet-TC correlation (last 20 hands) ─────────────────────
+    # A perfect counter's bets correlate ~0.9 with TC.
+    # We approximate: count how often bet > baseline when TC was high
+    tc_history   = counter.count_history[-20:]
+    recent_bets  = bets[-len(tc_history):]
+    if len(tc_history) >= 10:
+        high_tc_big_bet = sum(
+            1 for i, h in enumerate(tc_history)
+            if h.get('true_count', 0) >= 2
+            and i < len(recent_bets)
+            and recent_bets[i] > min_bet * 1.5
+        )
+        high_tc_count = sum(1 for h in tc_history if h.get('true_count', 0) >= 2)
+        correlation   = high_tc_big_bet / high_tc_count if high_tc_count > 0 else 0
+        if correlation >= 0.8:
+            score += 3
+            signals.append(f'Bet-TC correlation {correlation:.0%} — strong counter pattern')
+        elif correlation >= 0.6:
+            score += 2
+            signals.append(f'Bet-TC correlation {correlation:.0%} — noticeable')
+        elif correlation >= 0.4:
+            score += 1
+
+    # ── Signal 3: Win rate at high counts ────────────────────────────────
+    # Normal win rate ~42%. Counters win ~47-50% at high TC hands.
+    # We flag if win rate at big bets (proxy for high-TC hands) is high.
+    big_bet_threshold = min_bet * 3
+    big_bet_results   = [p for b, p in zip(bets, profits) if b >= big_bet_threshold]
+    if len(big_bet_results) >= 8:
+        big_bet_wins = sum(1 for p in big_bet_results if p > 0)
+        big_win_rate = big_bet_wins / len(big_bet_results)
+        if big_win_rate >= 0.55:
+            score += 2
+            signals.append(f'Win rate {big_win_rate:.0%} on big bets — above normal')
+        elif big_win_rate >= 0.50:
+            score += 1
+
+    # ── Signal 4: Session length ──────────────────────────────────────────
+    hands = len(history)
+    if hands >= 200:
+        score += 2
+        signals.append(f'{hands} hands — very long session, high visibility')
+    elif hands >= 100:
+        score += 1
+        signals.append(f'{hands} hands — moderate session length')
+
+    # ── Compute heat level ────────────────────────────────────────────────
+    if score >= 7:
+        level, label, color = 3, 'CRITICAL', '#ff5c5c'
+        advice = '🚨 Leave table immediately — pattern is obvious'
+    elif score >= 5:
+        level, label, color = 2, 'HOT', '#ff9944'
+        advice = '⚠ Reduce spread, make some cover plays, consider leaving'
+    elif score >= 3:
+        level, label, color = 1, 'WARM', '#ffd447'
+        advice = 'Play naturally, avoid max bets several hands in a row'
+    else:
+        level, label, color = 0, 'LOW', '#44e882'
+        advice = 'Pattern looks natural — continue playing'
+
+    return {
+        'level':   level,
+        'label':   label,
+        'color':   color,
+        'score':   score,
+        'spread':  round(spread, 1),
+        'hands':   hands,
+        'signals': signals,
+        'advice':  advice,
+    }
+
+
+# ══════════════════════════════════════════════════════════════
 # STATE BUILDER
 # ══════════════════════════════════════════════════════════════
 
@@ -351,7 +480,9 @@ def get_full_state():
 
     # ── Bet recommendation — now includes penetration for accurate sizing ──
     # ── Bet recommendation — now includes penetration for accurate sizing ──
-    bet_rec = betting_engine.get_bet_recommendation(enhanced_tc, penetration=penetration)
+    # Use Ace-adjusted TC for bet sizing — more accurate than plain TC
+    ace_adj_tc = counter.ace_adjusted_tc
+    bet_rec = betting_engine.get_bet_recommendation(ace_adj_tc, penetration=penetration)
 
     # ── Dealer hand data ───────────────────────────────────────────────
     dealer_hand_data = {
@@ -374,6 +505,39 @@ def get_full_state():
             current_dealer_hand.best_value >= 17
         ),
     }
+
+    # ── Split hand recommendations ───────────────────────────────────────────
+    # When the player has split, compute an independent recommendation for each
+    # hand. The active hand is the one currently being played.
+    split_hand_data = []
+    if split_hands:
+        for idx, sh in enumerate(split_hands):
+            sh_rec = None
+            if sh.cards and dealer_upcard_card:
+                sh_avail = sh.available_actions(game_config, num_splits_done)
+                sh_info  = deviation_engine.get_action_with_info(
+                    sh, dealer_upcard_card, tc, sh_avail)
+                sh_rec = {
+                    "action":       sh_info["action"].value.upper(),
+                    "is_deviation": sh_info["is_deviation"],
+                    "basic_action": sh_info["basic_strategy_action"].value.upper(),
+                    "deviation_info": sh_info.get("deviation"),
+                    "source":       "rules",
+                }
+            split_hand_data.append({
+                "index":        idx,
+                "is_active":    idx == active_hand_index,
+                "cards":        [str(c) for c in sh.cards],
+                "value":        sh.best_value if sh.cards else 0,
+                "is_soft":      sh.is_soft    if sh.cards else False,
+                "is_pair":      sh.is_pair    if sh.cards else False,
+                "can_double":   sh.can_double if sh.cards else False,
+                "can_split":    sh.can_split  if sh.cards else False,
+                "is_blackjack": sh.is_blackjack if sh.cards else False,
+                "is_bust":      sh.is_bust    if sh.cards else False,
+                "is_split_ace": sh.is_split_ace_hand,
+                "recommendation": sh_rec,
+            })
 
     return {
         "count": {
@@ -415,7 +579,12 @@ def get_full_state():
         "dealer_upcard": str(current_dealer_hand.cards[0]) if current_dealer_hand.cards else None,
         # dealer_hand: full dealer hand including all hit cards
         "dealer_hand":   dealer_hand_data,
-        "count_history": counter.count_history[-60:],
+        "count_history":    counter.count_history[-60:],
+        "side_counts":      counter.get_side_count_state(),
+        "casino_risk":      _get_casino_risk(),
+        "split_hands":      split_hand_data,
+        "active_hand_index": active_hand_index,
+        "num_splits_done":  num_splits_done,
         # insurance: separate from side_bets — it is a game mechanic.
         # Only available when dealer upcard is Ace. Pays 2:1 on half the bet.
         "insurance":     _get_insurance_data(dealer_upcard_card),
@@ -519,7 +688,13 @@ def handle_deal_card(data):
 
         # Route card to correct hand
         if target == 'player':
-            current_player_hand.add_card(card)
+            if split_hands:
+                # Post-split: add to the currently active split hand
+                split_hands[active_hand_index].add_card(card)
+                # Mirror active hand into current_player_hand for display/compat
+                current_player_hand = split_hands[active_hand_index]
+            else:
+                current_player_hand.add_card(card)
         elif target == 'dealer':
             current_dealer_hand.add_card(card)
         # 'seen': counted above, not added to any displayed hand
@@ -531,6 +706,83 @@ def handle_deal_card(data):
         print(f'[ERROR] handle_deal_card crashed: {e}')
         traceback.print_exc()
         emit('error', {'message': f'Server error processing card: {str(e)}'})
+
+
+
+@socketio.on('player_split')
+def handle_player_split(data=None):
+    """
+    Handle the player choosing to split their pair.
+
+    Rules enforced (8-deck S17, config-driven):
+      - Only allowed when current hand is a pair
+      - Only allowed when num_splits_done < MAX_SPLITS - 1 (config)
+      - Split aces receive exactly ONE card each, then stand automatically
+      - No re-split aces (ALLOW_RESPLIT_ACES = False in config)
+      - No double after split (ALLOW_DOUBLE_AFTER_SPLIT = False in config)
+      - No surrender on split hands (surrender = initial hand only)
+
+    After split:
+      split_hands = [Hand_A, Hand_B]
+      active_hand_index = 0
+      Deal one card to Player -> goes to split_hands[0]
+      Deal one card to Player -> goes to split_hands[1]
+      Client calls next_split_hand when done with hand 0
+    """
+    global current_player_hand, split_hands, active_hand_index, num_splits_done
+
+    if not current_player_hand.is_pair:
+        emit('error', {'message': 'Cannot split: hand is not a pair'})
+        return
+    if num_splits_done >= game_config.MAX_SPLITS - 1:
+        emit('error', {'message': f'Max splits ({game_config.MAX_SPLITS-1}) reached'})
+        return
+
+    # Each split hand starts with one card from the original pair
+    hand_a = Hand()
+    hand_b = Hand()
+    hand_a.is_split = True
+    hand_b.is_split = True
+    hand_a.add_card(current_player_hand.cards[0])
+    hand_b.add_card(current_player_hand.cards[1])
+
+    split_hands        = [hand_a, hand_b]
+    active_hand_index  = 0
+    num_splits_done   += 1
+    current_player_hand = hand_a   # keep current_player_hand pointing to active
+
+    _safe_emit('state_update', get_full_state())
+    emit('notification', {
+        'type': 'info',
+        'message': 'Pair split! Deal a card to each hand. Playing Hand 1 first.'
+    })
+
+
+@socketio.on('next_split_hand')
+def handle_next_split_hand(data=None):
+    """
+    Advance to the next split hand.
+    Call when: player stands, busts, gets BJ, or split-ace gets its card.
+    """
+    global current_player_hand, active_hand_index
+
+    if not split_hands:
+        emit('error', {'message': 'No split in progress'})
+        return
+
+    next_idx = active_hand_index + 1
+    if next_idx >= len(split_hands):
+        emit('notification', {'type': 'info', 'message': 'All split hands complete.'})
+        return
+
+    active_hand_index   = next_idx
+    current_player_hand = split_hands[active_hand_index]
+
+    _safe_emit('state_update', get_full_state())
+    emit('notification', {
+        'type':    'info',
+        'message': f'Now playing Hand {active_hand_index + 1} of {len(split_hands)}'
+    })
 
 
 @socketio.on('new_hand')
@@ -548,9 +800,12 @@ def handle_new_hand(data=None):
         Between every hand → emit 'new_hand'
         When dealer physically shuffles → emit 'shuffle' (resets count)
     """
-    global current_player_hand, current_dealer_hand
+    global current_player_hand, current_dealer_hand, split_hands, active_hand_index, num_splits_done
     current_player_hand = Hand()
     current_dealer_hand = Hand()
+    split_hands         = []    # clear split hands on new round
+    active_hand_index   = 0
+    num_splits_done     = 0
     # counter and shoe are intentionally NOT touched here
     _safe_emit('state_update', get_full_state())
 
