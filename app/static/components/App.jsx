@@ -176,6 +176,7 @@ function App() {
       if (e.key === 's' || e.key === 'S') handleShuffle()      // S = reshuffle
       if (e.key === 'p' || e.key === 'P') setTarget('player')  // P = deal to player
       if (e.key === 'd' || e.key === 'D') setTarget('dealer')  // D = deal to dealer
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') handleUndo()  // Ctrl+Z / Cmd+Z = undo
     }
     window.addEventListener('keydown', handler)
     // Cleanup removes the listener before attaching the new one on next render
