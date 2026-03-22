@@ -24,6 +24,7 @@ models/                 # all trained model files live here
 # ── YOLO Training Data & Outputs ──────────────────────────────────────────────
 yolo/dataset/           # synthetic dataset — regenerate: python yolo/generate_dataset.py
 yolo/runs/              # YOLO training run logs, weights, confusion matrices
+runs/                   # YOLO runs dumped in project root (ultralytics default output path)
 yolo/best_card_model.pt
 
 # ── Frontend Build Artifacts ──────────────────────────────────────────────────
