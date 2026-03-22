@@ -15,15 +15,15 @@
 
 ## 📋 Table of Contents
 
-1. [What This Project Does](#-what-this-project-does)
-2. [How Everything Fits Together](#-how-everything-fits-together-read-this-first)
-3. [Quick Start — Complete Setup](#-quick-start--complete-setup)
-4. [Project Structure](#-project-structure)
-5. [How the Frontend Build Works](#-how-the-frontend-build-works-read-this-if-you-edit-any-js-files)
-6. [Training the Blackjack Strategy AI From Scratch](#-training-the-blackjack-strategy-ai-from-scratch)
-7. [What the Strategy Model Actually Learns](#-what-the-strategy-model-actually-learns)
-8. [Fine-Tuning the Strategy Model](#-fine-tuning-the-strategy-model)
-9. [YOLO Card Detection — Full Setup Guide](#-yolo-card-detection--full-setup-guide)
+1.  [What This Project Does](#-what-this-project-does)
+2.  [How Everything Fits Together](#-how-everything-fits-together-read-this-first)
+3.  [Quick Start — Complete Setup](#-quick-start--complete-setup)
+4.  [Project Structure](#-project-structure)
+5.  [How the Frontend Build Works](#-how-the-frontend-build-works-read-this-if-you-edit-any-js-files)
+6.  [Training the Blackjack Strategy AI From Scratch](#-training-the-blackjack-strategy-ai-from-scratch)
+7.  [What the Strategy Model Actually Learns](#-what-the-strategy-model-actually-learns)
+8.  [Fine-Tuning the Strategy Model](#-fine-tuning-the-strategy-model)
+9.  [YOLO Card Detection — Full Setup Guide](#-yolo-card-detection--full-setup-guide)
 10. [Training YOLO with the Roboflow 20,000-Image Dataset](#-training-yolo-with-the-roboflow-20000-image-dataset)
 11. [Fine-Tuning YOLO for Your Specific Casino](#-fine-tuning-yolo-for-your-specific-casino)
 12. [OpenCV + Tesseract OCR Fallback](#-opencv--tesseract-ocr-fallback)
@@ -81,14 +81,14 @@ BlackjackML has TWO completely separate AI systems:
 │  PURPOSE: Look at a screenshot or live screen capture and       │
 │           identify which cards are visible.                     │
 │                                                                 │
-│  Example output: "I see Ace of Spades, King of Hearts"         │
+│  Example output: "I see Ace of Spades, King of Hearts"          │
 │                                                                 │
 │  How to train it:                                               │
-│    Step 1: python yolo/generate_dataset.py --images 10000      │
-│    Step 2: python yolo/train_yolo.py                           │
-│  Output file: models/card_detector.pt                          │
+│    Step 1: python yolo/generate_dataset.py --images 10000       │
+│    Step 2: python yolo/train_yolo.py                            │
+│  Output file: models/card_detector.pt                           │
 │                                                                 │
-│  If not trained: falls back to Tesseract OCR automatically     │
+│  If not trained: falls back to Tesseract OCR automatically      │
 └─────────────────────────────────────────────────────────────────┘
                             ↓
                   Detected cards fed into game engine
@@ -99,14 +99,14 @@ BlackjackML has TWO completely separate AI systems:
 │  PURPOSE: Given the current hand situation and running count,   │
 │           recommend the best action and bet size.               │
 │                                                                 │
-│  Example output: "You have 16 vs dealer 10 at TC +2 → STAND"  │
-│                  "Bet 4 units (₹400) — count is favourable"    │
+│  Example output: "You have 16 vs dealer 10 at TC +2 → STAND"    │
+│                  "Bet 4 units (₹400) — count is favourable"     │
 │                                                                 │
 │  How to train it:                                               │
-│    python main.py train --hands 1000000                        │
-│  Output file: models/best_model.pt                             │
+│    python main.py train --hands 1000000                         │
+│  Output file: models/best_model.pt                              │
 │                                                                 │
-│  If not trained: falls back to rules-based basic strategy      │
+│  If not trained: falls back to rules-based basic strategy       │
 └─────────────────────────────────────────────────────────────────┘
 
 KEY POINT: You train these two systems separately.
