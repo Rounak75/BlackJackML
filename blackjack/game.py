@@ -61,6 +61,7 @@ class Hand:
         self.cards: List[Card] = []
         self.bet = bet
         self.is_split = False
+        self.split_from_ace = False  # True ONLY when this hand was created by splitting Aces
         self.is_doubled = False
         self.is_surrendered = False
         self.is_insured = False
@@ -142,12 +143,11 @@ class Hand:
 
     @property
     def is_split_ace_hand(self) -> bool:
-        """True when this hand was formed by splitting aces.
+        """True when this hand was formed by splitting Aces.
         Rule: single card dealt to each split ace — no further hits allowed.
-        Safe to call on empty hands — returns False when no cards."""
-        if not self.cards:
-            return False
-        return self.is_split and self.cards[0].is_ace
+        Uses the explicit split_from_ace flag set at split time, not card inference,
+        so it stays correct even if an Ace happens to be the first card on a non-ace split."""
+        return self.split_from_ace
 
     def available_actions(self, config: GameConfig = None,
                           num_splits_done: int = 0) -> List[Action]:

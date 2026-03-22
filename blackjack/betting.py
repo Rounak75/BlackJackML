@@ -190,7 +190,14 @@ class BettingEngine:
     def get_session_stats(self) -> Dict:
         """Get session statistics."""
         if not self.bet_history:
-            return {"hands": 0, "profit": 0, "avg_bet": 0}
+            return {
+                "hands_played": 0, "total_profit": 0, "avg_bet": 0,
+                "bankroll": self.bankroll, "max_bankroll": self.max_bankroll,
+                "min_bankroll": self.min_bankroll, "win_rate": 0,
+                "wins": 0, "losses": 0, "pushes": 0,
+                "risk_of_ruin": self.risk_of_ruin(), "hourly_rate": 0,
+                "max_bet": 0,
+            }
 
         bets = [h["bet"] for h in self.bet_history]
         profits = [h["profit"] for h in self.bet_history]

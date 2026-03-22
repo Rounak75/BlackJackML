@@ -1,3 +1,4 @@
+﻿// @ts-nocheck
 /*
  * components/SplitHandPanel.js
  * ─────────────────────────────────────────────────────────
@@ -137,8 +138,8 @@ function SplitHandZone({ hand, handNumber, isActive, dealerUpcard, onComplete })
         </div>
       )}
 
-      {/* Done button — when active hand is complete (not bust, not BJ, not split ace auto-stand) */}
-      {isActive && !isBust && !isBJ && !isSplitAce && hand.cards.length >= 2 && onComplete && (
+      {/* Done button — when active hand is complete */}
+      {isActive && !isBust && hand.cards.length >= 2 && onComplete && (
         <button onClick={onComplete} aria-label={`Done with split hand ${handNumber}`} style={{
           width: '100%', marginTop: 8, padding: '6px', fontSize: 10, fontWeight: 700,
           borderRadius: 6, cursor: 'pointer',
@@ -162,11 +163,8 @@ function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, socket, onN
     if (onNextHand) onNextHand();
   };
 
-  const allDone = splitHands.every(h =>
-    h.is_bust || h.is_blackjack ||
-    (h.is_split_ace && h.cards.length >= 2) ||
-    (!h.is_active && h.cards.length >= 2)  // stood / completed hand
-  );
+  const allDone = splitHands.every(h => h.is_bust || h.is_blackjack ||
+    (h.is_split_ace && h.cards.length >= 2));
 
   return (
     <div style={{

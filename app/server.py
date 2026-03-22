@@ -775,6 +775,10 @@ def handle_player_split(data=None):
     hand_b = Hand()
     hand_a.is_split = True
     hand_b.is_split = True
+    # If splitting aces, mark both hands so is_split_ace_hand is reliable
+    if current_player_hand.cards[0].is_ace:
+        hand_a.split_from_ace = True
+        hand_b.split_from_ace = True
     hand_a.add_card(current_player_hand.cards[0])
     hand_b.add_card(current_player_hand.cards[1])
 
@@ -814,6 +818,62 @@ def handle_next_split_hand(data=None):
     emit('notification', {
         'type':    'info',
         'message': f'Now playing Hand {active_hand_index + 1} of {len(split_hands)}'
+    })
+
+
+@socketio.on('undo_split_card')
+def handle_undo_split_card(data=None):
+    """
+    Undo the last card dealt to the currently active split hand.
+
+    Unlike the full undo (which calls new_hand and replays everything),
+    this only removes the last card from split_hands[active_hand_index].
+    The split structure, other hands, count, and shoe are preserved as-is
+    EXCEPT for the one card being removed (counter and shoe are unwound).
+
+    Called by the frontend when the user presses Ctrl+Z or clicks Undo
+    while a split is in progress.
+    """
+    global current_player_hand
+
+    if not split_hands:
+        emit('error', {'message': 'No split in progress'})
+        return
+
+    active_hand = split_hands[active_hand_index]
+
+    if not active_hand.cards:
+        emit('notification', {'type': 'warning', 'message': 'No cards to undo on this hand'})
+        return
+
+    # Remove the last card from the active split hand
+    removed_card = active_hand.cards.pop()
+
+    # Unwind the counter: subtract the card's count value
+    val = counter.values.get(removed_card.count_key, 0)
+    counter.running_count -= val
+    counter.cards_seen    -= 1
+    if counter._card_log:
+        counter._card_log.pop()
+    if counter.count_history:
+        counter.count_history.pop()
+    if removed_card.is_ace and counter.aces_seen > 0:
+        counter.aces_seen -= 1
+    if removed_card.is_ten and counter.tens_seen > 0:
+        counter.tens_seen -= 1
+
+    # Return card to shoe
+    shoe.cards.append(removed_card)
+    if removed_card in shoe.dealt:
+        shoe.dealt.remove(removed_card)
+
+    # Keep current_player_hand mirror in sync
+    current_player_hand = active_hand
+
+    _safe_emit('state_update', get_full_state())
+    emit('notification', {
+        'type': 'info',
+        'message': f'Undid {removed_card} from split hand {active_hand_index + 1}'
     })
 
 
@@ -894,6 +954,7 @@ def handle_change_system(data):
                 def __init__(self, k):
                     self.count_key = k
                     self.is_ace    = (k == 11)
+                    self.is_ten    = (k == 10)   # 10-value cards: 10, J, Q, K all have count_key=10
             counter.count_card(_FakeCard(key))
 
         _safe_emit('state_update', get_full_state())
@@ -938,9 +999,12 @@ def _apply_card(rank, suit, target='seen'):
 
 def _reset_hand():
     """Bridge: scanner new-hand signal."""
-    global current_player_hand, current_dealer_hand
+    global current_player_hand, current_dealer_hand, split_hands, active_hand_index, num_splits_done
     current_player_hand = Hand()
     current_dealer_hand = Hand()
+    split_hands         = []
+    active_hand_index   = 0
+    num_splits_done     = 0
     socketio.emit('state_update', _json.loads(_json.dumps(get_full_state(), cls=_SafeEncoder)))
 
 live_scanner = _LiveScanner(

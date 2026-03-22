@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>body{background:#0a0e18;color:white;font-family:monospace;padding:40px}</style>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body>
+  <div id="root"><p style="color:#ffd447">Loading...</p></div>
+  <div id="status" style="margin-top:20px;font-size:12px"></div>
+  
+  <script>
+    document.getElementById('status').innerHTML = 
+      'React: ' + (typeof React !== "undefined" ? "✅ " + React.version : "❌ MISSING") + "<br>" +
+      'ReactDOM: ' + (typeof ReactDOM !== "undefined" ? "✅" : "❌ MISSING") + "<br>" +
+      'Babel: ' + (typeof Babel !== "undefined" ? "✅" : "❌ MISSING");
+  </script>
+
+  <script type="text/babel">
+    function App() {
+      return (
+        <div>
+          <h1 style={{color:"#44e882",fontSize:32}}>✅ React + Babel Working</h1>
+          <p style={{color:"#ccdaec"}}>If you see this, the base setup is fine.</p>
+          <p style={{color:"#ffd447"}}>The issue is in one of the component files.</p>
+        </div>
+      );
+    }
+    const root = ReactDOM.createRoot(document.getElementById("root"));
+    root.render(<App />);
+  </script>
+</body>
+</html>

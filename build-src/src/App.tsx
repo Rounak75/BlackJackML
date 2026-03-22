@@ -1,3 +1,4 @@
+﻿// @ts-nocheck
 /*
  * components/App.js — The Root Component
  * ═══════════════════════════════════════════════════════════════════════════
@@ -124,10 +125,6 @@ function App() {
   // value (a stale closure). By reading the REF instead we always get current.
   const dealTargetRef = useRef('player')
 
-  // A ref that mirrors gameState so callbacks (handleUndo etc.) can always
-  // read the LATEST game state without needing it in their dependency arrays.
-  const gameStateRef = useRef(null)
-
   // Helper: update both state (re-render) AND the ref (stays always-current).
   const setTarget = (t) => { dealTargetRef.current = t; setDealTarget(t); }
 
@@ -144,7 +141,6 @@ function App() {
     // It fires after every card dealt, every new hand, every shuffle, etc.
     socket.on('state_update', (data) => {
       setGameState(data)
-      gameStateRef.current = data   // keep ref in sync so callbacks always see latest state
 
       // Auto-update the recommended bet if the user hasn't overridden it.
       if (data.betting) {
@@ -181,15 +177,11 @@ function App() {
       if (e.key === 's' || e.key === 'S') handleShuffle()      // S = reshuffle
       if (e.key === 'p' || e.key === 'P') setTarget('player')  // P = deal to player
       if (e.key === 'd' || e.key === 'D') setTarget('dealer')  // D = deal to dealer
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault()   // stop browser from intercepting Ctrl+Z (undo in inputs etc.)
-        handleUndo()
-      }  // Ctrl+Z / Cmd+Z = undo
     }
     window.addEventListener('keydown', handler)
     // Cleanup removes the listener before attaching the new one on next render
     return () => window.removeEventListener('keydown', handler)
-  }, [lastBet, handleNewHand, handleShuffle, handleUndo])
+  }, [lastBet])
 
 
   // ── HANDLERS ───────────────────────────────────────────────────────────────
@@ -307,10 +299,10 @@ function App() {
 
     // Show a result toast (green for win, red for loss, grey for push)
     showToast(
-      `${result.toUpperCase()} — ${formatMoney(profit, currency.symbol)}`,
+      `${result.toUpperCase()} — ${formatMoney(profit)}`,
       result === 'win' ? 'success' : result === 'loss' ? 'error' : 'info'
     )
-  }, [currency])
+  }, [])
 
 
   /**
@@ -323,7 +315,7 @@ function App() {
    *
    * Steps:
    *   1. Save all cards except the last one
-   *   2. Tell server 'new_hand' to wipe current state (emits 'undo_split' first if split is active)
+   *   2. Tell server 'new_hand' to wipe current state
    *   3. Re-emit the saved cards with small delays (server needs to process in order)
    */
   const handleUndo = useCallback(() => {
@@ -337,11 +329,7 @@ function App() {
     undoStack.current = []
     dealTargetRef.current = 'player'
     setDealTarget('player')
-
-    // If a split is in progress, we need to clear the split state before replaying.
-    // The server's 'new_hand' event already clears split_hands, so no special
-    // 'undo_split' event is needed — new_hand handles it cleanly.
-    socketRef.current?.emit('new_hand')   // wipe server state (also clears split_hands)
+    socketRef.current?.emit('new_hand')   // wipe server state
 
     // Re-emit all saved cards in order, with 80ms gaps so the server
     // has time to process each one before the next arrives.

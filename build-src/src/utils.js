@@ -1,3 +1,4 @@
+﻿// @ts-nocheck
 /*
  * utils.js — Shared Helper Functions
  * ─────────────────────────────────────────────────────────────────────
@@ -95,16 +96,14 @@ function showToast(msg, type = 'info') {
 }
 
 // ── formatMoney ───────────────────────────────────────────────────────
-// Formats a number with a sign prefix and the active currency symbol.
-// Pass currencySymbol (e.g. '₹', '$', '€') as second arg; defaults to '₹'.
-// Examples (INR):
-//   formatMoney(150)     → "+₹150"
-//   formatMoney(-50)     → "-₹50"
-//   formatMoney(0)       → "+₹0"
-function formatMoney(n, currencySymbol) {
-  const sym = currencySymbol || '₹';
+// Formats a number with a sign prefix and dollar sign.
+// Examples:
+//   formatMoney(150)  → "+$150"
+//   formatMoney(-50)  → "-$50"
+//   formatMoney(0)    → "+$0"
+function formatMoney(n) {
   const abs = Math.abs(n || 0);
-  return `${(n || 0) >= 0 ? '+' : '-'}${sym}${abs.toFixed(0)}`;
+  return `${(n || 0) >= 0 ? '+' : '-'}$${abs.toFixed(0)}`;
 }
 
 
@@ -324,3 +323,4 @@ function buildExplanation(action, rec, count) {
 
   return lines;
 }
+
