@@ -374,7 +374,8 @@ class BlackjackTable:
             self.shoe.reshuffle()
 
         if bet is None:
-            bet = self.config.TABLE_MIN
+            from config import BettingConfig
+            bet = BettingConfig.TABLE_MIN
 
         self.current_round = Round(self.shoe, base_bet=bet)
         return self.current_round

@@ -256,9 +256,7 @@ class Simulator:
             len(hand.cards) / 10.0,                                      # [18]
             float(hand.can_double),                                      # [19]
             float(hand.can_split),                                       # [20]
-            float(hand.available_actions(self.config, hand_idx).__contains__(
-                __import__('blackjack.game', fromlist=['Action']).Action.SURRENDER
-            )),                                                           # [21] can_surrender
+            float(Action.SURRENDER in hand.available_actions(self.config, hand_idx)),                                                           # [21] can_surrender
             float(num_hands) / 4.0,                                     # [22] active split hands
             min(self.betting_engine.bankroll / self.betting_engine.config.INITIAL_BANKROLL, 2.0),  # [23] bankroll ratio (capped at 2x)
             self.counter.advantage,                                      # [24]

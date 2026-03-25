@@ -246,8 +246,8 @@ class MLConfig:
     TRUNK_DIM    = 256                     # shared trunk output width
 
     # ── Training hyperparameters ──────────────────────────────────────
-    LEARNING_RATE = 0.0008          # Slightly lower than v1 — residual nets
-                                    # are more sensitive to large LR
+    LEARNING_RATE = 0.001           # Slightly higher than v2 — compensates for
+                                    # reduced regularization (dropout 0.20, weight_decay 1e-4)
     BATCH_SIZE    = 512             # Samples per gradient update
     EPOCHS        = 50              # Full passes through training data
                                     # (increase to 60 for 2M+ hands)

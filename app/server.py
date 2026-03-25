@@ -911,7 +911,7 @@ def handle_shuffle(data=None):
     Only click this when you see the actual dealer collect and reshuffle
     all the cards into a new shoe. Not between hands.
     """
-    global shoe, current_player_hand, current_dealer_hand
+    global shoe, current_player_hand, current_dealer_hand, split_hands, active_hand_index, num_splits_done
 
     shuffle_type = data.get('type', 'machine') if data else 'machine'
 
@@ -919,6 +919,9 @@ def handle_shuffle(data=None):
     counter.reset()                   # ← Correct: new shoe = fresh count
     current_player_hand = Hand()      # Clear display
     current_dealer_hand = Hand()
+    split_hands       = []             # Clear any in-progress split
+    active_hand_index = 0
+    num_splits_done   = 0
 
     shuffle_tracker.on_shuffle(shuffle_type)
 
@@ -993,6 +996,17 @@ def _apply_card(rank, suit, target='seen'):
             elif target == 'dealer':
                 current_dealer_hand.add_card(card)
             counter.count_card(card)
+
+            # Update ML shuffle tracker (matches handle_deal_card)
+            shuffle_tracker.observe_card(card.count_key, card.is_ace, SUIT_IDX.get(str(suit).lower(), 0))
+
+            # Remove from shoe tracking (matches handle_deal_card)
+            for i, c in enumerate(shoe.cards):
+                if c.rank == r and c.suit == s:
+                    shoe.cards.pop(i)
+                    shoe.dealt.append(c)
+                    break
+
             socketio.emit('state_update', _json.loads(_json.dumps(get_full_state(), cls=_SafeEncoder)))
     except Exception as e:
         print("[WARNING]",f'[Live] apply_card error: {e}')

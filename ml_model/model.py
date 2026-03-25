@@ -301,10 +301,10 @@ class BlackjackNet(nn.Module):
         # 4 residual blocks: wide (512) in the middle for capacity,
         # narrowing back to trunk_dim for the head interfaces.
         self.trunk = nn.Sequential(
-            ResidualBlock(trunk_dim, 512,       dropout=0.40),
-            ResidualBlock(512,       512,       dropout=0.40),
-            ResidualBlock(512,       trunk_dim, dropout=0.40),
-            ResidualBlock(trunk_dim, trunk_dim, dropout=0.30),
+            ResidualBlock(trunk_dim, 512,       dropout=0.20),
+            ResidualBlock(512,       512,       dropout=0.20),
+            ResidualBlock(512,       trunk_dim, dropout=0.20),
+            ResidualBlock(trunk_dim, trunk_dim, dropout=0.15),
         )
 
         # ── 4. Specialised decision heads ────────────────────────────
@@ -436,7 +436,7 @@ class BlackjackDecisionModel:
             float(can_split),
             float(can_surrender),
             num_hands / 4.0,
-            min(bankroll_ratio, 1.0),
+            min(bankroll_ratio, 2.0),
             advantage,
             running_count / 20.0,
             decks_remaining / 8.0,

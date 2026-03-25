@@ -122,7 +122,7 @@ def _save_checkpoint(
             "is_best":          is_best,
             "is_trained":       True,
             "num_hands":        num_hands,
-            "input_dim":        next(model.parameters()).shape[1],  # stored for safe reload
+            "input_dim":        model.input_dim,  # stored for safe reload
             "config": {
                 "hidden_dims":   config.HIDDEN_DIMS,
                 "learning_rate": config.LEARNING_RATE,
@@ -377,9 +377,9 @@ class Trainer:
         model.to(device)
 
         criterion = nn.CrossEntropyLoss()
-        optimizer = optim.Adam(model.parameters(), lr=self.config.LEARNING_RATE, weight_decay=1e-3)
+        optimizer = optim.AdamW(model.parameters(), lr=self.config.LEARNING_RATE, weight_decay=1e-4)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, patience=5
+            optimizer, mode='min', patience=7, factor=0.5
         )
 
         # ── Optionally resume ─────────────────────────────────────────────
@@ -417,6 +417,7 @@ class Trainer:
                 optimizer.zero_grad()
                 loss = criterion(model(bx), by)
                 loss.backward()
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
                 optimizer.step()
                 train_loss_sum += loss.item()
             avg_train_loss = train_loss_sum / len(train_loader)
