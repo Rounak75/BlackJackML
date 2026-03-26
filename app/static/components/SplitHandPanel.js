@@ -137,15 +137,20 @@ function SplitHandZone({ hand, handNumber, isActive, dealerUpcard, onComplete })
         </div>
       )}
 
-      {/* Done button — when active hand is complete (not bust, not BJ, not split ace auto-stand) */}
-      {isActive && !isBust && !isBJ && !isSplitAce && hand.cards.length >= 2 && onComplete && (
+      {/* Done/Advance button — shown when hand is complete OR busted */}
+      {/* FIX: Previously hidden on bust (isBust guard), leaving player stuck.   */}
+      {/* Now shown on bust too, as a fallback in case server auto-advance races. */}
+      {isActive && !isBJ && !isSplitAce && hand.cards.length >= 2 && onComplete && (
         <button onClick={onComplete} aria-label={`Done with split hand ${handNumber}`} style={{
           width: '100%', marginTop: 8, padding: '6px', fontSize: 10, fontWeight: 700,
           borderRadius: 6, cursor: 'pointer',
-          background: 'rgba(106,175,255,0.12)', border: '1px solid rgba(106,175,255,0.4)',
-          color: '#6aafff',
+          background: isBust
+            ? 'rgba(255,92,92,0.12)' : 'rgba(106,175,255,0.12)',
+          border: isBust
+            ? '1px solid rgba(255,92,92,0.4)' : '1px solid rgba(106,175,255,0.4)',
+          color: isBust ? '#ff5c5c' : '#6aafff',
         }}>
-          ✓ Done with Hand {handNumber} → Next Hand
+          {isBust ? `✗ Hand ${handNumber} Busted → Next Hand` : `✓ Done with Hand ${handNumber} → Next Hand`}
         </button>
       )}
     </div>

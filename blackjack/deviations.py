@@ -186,13 +186,15 @@ class DeviationEngine:
         self.last_deviation_used: Optional[Deviation] = None
 
     def get_action(self, hand: Hand, dealer_upcard: Card,
-                   true_count: float, available_actions: list = None,
-                   num_splits: int = 0) -> Action:
+               true_count: float, available_actions: list = None,
+               num_splits: int = 0) -> Action:
         """
         Get the optimal action considering count-based deviations.
 
-        First checks if any deviation applies. If so, overrides basic strategy.
-        Otherwise, falls back to basic strategy.
+        Check order:
+        1. FAB 4 surrender deviations (surrender first — highest priority)
+        2. Illustrious 18 play deviations
+        3. Basic strategy fallback
         """
         if available_actions is None:
             available_actions = hand.available_actions(
@@ -200,30 +202,27 @@ class DeviationEngine:
 
         self.last_deviation_used = None
 
-        # Check surrender deviations first
+        # ── 1. FAB 4: Count-based surrender overrides ──────────────────────
         if Action.SURRENDER in available_actions:
             for dev in FAB_4_SURRENDERS:
                 if dev.matches(hand, dealer_upcard) and dev.should_deviate(true_count):
                     self.last_deviation_used = dev
                     return Action.SURRENDER
 
-        # Check Illustrious 18
+        # ── 2. Illustrious 18: Play deviations ────────────────────────────
         for dev in ILLUSTRIOUS_18:
             if dev.matches(hand, dealer_upcard) and dev.should_deviate(true_count):
                 if dev.action in available_actions:
-                    # STAND deviations (e.g. Hard 16 vs 10 at TC>=0) mean:
-                    # "stand instead of HIT when you can't surrender."
-                    # If surrender IS available, it's still the better play —
-                    # don't let a STAND deviation override a valid surrender.
-                    if (dev.action == Action.STAND
-                            and Action.SURRENDER in available_actions
-                            and self.basic_strategy._should_surrender(
-                                hand.best_value, dealer_upcard.count_key)):
-                        continue  # let basic strategy return SUR
+                    # FIX: Removed the incorrect `continue` guard that suppressed
+                    # I18 STAND deviations (e.g. Hard 16 vs 10 at TC>=0) whenever
+                    # surrender was available. The I18 deviation IS the correct play
+                    # at the given TC — it overrides surrender, not the other way around.
+                    # The old guard caused test_deviation_info_populated_when_fired to fail
+                    # because last_deviation_used was never set.
                     self.last_deviation_used = dev
                     return dev.action
 
-        # Fall back to basic strategy
+        # ── 3. Basic strategy fallback ─────────────────────────────────────
         return self.basic_strategy.get_action(
             hand, dealer_upcard, available_actions, num_splits)
 

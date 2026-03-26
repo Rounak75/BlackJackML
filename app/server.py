@@ -303,6 +303,24 @@ def _process_card_entry(card: Card, target: str, suit_str: str):
             split_hands[active_hand_index].add_card(card)
             # Mirror active hand into current_player_hand for display/compat
             current_player_hand = split_hands[active_hand_index]
+
+            # FIX: Auto-advance when active split hand busts.
+            # Previously the "Done" button in SplitHandPanel.js was hidden on bust
+            # (condition: !isBust), leaving the player with no way to switch hands.
+            # Now the server advances automatically so the next hand becomes active.
+            if current_player_hand.is_bust:
+                next_idx = active_hand_index + 1
+                if next_idx < len(split_hands):
+                    active_hand_index = next_idx
+                    current_player_hand = split_hands[active_hand_index]
+                    # Notify client of the auto-advance
+                    _safe_emit('notification', {
+                        'type': 'warning',
+                        'message': (
+                            f'Hand {active_hand_index} busted — '
+                            f'auto-advancing to Hand {active_hand_index + 1}'
+                        )
+                    })
         else:
             current_player_hand.add_card(card)
     elif target == TARGET_DEALER:
