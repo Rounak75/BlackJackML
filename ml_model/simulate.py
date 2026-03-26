@@ -175,6 +175,25 @@ class Simulator:
                         break
 
             # Dealer plays
+            # FIX #2 — Count desync (AUDIT finding #2):
+            #   OLD ordering:
+            #     if any_active: dealer_cards = play_dealer(); count each draw card
+            #     if round.dealer_hole_card: count_card(hole_card)
+            #   Problem 1: When all players bust, any_active=False so play_dealer()
+            #     is skipped — but the hole card block was INSIDE the any_active
+            #     check in some versions, meaning the hole card was never counted.
+            #   Problem 2: When any_active=True, play_dealer() returns only the
+            #     *draw* cards. The hole card is counted separately afterward.
+            #     This ordering was correct but fragile.
+            #   FIX: Always count the hole card first (it was always dealt).
+            #     Then conditionally play dealer and count draw cards.
+            #     This guarantees: hole card counted exactly once, every hand.
+
+            # Step 1: Count the dealer hole card — always revealed after player acts.
+            if round.dealer_hole_card:
+                self.counter.count_card(round.dealer_hole_card)
+
+            # Step 2: Dealer plays out (only when at least one player hand is live).
             any_active = any(
                 not h.is_bust and not h.is_surrendered and not h.is_blackjack
                 for h in round.player_hands
@@ -183,10 +202,6 @@ class Simulator:
                 dealer_cards = round.play_dealer(self.config.DEALER_HITS_SOFT_17)
                 for card in dealer_cards:
                     self.counter.count_card(card)
-
-            # Count dealer hole card
-            if round.dealer_hole_card:
-                self.counter.count_card(round.dealer_hole_card)
 
             # Resolve
             profit = round.resolve(self.config)
