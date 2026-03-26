@@ -25,6 +25,22 @@
 ║    print(hand.best_value)     # highest non-bust total                      ║
 ║    print(hand.is_soft)        # True if Ace counts as 11                    ║
 ║    print(hand.is_blackjack)   # True for natural 21                         ║
+║                                                                              ║
+║  BUGS FIXED IN THIS VERSION:                                                 ║
+║  ────────────────────────────                                                ║
+║  BUG 1 — Hand.is_soft returned False for multi-ace soft hands:             ║
+║    OLD: used `if total > 21: return False` where total counted all aces    ║
+║         as 11 first. This made A+A+6 (soft 18) return is_soft=False,       ║
+║         causing HARD_TABLE[18] (Stand) instead of SOFT_TABLE[18] (Ds).    ║
+║    FIX: removed the premature early return. Now uses only the correct       ║
+║         hard_total (all aces as 1) + 10 <= 21 check.                       ║
+║                                                                              ║
+║  BUG 2 — Round.player_split() never set split_from_ace:                    ║
+║    OLD: split_from_ace was left False on both resulting hands even when     ║
+║         splitting Aces, so the one-card-per-ace rule could never fire       ║
+║         through the Round API.                                               ║
+║    FIX: detect is_ace_split before the card pop, set split_from_ace on     ║
+║         both hands before inserting into player_hands.                      ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 from typing import List, Optional, Tuple
@@ -99,17 +115,28 @@ class Hand:
     @property
     def is_soft(self) -> bool:
         """Whether the hand contains a usable ace (counts as 11 without busting).
+
+        FIX: The previous implementation had a premature early-return:
+            total = sum(11 if c.is_ace else c.value ...)
+            if total > 21: return False   ← WRONG for hands like A+A+6
+
+        This incorrectly marked A+A+6 (soft 18), A+A+7 (soft 19), etc. as
+        hard hands, causing the strategy engine to use HARD_TABLE instead of
+        SOFT_TABLE for those hands.
+
+        Correct logic: a hand is soft if it has at least one Ace AND counting
+        exactly one of those Aces as 11 (all others as 1) keeps the total ≤ 21.
+        That is: hard_total (all aces=1) + 10 <= 21.
+
         Note: Blackjack (A+10-value on initial 2 cards) is NOT considered soft
-        for strategy purposes — it resolves immediately as BJ."""
+        for strategy purposes — it resolves immediately as BJ.
+        """
         if self.is_blackjack:
-            return False
-        total = sum(11 if c.is_ace else c.value for c in self.cards)
-        if total > 21:
             return False
         aces = sum(1 for c in self.cards if c.is_ace)
         if aces == 0:
             return False
-        # Check if counting one ace as 11 still keeps us <= 21
+        # Count all aces as 1, then check if upgrading exactly one to 11 stays ≤ 21
         hard_total = sum(1 if c.is_ace else c.value for c in self.cards)
         return (hard_total + 10) <= 21
 
@@ -246,12 +273,20 @@ class Round:
         if new_bet is None:
             new_bet = hand.bet
 
+        # FIX: detect ace split BEFORE popping the second card, so both resulting
+        # hands get split_from_ace=True and the one-card-per-hand rule fires correctly.
+        # Previously split_from_ace was never set here, meaning the Round API silently
+        # allowed unlimited hitting on split aces.
+        is_ace_split = len(hand.cards) >= 1 and hand.cards[0].is_ace
+
         # Create new hand with second card
         new_hand = Hand(bet=new_bet)
         new_hand.is_split = True
+        new_hand.split_from_ace = is_ace_split   # FIX: was missing
         new_hand.add_card(hand.cards.pop())
 
         hand.is_split = True
+        hand.split_from_ace = is_ace_split        # FIX: was missing
 
         # Deal one card to each
         card1 = self.shoe.deal()

@@ -27,6 +27,21 @@
 ║    print(counter.true_count)          # current TC                          ║
 ║    print(counter.advantage * 100)     # player edge as percentage           ║
 ║    print(counter.should_take_insurance())  # True/False                    ║
+║                                                                              ║
+║  IMPROVEMENTS IN THIS VERSION:                                               ║
+║  ────────────────────────────                                                ║
+║  PERF 1 — _total_per_rank pre-computed in __init__:                        ║
+║    Previously get_remaining_estimate() rebuilt the entire rank-total dict   ║
+║    on every call. Since num_decks never changes after construction, this    ║
+║    dict is now computed once in __init__ and reused. This matters because   ║
+║    get_remaining_estimate() is called once per get_full_state() call        ║
+║    (i.e., every card dealt event).                                           ║
+║                                                                              ║
+║  PERF 2 — count_history capped at _MAX_HISTORY (500 entries):              ║
+║    The history list was unbounded. In a long session (8+ hours, 300+        ║
+║    hands, 4+ cards/hand) it would grow to 3000+ entries. The frontend       ║
+║    only reads the last 60 entries (server.py: counter.count_history[-60:]). ║
+║    Capping at 500 wastes nothing visible while bounding memory use.         ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 from typing import List, Dict, Optional
@@ -34,6 +49,12 @@ from .card import Card
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 from config import CountingConfig
+
+# Maximum count_history entries to keep in memory.
+# The frontend only reads the last 60 (server.py: counter.count_history[-60:]).
+# Capping at 500 prevents unbounded memory growth in long multi-hour sessions
+# while keeping 8× more history than the UI ever needs (safe margin).
+_MAX_HISTORY = 500
 
 
 class CardCounter:
@@ -64,6 +85,22 @@ class CardCounter:
         self.aces_seen = 0          # How many Aces have been dealt
         self.tens_seen = 0          # How many 10/J/Q/K have been dealt
 
+        # ── Pre-computed rank totals ────────────────────────────────────────
+        # PERF: Previously rebuilt inside get_remaining_estimate() on every
+        # call. num_decks is fixed at construction time, so we compute once.
+        self._total_per_rank: Dict[int, int] = {
+            2:  4 * num_decks,
+            3:  4 * num_decks,
+            4:  4 * num_decks,
+            5:  4 * num_decks,
+            6:  4 * num_decks,
+            7:  4 * num_decks,
+            8:  4 * num_decks,
+            9:  4 * num_decks,
+            10: 16 * num_decks,   # 10, J, Q, K — four ranks × four suits × num_decks
+            11: 4 * num_decks,    # Ace
+        }
+
     def count_card(self, card: Card):
         """Process a single dealt card."""
         val = self.values.get(card.count_key, 0)
@@ -82,6 +119,11 @@ class CardCounter:
             "true_count": self.true_count,
             "cards_seen": self.cards_seen,
         })
+        # PERF: Cap history to prevent unbounded memory growth.
+        # _MAX_HISTORY (500) is 8× the 60 entries the frontend reads,
+        # so no displayed information is ever lost.
+        if len(self.count_history) > _MAX_HISTORY:
+            self.count_history = self.count_history[-_MAX_HISTORY:]
 
     def count_cards(self, cards: List[Card]):
         """Process multiple cards at once."""
@@ -198,7 +240,6 @@ class CardCounter:
         Estimated player advantage based on true count.
         Each +1 TC ≈ +0.5% player advantage (Hi-Lo).
         Base house edge = -0.50% with perfect basic strategy (8-deck S17).
-        Per casino rules: house edge ~2% without strategy, 0.5% with perfect play (RTP 99.50%).
         Break-even at TC = +1.
         """
         base_edge = -0.0043          # House edge 8-deck S17: 0.43% (Griffin/WoO reference)
@@ -233,25 +274,24 @@ class CardCounter:
         """
         Estimate remaining card composition based on dealt cards.
         Returns probability of each rank value remaining.
-        """
-        total_per_rank = {
-            2: 4 * self.num_decks, 3: 4 * self.num_decks, 4: 4 * self.num_decks,
-            5: 4 * self.num_decks, 6: 4 * self.num_decks, 7: 4 * self.num_decks,
-            8: 4 * self.num_decks, 9: 4 * self.num_decks,
-            10: 16 * self.num_decks,  # 10, J, Q, K
-            11: 4 * self.num_decks,   # Ace
-        }
 
+        PERF: Uses self._total_per_rank (pre-computed in __init__) instead of
+        rebuilding the dict on every call. The dict is identical across all calls
+        since num_decks is fixed at construction time.
+        """
         seen_counts = {i: 0 for i in range(2, 12)}
         for key in self._card_log:
             seen_counts[key] = seen_counts.get(key, 0) + 1
 
         remaining = {}
-        total_remaining = sum(total_per_rank[k] - seen_counts.get(k, 0) for k in total_per_rank)
+        total_remaining = sum(
+            self._total_per_rank[k] - seen_counts.get(k, 0)
+            for k in self._total_per_rank
+        )
         if total_remaining <= 0:
-            return {k: 1.0 / len(total_per_rank) for k in total_per_rank}
+            return {k: 1.0 / len(self._total_per_rank) for k in self._total_per_rank}
 
-        for rank_val, total in total_per_rank.items():
+        for rank_val, total in self._total_per_rank.items():
             left = total - seen_counts.get(rank_val, 0)
             remaining[rank_val] = max(left, 0) / total_remaining
 

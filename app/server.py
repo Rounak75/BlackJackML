@@ -25,8 +25,29 @@
 ║    Insurance is NOT a side bet — it is a core game mechanic.                ║
 ║    Computed separately in _get_insurance_data() and sent as its own         ║
 ║    top-level key "insurance" in the state, not inside "side_bets".         ║
-║    Only available when dealer upcard is an Ace. Pays 2:1. Costs half       ║
-║    the main bet. Profitable when True Count >= +3.                          ║
+║                                                                              ║
+║  IMPROVEMENTS IN THIS VERSION:                                               ║
+║  ─────────────────────────────────────────────────────────────────────────  ║
+║  REFACTOR 1 — _reset_hand_state() helper:                                  ║
+║    The 5-line reset block (current_player_hand, current_dealer_hand,        ║
+║    split_hands, active_hand_index, num_splits_done) was copy-pasted in      ║
+║    handle_new_hand, handle_shuffle, and _reset_hand (live scanner bridge).  ║
+║    Centralised into _reset_hand_state() — one place to maintain.           ║
+║                                                                              ║
+║  REFACTOR 2 — _process_card_entry() helper:                                ║
+║    Card processing logic (counter, shuffle tracker, shoe tracking, hand     ║
+║    routing) was duplicated between handle_deal_card and _apply_card.        ║
+║    Extracted into _process_card_entry() — both callers now use it.         ║
+║                                                                              ║
+║  REFACTOR 3 — _CountKey module-level class:                                ║
+║    _FakeCard was an inner class defined inside handle_change_system,        ║
+║    causing Python to create a new class object on every system switch.      ║
+║    Moved to module level as _CountKey with __slots__ for clarity.          ║
+║                                                                              ║
+║  REFACTOR 4 — get_full_state() extraction:                                 ║
+║    The 120+ line god function was split into _build_dealer_data(),          ║
+║    _build_player_data(), and _build_split_data() helpers. get_full_state()  ║
+║    now reads as a clean assembler of named, independently testable pieces.  ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 
@@ -120,6 +141,40 @@ def _safe_emit(event, data):
 
 
 # ══════════════════════════════════════════════════════════════
+# CARD TARGET CONSTANTS
+# ══════════════════════════════════════════════════════════════
+# Replaces magic strings 'player', 'dealer', 'seen' scattered
+# through handle_deal_card and _apply_card.
+
+TARGET_PLAYER = 'player'
+TARGET_DEALER = 'dealer'
+TARGET_SEEN   = 'seen'
+
+
+# ══════════════════════════════════════════════════════════════
+# COUNT-KEY HELPER
+# ══════════════════════════════════════════════════════════════
+
+class _CountKey:
+    """
+    Minimal card-like object for replaying a card log through a new counting system.
+
+    Used by handle_change_system to re-run every seen card through a new system's
+    tag values without needing real Card objects.
+
+    Previously defined as an inner class '_FakeCard' inside handle_change_system,
+    which re-created the class object on every call to that handler. Moved to
+    module level with __slots__ for clarity, correct naming, and minor efficiency.
+    """
+    __slots__ = ('count_key', 'is_ace', 'is_ten')
+
+    def __init__(self, key: int):
+        self.count_key = key
+        self.is_ace    = (key == 11)
+        self.is_ten    = (key == 10)   # 10-value cards: 10, J, Q, K all have count_key=10
+
+
+# ══════════════════════════════════════════════════════════════
 # GLOBAL GAME STATE
 # ══════════════════════════════════════════════════════════════
 
@@ -148,9 +203,6 @@ current_player_hand  = Hand()
 current_dealer_hand  = Hand()   # was: current_dealer_upcard = None
 
 # Split hand tracking
-# When the player splits, current_player_hand becomes hand[0] and a new
-# Hand() is created as hand[1]. active_hand_index tracks which hand is
-# currently being played. Strategy is computed independently for each hand.
 split_hands:         list  = []    # [] = no split; [Hand, Hand] = after split
 active_hand_index:   int   = 0     # 0 = first hand, 1 = second hand (post-split)
 num_splits_done:     int   = 0     # how many splits have occurred this hand
@@ -158,9 +210,8 @@ num_splits_done:     int   = 0     # how many splits have occurred this hand
 session_history = []
 
 # ── Live scanner ───────────────────────────────────────────────────────────────
-# Wire up after get_full_state / apply_card helpers are defined below.
-# We store a reference here and initialise after CARD MAPPING section.
-live_scanner = None   # initialised in _init_live_scanner() called at bottom
+# Wire up after helpers are defined below.
+live_scanner = None
 
 
 # ══════════════════════════════════════════════════════════════
@@ -182,6 +233,81 @@ SUIT_MAP = {
 }
 
 SUIT_IDX = {'hearts': 0, 'diamonds': 1, 'clubs': 2, 'spades': 3}
+
+
+# ══════════════════════════════════════════════════════════════
+# HAND STATE RESET HELPER
+# ══════════════════════════════════════════════════════════════
+
+def _reset_hand_state():
+    """
+    Clear all per-hand global state for the start of a new round.
+
+    Previously this 5-line block was copy-pasted in three places:
+      • handle_new_hand  (WebSocket 'new_hand' event)
+      • handle_shuffle   (WebSocket 'shuffle' event)
+      • _reset_hand      (live scanner bridge)
+    Centralised here so any future changes only need to happen once.
+
+    IMPORTANT: this does NOT touch counter, shoe, or betting_engine.
+    Those are only reset on a real shoe shuffle (handle_shuffle).
+    The running count must persist across all hands within one shoe.
+    """
+    global current_player_hand, current_dealer_hand, split_hands, active_hand_index, num_splits_done
+    current_player_hand = Hand()
+    current_dealer_hand = Hand()
+    split_hands         = []
+    active_hand_index   = 0
+    num_splits_done     = 0
+
+
+# ══════════════════════════════════════════════════════════════
+# CARD ENTRY HELPER
+# ══════════════════════════════════════════════════════════════
+
+def _process_card_entry(card: Card, target: str, suit_str: str):
+    """
+    Shared logic for adding a dealt card to the correct hand and updating
+    all tracking state (counter, shuffle tracker, shoe).
+
+    Previously duplicated almost verbatim between handle_deal_card (WebSocket
+    handler) and _apply_card (live scanner bridge). Both callers now call this
+    function instead, eliminating the risk of one path gaining a new tracking
+    call that the other silently misses.
+
+    Args:
+        card:     The Card object to process.
+        target:   TARGET_PLAYER, TARGET_DEALER, or TARGET_SEEN.
+        suit_str: Lowercase suit string ('spades', 'hearts', etc.) for
+                  the shuffle tracker's suit-index lookup.
+    """
+    global current_player_hand
+
+    # Always count every card that comes out of the shoe
+    counter.count_card(card)
+
+    # Update ML shuffle tracker
+    shuffle_tracker.observe_card(card.count_key, card.is_ace, SUIT_IDX.get(suit_str, 0))
+
+    # Remove from shoe tracking (manual entry — just remove first matching card)
+    for i, c in enumerate(shoe.cards):
+        if c.rank == card.rank and c.suit == card.suit:
+            shoe.cards.pop(i)
+            shoe.dealt.append(c)
+            break
+
+    # Route card to correct hand
+    if target == TARGET_PLAYER:
+        if split_hands:
+            # Post-split: add to the currently active split hand
+            split_hands[active_hand_index].add_card(card)
+            # Mirror active hand into current_player_hand for display/compat
+            current_player_hand = split_hands[active_hand_index]
+        else:
+            current_player_hand.add_card(card)
+    elif target == TARGET_DEALER:
+        current_dealer_hand.add_card(card)
+    # TARGET_SEEN: counted above, not added to any displayed hand
 
 
 # ══════════════════════════════════════════════════════════════
@@ -322,7 +448,6 @@ def _get_casino_risk() -> dict:
       2. Bet-TC correlation — bets consistently rising with TC (dead giveaway)
       3. Win rate at high counts — winning significantly more when TC>2
       4. Session length — long sessions increase exposure
-      5. Table changes — leaving tables after negative shoes
 
     Returns a heat level: 0=Cold, 1=Warm, 2=Hot, 3=Critical
     """
@@ -359,8 +484,6 @@ def _get_casino_risk() -> dict:
         signals.append(f'Spread {spread:.0f}:1 — mild')
 
     # ── Signal 2: Bet-TC correlation (last 20 hands) ─────────────────────
-    # A perfect counter's bets correlate ~0.9 with TC.
-    # We approximate: count how often bet > baseline when TC was high
     tc_history   = counter.count_history[-20:]
     recent_bets  = bets[-len(tc_history):]
     if len(tc_history) >= 10:
@@ -382,8 +505,6 @@ def _get_casino_risk() -> dict:
             score += 1
 
     # ── Signal 3: Win rate at high counts ────────────────────────────────
-    # Normal win rate ~42%. Counters win ~47-50% at high TC hands.
-    # We flag if win rate at big bets (proxy for high-TC hands) is high.
     big_bet_threshold = min_bet * 3
     big_bet_results   = [p for b, p in zip(bets, profits) if b >= big_bet_threshold]
     if len(big_bet_results) >= 8:
@@ -431,6 +552,89 @@ def _get_casino_risk() -> dict:
 
 
 # ══════════════════════════════════════════════════════════════
+# STATE BUILDER HELPERS
+# ══════════════════════════════════════════════════════════════
+# Extracted from get_full_state() to keep each piece focused and testable.
+
+def _build_dealer_data() -> dict:
+    """Build the dealer_hand sub-dict for the state payload."""
+    return {
+        "cards":        [str(c) for c in current_dealer_hand.cards],
+        "value":        current_dealer_hand.best_value  if current_dealer_hand.cards else 0,
+        "is_soft":      current_dealer_hand.is_soft     if current_dealer_hand.cards else False,
+        "is_blackjack": current_dealer_hand.is_blackjack if current_dealer_hand.cards else False,
+        "is_bust":      current_dealer_hand.is_bust     if current_dealer_hand.cards else False,
+        "card_count":   len(current_dealer_hand.cards),
+        # S17 rule: dealer must draw on 16 or less, stands on 17+
+        "must_draw": (
+            len(current_dealer_hand.cards) >= 2 and
+            not current_dealer_hand.is_bust and
+            not current_dealer_hand.is_blackjack and
+            current_dealer_hand.best_value < 17
+        ),
+        "dealer_stands": (
+            len(current_dealer_hand.cards) >= 2 and
+            not current_dealer_hand.is_bust and
+            current_dealer_hand.best_value >= 17
+        ),
+    }
+
+
+def _build_player_data() -> dict:
+    """Build the player_hand sub-dict for the state payload."""
+    return {
+        "cards":        [str(c) for c in current_player_hand.cards],
+        "value":        current_player_hand.best_value  if current_player_hand.cards else 0,
+        "is_soft":      current_player_hand.is_soft     if current_player_hand.cards else False,
+        "is_pair":      current_player_hand.is_pair     if current_player_hand.cards else False,
+        "can_double":   current_player_hand.can_double  if current_player_hand.cards else False,
+        "can_split":    current_player_hand.can_split   if current_player_hand.cards else False,
+        "is_blackjack": current_player_hand.is_blackjack if current_player_hand.cards else False,
+        "is_bust":      current_player_hand.is_bust     if current_player_hand.cards else False,
+    }
+
+
+def _build_split_data(dealer_upcard_card, tc: float) -> list:
+    """
+    Build the split_hands list for the state payload.
+    Returns [] when no split is in progress.
+    Computes an independent recommendation for each split hand.
+    """
+    if not split_hands:
+        return []
+
+    split_hand_data = []
+    for idx, sh in enumerate(split_hands):
+        sh_rec = None
+        if sh.cards and dealer_upcard_card:
+            sh_avail = sh.available_actions(game_config, num_splits_done)
+            sh_info  = deviation_engine.get_action_with_info(
+                sh, dealer_upcard_card, tc, sh_avail)
+            sh_rec = {
+                "action":         sh_info["action"].value.upper(),
+                "is_deviation":   sh_info["is_deviation"],
+                "basic_action":   sh_info["basic_strategy_action"].value.upper(),
+                "deviation_info": sh_info.get("deviation"),
+                "source":         "rules",
+            }
+        split_hand_data.append({
+            "index":        idx,
+            "is_active":    idx == active_hand_index,
+            "cards":        [str(c) for c in sh.cards],
+            "value":        sh.best_value if sh.cards else 0,
+            "is_soft":      sh.is_soft    if sh.cards else False,
+            "is_pair":      sh.is_pair    if sh.cards else False,
+            "can_double":   sh.can_double if sh.cards else False,
+            "can_split":    sh.can_split  if sh.cards else False,
+            "is_blackjack": sh.is_blackjack if sh.cards else False,
+            "is_bust":      sh.is_bust    if sh.cards else False,
+            "is_split_ace": sh.is_split_ace_hand,
+            "recommendation": sh_rec,
+        })
+    return split_hand_data
+
+
+# ══════════════════════════════════════════════════════════════
 # STATE BUILDER
 # ══════════════════════════════════════════════════════════════
 
@@ -439,13 +643,7 @@ def get_full_state():
     Build the complete game state JSON sent to the browser after every event.
     Raises exceptions — callers should catch them.
 
-    Changes from v2:
-    • dealer_upcard  — still the first card string (UI backward-compat)
-    • dealer_hand    — NEW: full dealer hand (all cards + value + flags)
-    • insurance      — NEW: separate top-level key, not inside side_bets.
-                       Insurance is a game mechanic, not a side bet.
-    • ml_recommendation — NEW: ML model play decision with confidence score.
-                       Falls back to rule-based if model not loaded.
+    Uses the _build_* helpers above to assemble each sub-section.
     """
     tc          = counter.true_count
     enhanced_tc = shuffle_tracker.get_enhanced_true_count(tc)
@@ -472,9 +670,7 @@ def get_full_state():
             dev = recommendation["deviation_info"]
             dev["description_short"] = f"TC {dev['direction']} {dev['tc_threshold']}"
 
-    # ── ML model recommendation (uses full 28-feature state with count) ───
-    # If model is confident (≥75%), it overrides the rule-based recommendation.
-    # If not confident, rule-based recommendation is used as fallback.
+    # ── ML model recommendation ───────────────────────────────────────────
     ml_rec = _get_ml_recommendation(current_player_hand, dealer_upcard_card)
     if ml_rec and ml_rec["is_confident"] and recommendation is not None:
         # ML overrides rules — surface both so UI can show the difference
@@ -490,7 +686,6 @@ def get_full_state():
         final_recommendation = recommendation
 
     # ── Side bets (Perfect Pairs, 21+3, Lucky Ladies — NOT insurance) ──
-    # Insurance is computed separately below and sent as its own key.
     side_bets = side_bet_analyzer.analyze_all(
         shoe, counter,
         current_player_hand.cards if current_player_hand.cards else None,
@@ -500,61 +695,6 @@ def get_full_state():
     # Use Ace-adjusted TC for bet sizing — more accurate than plain TC
     ace_adj_tc = counter.ace_adjusted_tc
     bet_rec = betting_engine.get_bet_recommendation(ace_adj_tc, penetration=penetration)
-
-    # ── Dealer hand data ───────────────────────────────────────────────
-    dealer_hand_data = {
-        "cards":        [str(c) for c in current_dealer_hand.cards],
-        "value":        current_dealer_hand.best_value  if current_dealer_hand.cards else 0,
-        "is_soft":      current_dealer_hand.is_soft     if current_dealer_hand.cards else False,
-        "is_blackjack": current_dealer_hand.is_blackjack if current_dealer_hand.cards else False,
-        "is_bust":      current_dealer_hand.is_bust     if current_dealer_hand.cards else False,
-        "card_count":   len(current_dealer_hand.cards),
-        # S17 rule: dealer must draw on 16 or less, stands on 17+
-        "must_draw":    (
-            len(current_dealer_hand.cards) >= 2 and
-            not current_dealer_hand.is_bust and
-            not current_dealer_hand.is_blackjack and
-            current_dealer_hand.best_value < 17
-        ),
-        "dealer_stands": (
-            len(current_dealer_hand.cards) >= 2 and
-            not current_dealer_hand.is_bust and
-            current_dealer_hand.best_value >= 17
-        ),
-    }
-
-    # ── Split hand recommendations ───────────────────────────────────────────
-    # When the player has split, compute an independent recommendation for each
-    # hand. The active hand is the one currently being played.
-    split_hand_data = []
-    if split_hands:
-        for idx, sh in enumerate(split_hands):
-            sh_rec = None
-            if sh.cards and dealer_upcard_card:
-                sh_avail = sh.available_actions(game_config, num_splits_done)
-                sh_info  = deviation_engine.get_action_with_info(
-                    sh, dealer_upcard_card, tc, sh_avail)
-                sh_rec = {
-                    "action":       sh_info["action"].value.upper(),
-                    "is_deviation": sh_info["is_deviation"],
-                    "basic_action": sh_info["basic_strategy_action"].value.upper(),
-                    "deviation_info": sh_info.get("deviation"),
-                    "source":       "rules",
-                }
-            split_hand_data.append({
-                "index":        idx,
-                "is_active":    idx == active_hand_index,
-                "cards":        [str(c) for c in sh.cards],
-                "value":        sh.best_value if sh.cards else 0,
-                "is_soft":      sh.is_soft    if sh.cards else False,
-                "is_pair":      sh.is_pair    if sh.cards else False,
-                "can_double":   sh.can_double if sh.cards else False,
-                "can_split":    sh.can_split  if sh.cards else False,
-                "is_blackjack": sh.is_blackjack if sh.cards else False,
-                "is_bust":      sh.is_bust    if sh.cards else False,
-                "is_split_ace": sh.is_split_ace_hand,
-                "recommendation": sh_rec,
-            })
 
     return {
         "count": {
@@ -582,30 +722,20 @@ def get_full_state():
         "side_bets":         side_bets,
         "shuffle_tracker":   shuffle_tracker.get_state(),
         "session":           betting_engine.get_session_stats(),
-        "player_hand": {
-            "cards":        [str(c) for c in current_player_hand.cards],
-            "value":        current_player_hand.best_value  if current_player_hand.cards else 0,
-            "is_soft":      current_player_hand.is_soft     if current_player_hand.cards else False,
-            "is_pair":      current_player_hand.is_pair     if current_player_hand.cards else False,
-            "can_double":   current_player_hand.can_double  if current_player_hand.cards else False,
-            "can_split":    current_player_hand.can_split   if current_player_hand.cards else False,
-            "is_blackjack": current_player_hand.is_blackjack if current_player_hand.cards else False,
-            "is_bust":      current_player_hand.is_bust     if current_player_hand.cards else False,
-        },
-        # dealer_upcard: first dealer card as a string (UI backward compat)
-        "dealer_upcard": str(current_dealer_hand.cards[0]) if current_dealer_hand.cards else None,
+        "player_hand":       _build_player_data(),
+        # dealer_upcard: first dealer card as string (UI backward compat)
+        "dealer_upcard":     str(current_dealer_hand.cards[0]) if current_dealer_hand.cards else None,
         # dealer_hand: full dealer hand including all hit cards
-        "dealer_hand":   dealer_hand_data,
-        "count_history":    counter.count_history[-60:],
-        "side_counts":      counter.get_side_count_state(),
-        "casino_risk":      _get_casino_risk(),
-        "split_hands":      split_hand_data,
+        "dealer_hand":       _build_dealer_data(),
+        "count_history":     counter.count_history[-60:],
+        "side_counts":       counter.get_side_count_state(),
+        "casino_risk":       _get_casino_risk(),
+        "split_hands":       _build_split_data(dealer_upcard_card, tc),
         "active_hand_index": active_hand_index,
-        "num_splits_done":  num_splits_done,
+        "num_splits_done":   num_splits_done,
         # insurance: separate from side_bets — it is a game mechanic.
-        # Only available when dealer upcard is Ace. Pays 2:1 on half the bet.
-        "insurance":     _get_insurance_data(dealer_upcard_card),
-        "ml_available":  _ml_available,
+        "insurance":         _get_insurance_data(dealer_upcard_card),
+        "ml_available":      _ml_available,
     }
 
 
@@ -636,16 +766,8 @@ def api_state():
 def api_detect_cards():
     """
     Computer vision card detection endpoint.
-
     Accepts a base64-encoded screenshot frame, runs the CV pipeline,
-    and returns a list of detected cards with confidence scores.
-
-    Request JSON:  { "frame": "<base64 image string>" }
-    Response JSON: { "cards": [ {rank, suit, confidence, bbox}, ... ] }
-
-    The browser captures the frame via getDisplayMedia() (screen share)
-    or getUserMedia() (webcam) and sends one JPEG frame here.
-    The UI shows a confirmation dialog before cards are applied.
+    returns a list of detected cards with confidence scores.
     """
     try:
         from app.cv_detector import detect_from_base64
@@ -682,13 +804,12 @@ def handle_deal_card(data):
     """
     Handle a card being entered into the system.
     Wrapped in try/except so any crash surfaces as an error toast in the UI
-    instead of silently failing (which made cards appear to not register).
+    instead of silently failing.
     """
-    global current_player_hand, current_dealer_hand
     try:
         rank_str = data.get('rank', '')
         suit_str = data.get('suit', 'spades')
-        target   = data.get('target', 'seen')
+        target   = data.get('target', TARGET_SEEN)
 
         rank = RANK_MAP.get(rank_str)
         suit = SUIT_MAP.get(suit_str, Suit.SPADES)
@@ -699,31 +820,8 @@ def handle_deal_card(data):
 
         card = Card(rank, suit)
 
-        # Count every card that comes out of the shoe
-        counter.count_card(card)
-
-        # Update ML shuffle tracker
-        shuffle_tracker.observe_card(card.count_key, card.is_ace, SUIT_IDX.get(suit_str, 0))
-
-        # Remove from shoe tracking (manual entry — just remove first matching card)
-        for i, c in enumerate(shoe.cards):
-            if c.rank == rank and c.suit == suit:
-                shoe.cards.pop(i)
-                shoe.dealt.append(c)
-                break
-
-        # Route card to correct hand
-        if target == 'player':
-            if split_hands:
-                # Post-split: add to the currently active split hand
-                split_hands[active_hand_index].add_card(card)
-                # Mirror active hand into current_player_hand for display/compat
-                current_player_hand = split_hands[active_hand_index]
-            else:
-                current_player_hand.add_card(card)
-        elif target == 'dealer':
-            current_dealer_hand.add_card(card)
-        # 'seen': counted above, not added to any displayed hand
+        # Delegate to shared helper — identical logic to _apply_card path
+        _process_card_entry(card, target, suit_str)
 
         _safe_emit('state_update', get_full_state())
 
@@ -830,9 +928,6 @@ def handle_undo_split_card(data=None):
     this only removes the last card from split_hands[active_hand_index].
     The split structure, other hands, count, and shoe are preserved as-is
     EXCEPT for the one card being removed (counter and shoe are unwound).
-
-    Called by the frontend when the user presses Ctrl+Z or clicks Undo
-    while a split is in progress.
     """
     global current_player_hand
 
@@ -883,7 +978,7 @@ def handle_new_hand(data=None):
     Clear current hand state to start a new hand.
 
     FIX (Bug 2):
-        Only clears player hand and dealer hand.
+        Only clears player hand and dealer hand via _reset_hand_state().
         Does NOT reset counter or shoe.
         The running count continues across all hands in the same shoe —
         exactly as a real card counter does at the casino table.
@@ -892,12 +987,7 @@ def handle_new_hand(data=None):
         Between every hand → emit 'new_hand'
         When dealer physically shuffles → emit 'shuffle' (resets count)
     """
-    global current_player_hand, current_dealer_hand, split_hands, active_hand_index, num_splits_done
-    current_player_hand = Hand()
-    current_dealer_hand = Hand()
-    split_hands         = []    # clear split hands on new round
-    active_hand_index   = 0
-    num_splits_done     = 0
+    _reset_hand_state()
     # counter and shoe are intentionally NOT touched here
     _safe_emit('state_update', get_full_state())
 
@@ -911,17 +1001,13 @@ def handle_shuffle(data=None):
     Only click this when you see the actual dealer collect and reshuffle
     all the cards into a new shoe. Not between hands.
     """
-    global shoe, current_player_hand, current_dealer_hand, split_hands, active_hand_index, num_splits_done
+    global shoe
 
     shuffle_type = data.get('type', 'machine') if data else 'machine'
 
     shoe.reshuffle(ShuffleType(shuffle_type))
-    counter.reset()                   # ← Correct: new shoe = fresh count
-    current_player_hand = Hand()      # Clear display
-    current_dealer_hand = Hand()
-    split_hands       = []             # Clear any in-progress split
-    active_hand_index = 0
-    num_splits_done   = 0
+    counter.reset()           # ← Correct: new shoe = fresh count
+    _reset_hand_state()       # ← Shared helper: clears hand display
 
     shuffle_tracker.on_shuffle(shuffle_type)
 
@@ -949,16 +1035,9 @@ def handle_change_system(data):
         counter = CardCounter(system, game_config.NUM_DECKS)
 
         # Replay every card seen so far through the new system's tag values.
-        # count_card() updates running_count, cards_seen, AND _card_log correctly,
-        # so true_count and penetration calculations remain accurate after the switch.
+        # Uses module-level _CountKey instead of a re-created inner class.
         for key in old_log:
-            # Reconstruct a minimal Card-like object with just count_key
-            class _FakeCard:
-                def __init__(self, k):
-                    self.count_key = k
-                    self.is_ace    = (k == 11)
-                    self.is_ten    = (k == 10)   # 10-value cards: 10, J, Q, K all have count_key=10
-            counter.count_card(_FakeCard(key))
+            counter.count_card(_CountKey(key))
 
         _safe_emit('state_update', get_full_state())
 
@@ -976,49 +1055,34 @@ def handle_record_result(data):
     _safe_emit('state_update', get_full_state())
 
 
-
 # ══════════════════════════════════════════════════════════════
 # LIVE SCANNER — socket handlers + REST routes
 # ══════════════════════════════════════════════════════════════
-# Initialise the scanner now that get_full_state / handle_deal_card are defined.
+# Initialise the scanner now that _process_card_entry / _reset_hand_state
+# and get_full_state are defined above.
 
 from app.live_scanner import LiveScanner as _LiveScanner
 
-def _apply_card(rank, suit, target='seen'):
-    """Bridge: scanner thread → deal_card handler (thread-safe)."""
+def _apply_card(rank, suit, target=TARGET_SEEN):
+    """Bridge: scanner thread → deal_card handler (thread-safe).
+    Uses _process_card_entry so card tracking logic stays in one place."""
     try:
         r = RANK_MAP.get(str(rank).upper())
         s = SUIT_MAP.get(str(suit).lower())
         if r and s:
+            suit_str = str(suit).lower()
             card = Card(r, s)
-            if target == 'player':
-                current_player_hand.add_card(card)
-            elif target == 'dealer':
-                current_dealer_hand.add_card(card)
-            counter.count_card(card)
 
-            # Update ML shuffle tracker (matches handle_deal_card)
-            shuffle_tracker.observe_card(card.count_key, card.is_ace, SUIT_IDX.get(str(suit).lower(), 0))
-
-            # Remove from shoe tracking (matches handle_deal_card)
-            for i, c in enumerate(shoe.cards):
-                if c.rank == r and c.suit == s:
-                    shoe.cards.pop(i)
-                    shoe.dealt.append(c)
-                    break
+            # Delegate to shared helper — same logic as handle_deal_card
+            _process_card_entry(card, target, suit_str)
 
             socketio.emit('state_update', _json.loads(_json.dumps(get_full_state(), cls=_SafeEncoder)))
     except Exception as e:
-        print("[WARNING]",f'[Live] apply_card error: {e}')
+        print("[WARNING]", f'[Live] apply_card error: {e}')
 
 def _reset_hand():
-    """Bridge: scanner new-hand signal."""
-    global current_player_hand, current_dealer_hand, split_hands, active_hand_index, num_splits_done
-    current_player_hand = Hand()
-    current_dealer_hand = Hand()
-    split_hands         = []
-    active_hand_index   = 0
-    num_splits_done     = 0
+    """Bridge: scanner new-hand signal. Uses shared _reset_hand_state()."""
+    _reset_hand_state()
     socketio.emit('state_update', _json.loads(_json.dumps(get_full_state(), cls=_SafeEncoder)))
 
 live_scanner = _LiveScanner(
@@ -1128,13 +1192,10 @@ def api_live_new_hand():
 
 
 # ── Window / tab listing ───────────────────────────────────────────────────────
-# Returns all visible OS windows so the user can pick which browser tab to scan.
-# Works on Windows (via ctypes EnumWindows), macOS (via Quartz), Linux (via xdotool/wmctrl).
-
 def _list_windows():
     """
     Return list of {id, title, x, y, w, h} for all visible OS windows.
-    Windows: PowerShell Get-Process (no install needed) + Chrome CDP for tabs.
+    Windows: ctypes EnumWindows + Chrome CDP for tabs.
     macOS:   AppleScript.
     Linux:   wmctrl / xdotool.
     """
@@ -1143,19 +1204,15 @@ def _list_windows():
     system = platform.system()
 
     if system == 'Windows':
-        # ── Primary: ctypes EnumWindows with full geometry ───────────────────
-        # This works reliably from any Python process on Windows — no extra
-        # tools needed, no PowerShell, no elevated permissions required.
         try:
             import ctypes
             import ctypes.wintypes as wt
 
             user32 = ctypes.windll.user32
 
-            # SetThreadDpiAwarenessContext so GetWindowRect returns physical px
             try:
                 ctypes.windll.user32.SetThreadDpiAwarenessContext(
-                    ctypes.c_void_p(-2))   # DPI_AWARENESS_CONTEXT_SYSTEM_AWARE
+                    ctypes.c_void_p(-2))
             except Exception:
                 pass
 
@@ -1163,36 +1220,27 @@ def _list_windows():
 
             def _enum_cb(hwnd, _):
                 try:
-                    # Skip invisible or minimised windows
                     if not user32.IsWindowVisible(hwnd):
                         return True
                     if user32.IsIconic(hwnd):
                         return True
-
-                    # Skip tool windows (system tray, popups etc.)
-                    ex_style = user32.GetWindowLongW(hwnd, -20)  # GWL_EXSTYLE
-                    if ex_style & 0x00000080:   # WS_EX_TOOLWINDOW
+                    ex_style = user32.GetWindowLongW(hwnd, -20)
+                    if ex_style & 0x00000080:
                         return True
-
-                    # Skip windows with no title
                     length = user32.GetWindowTextLengthW(hwnd)
                     if length == 0:
                         return True
-
                     buf = ctypes.create_unicode_buffer(length + 1)
                     user32.GetWindowTextW(hwnd, buf, length + 1)
                     title = buf.value.strip()
                     if not title:
                         return True
-
-                    # Get window geometry
                     rect = wt.RECT()
                     user32.GetWindowRect(hwnd, ctypes.byref(rect))
                     w = rect.right  - rect.left
                     h = rect.bottom - rect.top
                     if w < 100 or h < 100:
                         return True
-
                     wins.append({
                         'id':    int(hwnd),
                         'title': title,
@@ -1205,15 +1253,12 @@ def _list_windows():
                     pass
                 return True
 
-            # Keep cb_ref alive for the duration of the call
             cb_ref = EnumProc(_enum_cb)
             user32.EnumWindows(cb_ref, 0)
 
         except Exception as e:
-            print("[WARNING]",f'[Win] EnumWindows: {e}')
+            print("[WARNING]", f'[Win] EnumWindows: {e}')
 
-        # ── Fallback: simple PowerShell one-liner (no complex PS objects) ─────
-        # Only runs if EnumWindows produced nothing (rare edge case)
         if not wins:
             try:
                 ps = (
@@ -1225,7 +1270,7 @@ def _list_windows():
                     ['powershell', '-NoProfile', '-NonInteractive',
                      '-Command', ps],
                     capture_output=True, text=True, timeout=3,
-                    creationflags=0x08000000,   # CREATE_NO_WINDOW
+                    creationflags=0x08000000,
                 )
                 if r.returncode == 0 and r.stdout.strip():
                     raw = r.stdout.strip()
@@ -1238,10 +1283,8 @@ def _list_windows():
                                 'x': 0, 'y': 0, 'w': 1920, 'h': 1080,
                             })
             except Exception as e:
-                print("[WARNING]",f'[Win] PS fallback: {e}')
-        # ── 2. Chrome / Edge tab list via remote debugging port ───────────────
-        # Chrome/Edge must be launched with --remote-debugging-port=9222
-        # (or user can enable it). This gives us individual tab titles + URLs.
+                print("[WARNING]", f'[Win] PS fallback: {e}')
+
         for port in [9222, 9223, 9224]:
             try:
                 import urllib.request
@@ -1255,8 +1298,6 @@ def _list_windows():
                     tab_url   = t.get('url', '')
                     if not tab_title or tab_url.startswith('chrome-extension://'):
                         continue
-                    # Find the matching OS window to get its geometry
-                    # Match by looking for a window whose title contains the tab title (truncated)
                     short = tab_title[:40]
                     matched = next((w for w in wins if short.lower() in w['title'].lower()), None)
                     geo = matched or {'x': 0, 'y': 0, 'w': 1920, 'h': 1080}
@@ -1268,11 +1309,10 @@ def _list_windows():
                         'is_tab': True,
                     })
             except Exception:
-                pass  # port not open — Chrome not in debug mode, skip silently
+                pass
 
     elif system == 'Darwin':
         try:
-            import subprocess, json as _j
             script = '''
             tell application "System Events"
                 set wins to {}
@@ -1299,11 +1339,10 @@ def _list_windows():
                     except ValueError:
                         pass
         except Exception as e:
-            print("[WARNING]",f'[macOS] window list error: {e}')
+            print("[WARNING]", f'[macOS] window list error: {e}')
 
     else:  # Linux — try wmctrl then xdotool
         try:
-            import subprocess
             r = subprocess.run(['wmctrl', '-lG'], capture_output=True, text=True, timeout=3)
             if r.returncode == 0:
                 for line in r.stdout.strip().splitlines():
@@ -1321,11 +1360,10 @@ def _list_windows():
         except FileNotFoundError:
             pass
         except Exception as e:
-            print("[WARNING]",f'[Linux] wmctrl error: {e}')
+            print("[WARNING]", f'[Linux] wmctrl error: {e}')
 
         if not wins:
             try:
-                import subprocess
                 r = subprocess.run(['xdotool', 'search', '--onlyvisible', '--name', ''],
                                    capture_output=True, text=True, timeout=3)
                 for wid in r.stdout.strip().splitlines()[:30]:
@@ -1355,7 +1393,6 @@ def api_list_windows():
     """List all visible OS windows for the tab-picker dropdown."""
     try:
         wins = _list_windows()
-        # Sort: browser windows first (Chrome, Firefox, Edge, Opera, Brave)
         browser_kw = ['chrome', 'firefox', 'edge', 'opera', 'brave', 'safari',
                       'stake', 'casino', 'blackjack', '21']
         def _score(w):
@@ -1400,7 +1437,6 @@ def start_server(host: str = '0.0.0.0', port: int = 5000, debug: bool = False):
         print('\n\n  ♠  BlackjackML stopped. Goodbye!\n')
         sys.exit(0)
 
-    # Register Ctrl+C handler — fixes Windows PowerShell not responding to Ctrl+C
     signal.signal(signal.SIGINT,  _graceful_exit)
     signal.signal(signal.SIGTERM, _graceful_exit)
 
@@ -1421,4 +1457,4 @@ def start_server(host: str = '0.0.0.0', port: int = 5000, debug: bool = False):
 
 
 if __name__ == '__main__':
-    start_server(debug=True)
+    start_server()
