@@ -281,7 +281,7 @@ def _process_card_entry(card: Card, target: str, suit_str: str):
         suit_str: Lowercase suit string ('spades', 'hearts', etc.) for
                   the shuffle tracker's suit-index lookup.
     """
-    global current_player_hand
+    global current_player_hand, active_hand_index
 
     # Always count every card that comes out of the shoe
     counter.count_card(card)
