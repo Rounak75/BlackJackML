@@ -1110,10 +1110,33 @@ def handle_record_result(data):
     total_profit = stats['total_profit']
     import logging as _log
     _slog = _log.getLogger('session.stops')
-    _slog.info("[RESULT] bet=%.2f profit=%.2f  session_profit=%.2f  bankroll=%.2f",
-               bet, profit, total_profit, stats['bankroll'])
+    _slog.info("[RESULT] bet=%.2f profit=%.2f  session_profit=%.2f  bankroll=%.2f  should_leave=%s  stop_reason=%s",
+               bet, profit, total_profit, stats['bankroll'],
+               stats['should_leave'], stats['stop_reason'])
 
     _safe_emit('state_update', get_full_state())
+
+
+@socketio.on('set_stop_thresholds')
+def handle_set_stop_thresholds(data):
+    """
+    Update stop-loss / stop-win thresholds from the frontend settings UI.
+
+    Expected payload: { stop_loss: -5000, stop_win: 3000 }
+    stop_loss must be negative; stop_win must be positive.
+    Emits a full state_update so the UI reflects the new thresholds immediately.
+    """
+    try:
+        stop_loss = float(data.get('stop_loss', betting_engine.stop_loss))
+        stop_win  = float(data.get('stop_win',  betting_engine.stop_win))
+        betting_engine.set_stop_thresholds(stop_loss, stop_win)
+        import logging as _log
+        _log.getLogger('session.stops').info(
+            "[THRESHOLDS] Updated: stop_loss=%.2f  stop_win=%.2f", stop_loss, stop_win
+        )
+        _safe_emit('state_update', get_full_state())
+    except (ValueError, TypeError) as exc:
+        _safe_emit('error', {'message': f'Invalid stop thresholds: {exc}'})
 
 
 # ══════════════════════════════════════════════════════════════

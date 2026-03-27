@@ -12,27 +12,51 @@
  *   • Audio beep (Web Audio API — no file needed)
  *   • Snooze button (dismiss for 10 hands)
  *   • Progress bar showing current P&L vs targets
+ *   • Backend-authoritative should_leave flag (server owns state)
+ *   • Threshold edits emit set_stop_thresholds to server for persistence
  *
  * Props:
- *   session  — session object { total_profit, hands_played }
+ *   session  — session object { total_profit, hands_played,
+ *                               should_leave, stop_reason,
+ *                               stop_loss, stop_win }
  *   currency — { symbol }
+ *   socket   — socket.io instance for emitting set_stop_thresholds
  */
 
-function StopAlerts({ session, currency }) {
+function StopAlerts({ session, currency, socket }) {
   const { useState, useEffect, useRef } = React;
 
   const profit  = session?.total_profit ?? 0;
   const hands   = session?.hands_played ?? 0;
   const sym     = currency?.symbol ?? '₹';
 
-  const [stopLoss,   setStopLoss]   = useState(-5000);
-  const [stopWin,    setStopWin]    = useState(3000);
+  // ── Thresholds: initialise from server state when it arrives, then track locally ──
+  // session.stop_loss and session.stop_win are the server-authoritative values.
+  // We only fall back to defaults if the server hasn't sent them yet.
+  const serverStopLoss = session?.stop_loss ?? -5000;
+  const serverStopWin  = session?.stop_win  ??  3000;
+
+  const [stopLoss,   setStopLoss]   = useState(serverStopLoss);
+  const [stopWin,    setStopWin]    = useState(serverStopWin);
   const [snoozedAt,  setSnoozedAt]  = useState(null);  // hand count when snoozed
   const [dismissed,  setDismissed]  = useState({ loss: false, win: false });
   const [editing,    setEditing]    = useState(false);
-  const [tempLoss,   setTempLoss]   = useState(-5000);
-  const [tempWin,    setTempWin]    = useState(3000);
+  const [tempLoss,   setTempLoss]   = useState(serverStopLoss);
+  const [tempWin,    setTempWin]    = useState(serverStopWin);
   const alertedRef = useRef({ loss: false, win: false });
+
+  // Sync local thresholds if server sends updated values (e.g. after reconnect)
+  useEffect(() => {
+    if (!editing) {
+      setStopLoss(serverStopLoss);
+      setStopWin(serverStopWin);
+    }
+  }, [serverStopLoss, serverStopWin]);
+
+  // ── Backend-authoritative should_leave overrides local threshold calc ──
+  // Use server flag when available; fall back to client-side calculation.
+  const backendShouldLeave = session?.should_leave ?? false;
+  const backendStopReason  = session?.stop_reason  ?? null;   // 'STOP_LOSS' | 'STOP_WIN' | null
 
   // Web Audio beep — no file needed, pure tone via oscillator
   const playAlert = (type) => {
@@ -53,8 +77,13 @@ function StopAlerts({ session, currency }) {
 
   const snoozeActive = snoozedAt !== null && (hands - snoozedAt) < 10;
 
-  const lossHit = profit <= stopLoss;
-  const winHit  = profit >= stopWin;
+  // Prefer backend-authoritative flag; fall back to local threshold calc
+  const lossHit = backendShouldLeave
+    ? backendStopReason === 'STOP_LOSS'
+    : profit <= stopLoss;
+  const winHit  = backendShouldLeave
+    ? backendStopReason === 'STOP_WIN'
+    : profit >= stopWin;
 
   // Fire alerts when thresholds crossed for the first time
   useEffect(() => {
@@ -251,7 +280,19 @@ function StopAlerts({ session, currency }) {
             </div>
           ))}
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => { setStopLoss(tempLoss); setStopWin(tempWin); setEditing(false); setDismissed({ loss: false, win: false }); }}
+            <button onClick={() => {
+                setStopLoss(tempLoss);
+                setStopWin(tempWin);
+                setEditing(false);
+                setDismissed({ loss: false, win: false });
+                // Persist new thresholds to server so backend state matches UI
+                if (socket) {
+                  socket.emit('set_stop_thresholds', {
+                    stop_loss: tempLoss,
+                    stop_win:  tempWin,
+                  });
+                }
+              }}
               aria-label="Save limits"
               style={{ flex: 2, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
                 background: 'rgba(68,232,130,0.12)', border: '1px solid rgba(68,232,130,0.3)', color: '#44e882' }}>

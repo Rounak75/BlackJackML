@@ -610,7 +610,7 @@ function App() {
           <CasinoRiskMeter casinoRisk={casinoRisk} />
 
           {/* Stop-loss / stop-win alerts with audio */}
-          <StopAlerts session={session} currency={currency} />
+          <StopAlerts session={session} currency={currency} socket={socketRef.current} />
 
           {/* N₀ + Shoe Quality Score */}
           <AnalyticsPanel analytics={gameState?.analytics} />
