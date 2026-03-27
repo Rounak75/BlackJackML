@@ -85,6 +85,37 @@ function StopAlerts({ session, currency }) {
   return (
     <Widget title="Stop Alerts" badge={showLossAlert || showWinAlert ? '⚠ TRIGGERED' : 'ARMED'}>
 
+      {/* ── Session status: explicit Continue / Leave indicator ── */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '7px 10px', borderRadius: 6, marginBottom: 10,
+        background: (lossHit || winHit)
+          ? 'rgba(255,92,92,0.08)' : 'rgba(68,232,130,0.07)',
+        border: `1px solid ${(lossHit || winHit)
+          ? 'rgba(255,92,92,0.35)' : 'rgba(68,232,130,0.25)'}`,
+      }}>
+        <span style={{ fontSize: 18, lineHeight: 1 }}>
+          {lossHit ? '❌' : winHit ? '🏆' : '✅'}
+        </span>
+        <div>
+          <div style={{
+            fontSize: 11, fontWeight: 800,
+            color: lossHit ? '#ff5c5c' : winHit ? '#ffd447' : '#44e882',
+          }}>
+            {lossHit ? 'LEAVE TABLE — Stop-Loss Hit'
+              : winHit ? 'LEAVE TABLE — Stop-Win Hit'
+              : 'Continue Playing'}
+          </div>
+          <div style={{ fontSize: 9, color: '#94a7c4', marginTop: 1 }}>
+            {lossHit
+              ? `Down ${sym}${Math.abs(profit).toLocaleString()} — limit: ${sym}${Math.abs(stopLoss).toLocaleString()}`
+              : winHit
+                ? `Up ${sym}${profit.toLocaleString()} — target: ${sym}${stopWin.toLocaleString()}`
+                : `${sym}${Math.abs(profit - stopLoss).toLocaleString()} buffer to stop-loss`}
+          </div>
+        </div>
+      </div>
+
       {/* Loss alert banner */}
       {showLossAlert && (
         <div style={{

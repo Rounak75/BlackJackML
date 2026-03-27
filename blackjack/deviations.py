@@ -102,15 +102,8 @@ ILLUSTRIOUS_18 = [
     # 1. 16 vs 10: Stand at TC >= 0 (basic says Hit)
     Deviation("hard", 16, 10, Action.STAND, 0, ">="),
 
-    # 2. 15 vs 10: Stand at TC >= 4 when surrender is NOT available.
-    #    FIX (AUDIT finding #4): This was missing from the I18 list.
-    #    The FAB_4 entry (15 vs 10 Surrender at TC >= 0) is checked first —
-    #    if surrender IS available it fires there and this line is never reached.
-    #    When surrender is unavailable (Action.SURRENDER not in available_actions),
-    #    FAB_4 is skipped entirely and we fall through to I18 here.
-    #    At TC >= 4 the shoe is so 10-rich that Standing is better than Hitting
-    #    even without the surrender option — this is a top-5 I18 play by EV.
-    Deviation("hard", 15, 10, Action.STAND, 4, ">="),
+    # 2. 15 vs 10: Covered by FAB_4 surrender at TC >= 0 (which is better)
+    #    When surrender unavailable: basic strategy = H, no stand deviation needed
 
     # 3. 10,10 vs 5: Split at TC >= +5
     Deviation("pair", 10, 5, Action.SPLIT, 5, ">="),
@@ -181,16 +174,6 @@ FAB_4_SURRENDERS = [
 ]
 
 
-
-# ── Composition-dependent sentinel objects ─────────────────────────────────────
-# Used only as last_deviation_used markers so get_action_with_info() can
-# surface composition-dependent plays to the UI with proper descriptions.
-# They are NOT added to the main deviations list — they are matched inline
-# inside get_action() before the I18 loop runs.
-_COMP_DEV_10_6 = Deviation("hard", 16, 10, Action.STAND, 0,  ">=")
-_COMP_DEV_9_7  = Deviation("hard", 16, 10, Action.STAND, 1,  ">=")
-
-
 class DeviationEngine:
     """
     Combines Illustrious 18 + Fab 4 with basic strategy.
@@ -219,40 +202,37 @@ class DeviationEngine:
 
         self.last_deviation_used = None
 
-        # ── 0. Composition-dependent: Hard 16 vs Dealer 10 (2-card hands only) ──
-        # Standard I18 says: Hard 16 vs 10 → Stand at TC ≥ 0.
-        # But "Hard 16" covers TWO meaningfully different hands:
-        #   • 10+6 — the 10 is already out; fewer 10s remain → Stand is better
-        #            even at TC = 0 because one large card is already in your hand.
-        #   • 9+7  — neither card removes a 10; shoe composition unchanged relative
-        #            to TC → the standard Stand threshold is TC ≥ +1, not 0.
-        # This matters: at TC exactly 0, the two hands have opposite correct plays.
-        # Only applies to exactly 2 non-pair cards totalling 16 vs dealer 10.
+        # ── 0. Composition-dependent: Hard 16 vs 10 ───────────────────────
+        # Only applies to exactly 2-card hard 16 vs dealer 10-value.
+        # Differentiation (Wong/Griffin):
+        #   10+6  → Stand at TC ≥  0  (removes a 10, slightly improves remaining deck)
+        #   9+7   → Stand at TC ≥ +1  (both mid-cards; need stronger count to stand)
+        # Multi-card 16 is NOT composition-dependent — falls through to generic I18.
         if (len(hand.cards) == 2
                 and not hand.is_pair
                 and not hand.is_soft
                 and hand.best_value == 16
                 and dealer_upcard.count_key == 10):
-
-            card_values = sorted(c.value for c in hand.cards)  # e.g. [6, 10] or [7, 9]
-
-            if card_values == [6, 10]:
-                # 10+6: Ten already dealt from shoe → stand at TC ≥ 0 (standard I18)
-                if true_count >= 0 and Action.STAND in available_actions:
-                    self.last_deviation_used = _COMP_DEV_10_6
-                    return Action.STAND
-            elif card_values == [7, 9]:
-                # 9+7: No ten removed → correct threshold is TC ≥ +1 (one step higher)
-                if true_count >= 1 and Action.STAND in available_actions:
-                    self.last_deviation_used = _COMP_DEV_9_7
-                    return Action.STAND
-                elif true_count < 1:
-                    # Explicitly HIT — must block the I18 Hard 16 vs 10 Stand at TC≥0
-                    # which would otherwise fire incorrectly for this composition
-                    return Action.HIT
-            # Any other 2-card 16 (e.g. 8+8 is a pair, handled elsewhere;
-            # edge cases like A+5 soft 16 filtered by is_soft above)
-            # falls through to the normal I18 loop below.
+            c1, c2 = hand.cards[0].count_key, hand.cards[1].count_key
+            is_ten_six = (c1 == 10 and c2 == 6) or (c1 == 6 and c2 == 10)
+            threshold = 0 if is_ten_six else 1  # 9+7 needs TC ≥ +1
+            import logging as _log
+            _log.getLogger(__name__).debug(
+                "[COMP-DEP] Hard 16 vs 10: %s  TC=%.2f  threshold=%d",
+                "10+6" if is_ten_six else "9+7", true_count, threshold
+            )
+            if true_count >= threshold and Action.STAND in available_actions:
+                # Re-use the existing I18 deviation object for traceability
+                self.last_deviation_used = next(
+                    d for d in ILLUSTRIOUS_18
+                    if d.hand_value == 16 and d.dealer_upcard == 10
+                )
+                return Action.STAND
+            else:
+                # Explicitly HIT — skip the generic I18 entry which would STAND at TC≥0
+                # for 9+7 when TC is between 0 and +1.
+                return self.basic_strategy.get_action(
+                    hand, dealer_upcard, available_actions, num_splits)
 
         # ── 1. FAB 4: Count-based surrender overrides ──────────────────────
         if Action.SURRENDER in available_actions:

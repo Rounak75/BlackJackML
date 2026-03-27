@@ -218,6 +218,37 @@ class CardCounter:
         """
         return round(self.true_count + self.ace_adjustment + self.ten_adjustment, 2)
 
+    @property
+    def shoe_quality_score(self) -> int:
+        """
+        Composite shoe quality score (0-100). Higher = better for the player.
+
+        Weights:
+          60% — True Count  (primary signal; clamped -5..+5 mapped to 0..100)
+          25% — Penetration (deeper shoe = count more reliable = higher quality)
+          15% — Ace richness (ace-rich shoe improves BJ probability)
+
+        Thresholds:  0-40 Bad (Red)  |  40-70 Neutral (Yellow)  |  70-100 Strong (Green)
+        """
+        tc_clamped = max(-5.0, min(5.0, self.true_count))
+        tc_score   = (tc_clamped + 5.0) / 10.0 * 100.0   # -5..+5  -> 0..100
+        pen_score  = self.penetration * 100.0              # 0..1    -> 0..100
+        # ace_adjustment typically -0.5..+0.5; normalise to 0..1 then scale
+        ace_norm   = max(0.0, min(1.0, (self.ace_adjustment + 1.0) / 2.0))
+        ace_score  = ace_norm * 100.0
+
+        raw   = 0.60 * tc_score + 0.25 * pen_score + 0.15 * ace_score
+        score = max(0, min(100, int(raw)))
+
+        import logging as _log
+        _log.getLogger(__name__).debug(
+            "[SHOE-QUALITY] tc=%.2f(score=%.1f) pen=%.2f(score=%.1f) "
+            "ace_adj=%.2f(score=%.1f) -> raw=%.1f final=%d",
+            self.true_count, tc_score, self.penetration, pen_score,
+            self.ace_adjustment, ace_score, raw, score,
+        )
+        return score
+
     def get_side_count_state(self) -> dict:
         """Full side count state for the frontend."""
         return {
@@ -296,84 +327,6 @@ class CardCounter:
             remaining[rank_val] = max(left, 0) / total_remaining
 
         return remaining
-
-    @property
-    def shoe_quality_score(self) -> dict:
-        """
-        Feature 4 — Shoe Quality Score (0–100).
-
-        A single number combining the four signals that determine how
-        profitable and reliable the current shoe is for advantage play.
-        Uses ONLY existing properties — no new tracking state.
-
-        Component weights (sum to 100):
-          TC component     (40 pts) — dominant signal; TC drives EV directly.
-                                      Scaled: TC=-4→0pts, TC=0→20pts, TC=+5→40pts.
-          Penetration      (25 pts) — deeper shoe = more reliable TC.
-                                      Scaled: 0%→0pts, 75%→18.75pts, 100%→25pts.
-          Ace richness     (20 pts) — Ace surplus above expectation adds EV.
-                                      Neutral = 10pts; +1 ace/deck above = +5pts.
-                                      Clamped [0, 20].
-          Ten richness     (15 pts) — Ten surplus above expectation adds EV
-                                      (independently from TC).
-                                      Neutral = 7.5pts. Clamped [0, 15].
-
-        Returns:
-            {
-              "score":        78,       # 0–100
-              "label":        "GOOD",   # POOR / FAIR / GOOD / EXCELLENT
-              "components": {
-                "true_count":   28.0,
-                "penetration":  18.75,
-                "ace_richness": 12.0,
-                "ten_richness": 8.5,
-              }
-            }
-        """
-        # ── TC component (0–40) ───────────────────────────────────────────────
-        # Linear from TC=-4 (0pts) to TC=0 (20pts) to TC=+5 (40pts).
-        # Clamped so extreme TC values don't push above 40 or below 0.
-        tc = self.true_count
-        tc_score = max(0.0, min(40.0, (tc + 4) / 9 * 40))
-
-        # ── Penetration component (0–25) ──────────────────────────────────────
-        # Linear: 0% dealt = 0pts, 100% dealt = 25pts.
-        pen_score = self.penetration * 25.0
-
-        # ── Ace richness component (0–20) ─────────────────────────────────────
-        # Neutral (actual = expected) → 10pts.
-        # Each extra ace per remaining deck above expectation → +5pts.
-        # Each ace per deck below → -5pts. Clamped [0, 20].
-        decks_left = max(self.decks_remaining, 0.25)
-        extra_aces_per_deck = (self.aces_remaining - self.aces_expected) / decks_left
-        ace_score = max(0.0, min(20.0, 10.0 + extra_aces_per_deck * 5.0))
-
-        # ── Ten richness component (0–15) ─────────────────────────────────────
-        # Neutral → 7.5pts. Each extra ten per remaining deck → +2pts. Clamped [0,15].
-        extra_tens_per_deck = (self.tens_remaining - self.tens_expected) / decks_left
-        ten_score = max(0.0, min(15.0, 7.5 + extra_tens_per_deck * 2.0))
-
-        total = tc_score + pen_score + ace_score + ten_score  # max possible = 100
-
-        if total >= 75:
-            label = "EXCELLENT"
-        elif total >= 55:
-            label = "GOOD"
-        elif total >= 35:
-            label = "FAIR"
-        else:
-            label = "POOR"
-
-        return {
-            "score": round(total, 1),
-            "label": label,
-            "components": {
-                "true_count":   round(tc_score, 2),
-                "penetration":  round(pen_score, 2),
-                "ace_richness": round(ace_score, 2),
-                "ten_richness": round(ten_score, 2),
-            },
-        }
 
     def get_state_vector(self) -> List[float]:
         """

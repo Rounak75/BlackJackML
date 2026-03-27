@@ -478,6 +478,9 @@ function App() {
           {/* AI action recommendation */}
           <ActionPanel recommendation={rec} count={count} />
 
+          {/* Composition-dependent strategy alert for Hard 16 vs 10 */}
+          <CompDepAlert recommendation={rec} trueCount={count?.true} />
+
           {/* Bet sizing — Kelly criterion, custom bet, auto-resolve */}
           <BettingPanel
             betting={betting}
@@ -608,6 +611,9 @@ function App() {
 
           {/* Stop-loss / stop-win alerts with audio */}
           <StopAlerts session={session} currency={currency} />
+
+          {/* N₀ + Shoe Quality Score */}
+          <AnalyticsPanel analytics={gameState?.analytics} />
         </div>
 
       </div>

@@ -82,6 +82,55 @@ class BettingEngine:
         self.aggressive_mode = aggressive_mode  # Fix #1: default off
         self.stealth_mode = stealth_mode        # Fix #5: default off
         self._last_bet: float = self.config.TABLE_MIN  # for stealth smoothing
+        self.config = config or BettingConfig()
+        self.bankroll = self.config.INITIAL_BANKROLL
+        self.session_profit = 0.0
+        self.max_bankroll = self.bankroll
+        self.min_bankroll = self.bankroll
+        self.bet_history = []
+        self.hands_played = 0
+
+        # ── Session stop thresholds ────────────────────────────────────────
+        # Configurable server-side limits. The frontend JS mirrors these for
+        # display, but the authoritative should_leave flag lives here so the
+        # overlay, REST clients, and logging all see the same state.
+        # Defaults: stop-loss = -50 units, stop-win = +30 units.
+        self.stop_loss = -(self.config.BASE_UNIT * 50)   # e.g. -₹5,000
+        self.stop_win  =  (self.config.BASE_UNIT * 30)   # e.g. +₹3,000
+        self._stop_triggered: Optional[str] = None       # None | 'loss' | 'win'
+
+    def set_stop_thresholds(self, stop_loss: float, stop_win: float) -> None:
+        """Update stop-loss / stop-win limits at runtime (e.g. from frontend settings)."""
+        if stop_loss >= 0:
+            raise ValueError(f"stop_loss must be negative, got {stop_loss}")
+        if stop_win <= 0:
+            raise ValueError(f"stop_win must be positive, got {stop_win}")
+        self.stop_loss = stop_loss
+        self.stop_win  = stop_win
+        # Re-evaluate triggered state with new thresholds
+        self._stop_triggered = self._evaluate_stop()
+
+    def _evaluate_stop(self) -> Optional[str]:
+        """Return 'loss', 'win', or None based on current session_profit."""
+        if self.session_profit <= self.stop_loss:
+            return 'loss'
+        if self.session_profit >= self.stop_win:
+            return 'win'
+        return None
+
+    @property
+    def should_leave(self) -> bool:
+        """True when either stop threshold has been crossed."""
+        return self._stop_triggered is not None
+
+    @property
+    def stop_reason(self) -> Optional[str]:
+        """'STOP_LOSS', 'STOP_WIN', or None."""
+        if self._stop_triggered == 'loss':
+            return 'STOP_LOSS'
+        if self._stop_triggered == 'win':
+            return 'STOP_WIN'
+        return None
 
     def get_optimal_bet(self, true_count: float, advantage: float = None, penetration: float = 0.75) -> float:
         """
@@ -90,18 +139,6 @@ class BettingEngine:
         Uses a combination of:
         1. Count-based bet spread (primary)
         2. Kelly Criterion (secondary, for sizing validation)
-
-        FIX #1 — Conservative default:
-            Always takes min(spread, kelly) unless aggressive_mode=True.
-            Old code took max() at TC>=3, which could produce bets 1.5-2×
-            above optimal Kelly as the bankroll shrinks.
-
-        FIX #5 — Stealth mode:
-            When stealth_mode=True:
-              • Applies ±10% random jitter to the final bet
-              • Smooths the transition: new_bet is capped at 2× the previous
-                bet to avoid a single-step 1→8 unit jump that flags surveillance
-              • Penetration spike (85%+ → ×1.25) is softened to ×1.10
         """
         if advantage is None:
             # House edge 0.50% with perfect basic strategy (8-deck S17, RTP 99.50%)
@@ -129,6 +166,9 @@ class BettingEngine:
 
         # Penetration multiplier — the deeper into the shoe, the more reliable
         # the true count, so scale bets up confidently at high penetration.
+        # Below 50% penetration: scale down (count unreliable)
+        # 50-70% penetration: neutral
+        # Above 70% penetration: scale up (count very reliable)
         if true_count > 0:
             if self.stealth_mode:
                 # ── FIX #5: Soften the 85%-depth spike ───────────────────────
@@ -152,8 +192,12 @@ class BettingEngine:
         # Don't bet more than we can afford
         optimal = min(optimal, self.bankroll)
 
-        # Round to nearest unit
-        optimal = round(optimal / self.config.BASE_UNIT) * self.config.BASE_UNIT or self.config.TABLE_MIN
+        # FIX: use math.floor (not round) so the bet never exceeds the
+        # bankroll guard applied above.  round(1.5) = 2 under Python 3
+        # banker's rounding, which would produce 2 × BASE_UNIT = ₹200 on a
+        # ₹150 bankroll — an overbet.  floor(1.5) = 1 → ₹100 — safe.
+        floored = math.floor(optimal / self.config.BASE_UNIT) * self.config.BASE_UNIT
+        optimal = floored or self.config.TABLE_MIN
 
         # ── FIX #5: Stealth jitter + ramp smoothing ───────────────────────────
         if self.stealth_mode:
@@ -170,7 +214,8 @@ class BettingEngine:
 
             # Re-clamp and re-round after jitter
             optimal = max(self.config.TABLE_MIN, min(optimal, self.config.TABLE_MAX))
-            optimal = round(optimal / self.config.BASE_UNIT) * self.config.BASE_UNIT or self.config.TABLE_MIN
+            floored2 = math.floor(optimal / self.config.BASE_UNIT) * self.config.BASE_UNIT
+            optimal = floored2 or self.config.TABLE_MIN
 
         self._last_bet = optimal
         return optimal
@@ -240,23 +285,32 @@ class BettingEngine:
             "profit": profit,
             "bankroll": self.bankroll,
         })
+        # Re-evaluate stop thresholds after every hand.
+        # Only latch the first trigger — do not flip from 'loss' to 'win'
+        # mid-session if the bankroll swings back.
+        if self._stop_triggered is None:
+            self._stop_triggered = self._evaluate_stop()
+            if self._stop_triggered:
+                import logging as _log
+                _log.getLogger(__name__).warning(
+                    "[STOP] %s triggered — session_profit=%.2f  threshold=%.2f  "
+                    "bankroll=%.2f  hands=%d",
+                    self.stop_reason, self.session_profit,
+                    self.stop_loss if self._stop_triggered == 'loss' else self.stop_win,
+                    self.bankroll, self.hands_played,
+                )
 
     def risk_of_ruin(self) -> float:
         """
         Estimate risk of ruin using the formula:
         RoR = ((1 - edge) / (1 + edge)) ^ (bankroll / unit)
 
-        FIX #3 — Dynamic edge estimate (AUDIT finding #3):
-            OLD: avg_edge = 0.005 hardcoded — never changed regardless of
-                 how badly the session was going. After 50 losing hands the
-                 RoR still read identically to a fresh session. Misleading
-                 for any live money decision.
-            NEW: Edge is estimated from actual session results using a rolling
-                 _ROR_WINDOW (200) hand average. For sessions with fewer than
-                 20 hands we blend with the theoretical 0.5% prior so the
-                 formula doesn't explode on tiny samples.
+        FIX #3 — Dynamic edge estimate:
+            OLD: avg_edge = 0.005 hardcoded — never reflected a losing session.
+            NEW: Edge estimated from actual session results using a rolling
+                 _ROR_WINDOW (200) hand average. Blended with the theoretical
+                 0.5% prior so the formula stays stable on small samples.
         """
-        # ── Dynamic edge from live session data ──────────────────────────────
         window = self.bet_history[-_ROR_WINDOW:] if self.bet_history else []
         n = len(window)
 
@@ -264,14 +318,11 @@ class BettingEngine:
             total_wagered = sum(h["bet"]    for h in window)
             total_profit  = sum(h["profit"] for h in window)
             session_edge  = total_profit / total_wagered if total_wagered > 0 else 0.0
-            # Smooth toward theoretical prior as sample shrinks
-            blend = min(n / _ROR_WINDOW, 1.0)           # 0→1 as n grows
-            prior_edge = 0.005                           # theoretical 0.5%
-            avg_edge = blend * session_edge + (1 - blend) * prior_edge
+            blend     = min(n / _ROR_WINDOW, 1.0)   # 0→1 as n grows to 200
+            avg_edge  = blend * session_edge + (1 - blend) * 0.005
         else:
             avg_edge = 0.005  # not enough data — use theoretical prior
 
-        # RoR formula only meaningful with a positive edge
         if avg_edge <= 0:
             return 1.0   # negative or zero edge → certain ruin eventually
 
@@ -285,26 +336,6 @@ class BettingEngine:
 
     def get_session_stats(self) -> Dict:
         """Get session statistics."""
-        # ── Feature 1: Stop-loss / Stop-win thresholds ────────────────────────
-        # Expressed in units so they scale automatically with BASE_UNIT changes.
-        # Defaults: leave if down 20 units OR up 50 units from session start.
-        # Override by setting these attributes on the engine instance.
-        stop_loss_units = getattr(self, 'stop_loss_units', -20)   # e.g. -20 units
-        stop_win_units  = getattr(self, 'stop_win_units',   50)   # e.g. +50 units
-        stop_loss_amount = stop_loss_units * self.config.BASE_UNIT
-        stop_win_amount  = stop_win_units  * self.config.BASE_UNIT
-
-        session_profit = self.session_profit  # profit since engine was created
-
-        should_leave = False
-        leave_reason = None
-        if session_profit <= stop_loss_amount:
-            should_leave = True
-            leave_reason = "STOP_LOSS"
-        elif session_profit >= stop_win_amount:
-            should_leave = True
-            leave_reason = "STOP_WIN"
-
         if not self.bet_history:
             return {
                 "hands_played": 0, "total_profit": 0, "avg_bet": 0,
@@ -313,84 +344,94 @@ class BettingEngine:
                 "wins": 0, "losses": 0, "pushes": 0,
                 "risk_of_ruin": self.risk_of_ruin(), "hourly_rate": 0,
                 "max_bet": 0,
-                # Feature 1 — always present even before first hand
-                "should_leave":  should_leave,
-                "leave_reason":  leave_reason,
-                "stop_loss_at":  stop_loss_amount,
-                "stop_win_at":   stop_win_amount,
-                # Feature 3 — N0 not meaningful yet
-                "n0":            None,
+                "n0": None,
                 "n0_interpretation": "Need more hands to estimate N₀",
+                "should_leave": self.should_leave,
+                "stop_reason":  self.stop_reason,
+                "stop_loss":    self.stop_loss,
+                "stop_win":     self.stop_win,
+                # Aliases for frontend backward compat
+                "leave_reason": self.stop_reason,
+                "stop_loss_at": self.stop_loss,
+                "stop_win_at":  self.stop_win,
             }
 
-        bets    = [h["bet"]    for h in self.bet_history]
+        bets = [h["bet"] for h in self.bet_history]
         profits = [h["profit"] for h in self.bet_history]
 
-        wins   = sum(1 for p in profits if p > 0)
+        wins = sum(1 for p in profits if p > 0)
         losses = sum(1 for p in profits if p < 0)
         pushes = sum(1 for p in profits if p == 0)
 
         avg_bet = sum(bets) / len(bets)
 
-        # ── Feature 3: N₀ — Variance Convergence Tracker ─────────────────────
-        # N₀ = variance_per_hand / edge_per_hand²
-        #
-        # Interpretation: after N₀ hands, the expected profit (edge × N₀) equals
-        # one standard deviation of the profit distribution (√(variance × N₀)).
-        # Below N₀ hands, variance dominates and losing streaks are normal even
-        # with a genuine positive edge. Above N₀ hands, EV dominates.
-        #
-        # variance_per_hand: We use realized sample variance of (profit / bet)
-        # normalised by avg_bet² so N₀ is expressed in hands, not dollars.
-        # edge_per_hand: session EV per unit bet (dynamic, same source as RoR fix).
-        n0       = None
-        n0_interp = "Need at least 20 hands to estimate N₀"
+        # ── N₀ (variance convergence tracker) ──────────────────────────────
+        # N₀ = variance / edge²
+        # Uses realized sample variance of (profit / bet) ratios — session-specific,
+        # not a fixed constant. This captures real play conditions: double-downs,
+        # blackjacks, and splits all shift actual variance away from the 1.33 theory.
+        n0 = None
+        n0_interpretation = "Need at least 20 hands to estimate N₀"
 
         if len(profits) >= 20:
             total_wagered = sum(bets)
-            edge_per_hand = (self.session_profit / total_wagered) if total_wagered > 0 else 0.0
-            # Realized variance of profit outcomes (normalized to unit bets)
+            edge_per_hand = self.session_profit / total_wagered if total_wagered > 0 else 0.0
             unit_profits  = [p / b for p, b in zip(profits, bets) if b > 0]
             mean_unit     = sum(unit_profits) / len(unit_profits)
             variance      = sum((x - mean_unit) ** 2 for x in unit_profits) / len(unit_profits)
+
+            import logging as _log
+            _log.getLogger(__name__).debug(
+                "[N0] hands=%d  edge_per_hand=%.5f  variance=%.4f",
+                self.hands_played, edge_per_hand, variance
+            )
 
             if abs(edge_per_hand) > 1e-6 and variance > 0:
                 n0 = round(variance / (edge_per_hand ** 2))
                 played = self.hands_played
                 if played >= n0:
-                    n0_interp = (f"✅ Past N₀ ({n0:,} hands) — EV is dominating variance. "
-                                 f"Your edge is statistically confirmed.")
+                    n0_interpretation = (
+                        f"✅ Past N₀ ({n0:,} hands) — EV is dominating variance. "
+                        f"Your edge is statistically confirmed."
+                    )
                 else:
                     remaining = n0 - played
-                    n0_interp = (f"⏳ {remaining:,} more hands until EV dominates variance "
-                                 f"(N₀ = {n0:,}). Losing streaks are still normal.")
+                    n0_interpretation = (
+                        f"⏳ {remaining:,} more hands until EV dominates variance "
+                        f"(N₀ = {n0:,}). Losing streaks are still normal."
+                    )
             elif edge_per_hand <= 0:
-                n0_interp = "⚠ Session edge is ≤ 0 — N₀ undefined. Negative edge means variance never 'converges' to profit."
+                n0_interpretation = (
+                    "⚠ Session edge is ≤ 0 — N₀ undefined. "
+                    "Negative edge means variance never 'converges' to profit."
+                )
             else:
-                n0_interp = "N₀ calculation requires non-zero variance."
+                n0_interpretation = "N₀ calculation requires non-zero variance."
 
         return {
-            "hands_played":  self.hands_played,
-            "total_profit":  self.session_profit,
-            "bankroll":      self.bankroll,
-            "max_bankroll":  self.max_bankroll,
-            "min_bankroll":  self.min_bankroll,
-            "avg_bet":       avg_bet,
-            "max_bet":       max(bets),
-            "win_rate":      wins / len(profits) if profits else 0,
-            "wins":          wins,
-            "losses":        losses,
-            "pushes":        pushes,
-            "risk_of_ruin":  self.risk_of_ruin(),
-            "hourly_rate":   (self.session_profit / max(self.hands_played, 1)) * 80,
-            # ── Feature 1: Stop-loss / stop-win ───────────────────────────────
-            "should_leave":  should_leave,
-            "leave_reason":  leave_reason,       # "STOP_LOSS" | "STOP_WIN" | None
-            "stop_loss_at":  stop_loss_amount,   # the threshold in currency units
-            "stop_win_at":   stop_win_amount,
-            # ── Feature 3: N₀ variance convergence ───────────────────────────
-            "n0":            n0,
-            "n0_interpretation": n0_interp,
+            "hands_played": self.hands_played,
+            "total_profit": self.session_profit,
+            "bankroll": self.bankroll,
+            "max_bankroll": self.max_bankroll,
+            "min_bankroll": self.min_bankroll,
+            "avg_bet": avg_bet,
+            "max_bet": max(bets),
+            "win_rate": wins / len(profits) if profits else 0,
+            "wins": wins,
+            "losses": losses,
+            "pushes": pushes,
+            "risk_of_ruin": self.risk_of_ruin(),
+            "hourly_rate": (self.session_profit / max(self.hands_played, 1)) * 80,
+            "n0": n0,
+            "n0_interpretation": n0_interpretation,
+            "should_leave": self.should_leave,
+            "stop_reason":  self.stop_reason,
+            "stop_loss":    self.stop_loss,
+            "stop_win":     self.stop_win,
+            # Aliases — keep backward compat with any frontend reading old key names
+            "leave_reason": self.stop_reason,
+            "stop_loss_at": self.stop_loss,
+            "stop_win_at":  self.stop_win,
         }
 
     def get_bet_recommendation(self, true_count: float, penetration: float = 0.75) -> Dict:

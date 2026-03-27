@@ -688,6 +688,35 @@ def get_full_state():
             dev = recommendation["deviation_info"]
             dev["description_short"] = f"TC {dev['direction']} {dev['tc_threshold']}"
 
+        # ── Composition-dependent 16 vs 10 metadata ───────────────────────
+        # Expose which sub-case applies so the frontend can explain it clearly.
+        comp_dep_16 = None
+        cards = current_player_hand.cards
+        if (len(cards) == 2
+                and not current_player_hand.is_pair
+                and not current_player_hand.is_soft
+                and current_player_hand.best_value == 16
+                and dealer_upcard_card.count_key == 10):
+            c1, c2 = cards[0].count_key, cards[1].count_key
+            is_ten_six = (c1 == 10 and c2 == 6) or (c1 == 6 and c2 == 10)
+            threshold = 0 if is_ten_six else 1
+            import logging as _log
+            _log.getLogger('strategy.comp_dep').debug(
+                "[COMP-DEP-META] hand=%s+%s  is_ten_six=%s  tc=%.2f  threshold=%d  action=%s",
+                cards[0], cards[1], is_ten_six, tc, threshold, recommendation["action"]
+            )
+            comp_dep_16 = {
+                "active":      True,
+                "hand_type":   "10+6" if is_ten_six else "9+7",
+                "threshold":   threshold,
+                "tc":          round(tc, 2),
+                "description": (
+                    f"{'10+6' if is_ten_six else '9+7'} vs 10 — "
+                    f"Stand at TC ≥ {'0' if is_ten_six else '+1'}"
+                ),
+            }
+        recommendation["comp_dep_16"] = comp_dep_16
+
     # ── ML model recommendation ───────────────────────────────────────────
     ml_rec = _get_ml_recommendation(current_player_hand, dealer_upcard_card)
     if ml_rec and ml_rec["is_confident"] and recommendation is not None:
@@ -754,6 +783,11 @@ def get_full_state():
         # insurance: separate from side_bets — it is a game mechanic.
         "insurance":         _get_insurance_data(dealer_upcard_card),
         "ml_available":      _ml_available,
+        # ── Analytics: N₀ + Shoe Quality (new) ───────────────────────────
+        "analytics": {
+            "n0":           betting_engine.get_session_stats().get("n0"),
+            "shoe_quality": counter.shoe_quality_score,
+        },
     }
 
 
@@ -1070,6 +1104,15 @@ def handle_record_result(data):
     profit = data.get('profit', 0)
     betting_engine.record_result(bet, profit)
     session_history.append({'bet': bet, 'profit': profit})
+
+    # ── Stop-loss / stop-win logging ──────────────────────────────────────
+    stats = betting_engine.get_session_stats()
+    total_profit = stats['total_profit']
+    import logging as _log
+    _slog = _log.getLogger('session.stops')
+    _slog.info("[RESULT] bet=%.2f profit=%.2f  session_profit=%.2f  bankroll=%.2f",
+               bet, profit, total_profit, stats['bankroll'])
+
     _safe_emit('state_update', get_full_state())
 
 
