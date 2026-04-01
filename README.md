@@ -967,7 +967,7 @@ Restart the app after saving. No retraining needed.
 The training pipeline now supports two modes controlled by the `--system` flag:
 
 | Command | What it trains on | Best for |
-|---------|-------------------|---------|
+|---------|-------------------|----------|
 | `python main.py train --hands 1000000` | All 4 systems equally (default) | General use — model works correctly regardless of which system you switch to in the app |
 | `python main.py train --hands 1000000 --system hi_lo` | Hi-Lo only | Dedicated Hi-Lo players who never switch systems |
 | `python main.py train --hands 1000000 --system omega_ii` | Omega II only | Advanced players locked to Omega II |
@@ -982,7 +982,7 @@ Omega II and Zen use ±2 card tags, so their raw running counts and true counts 
 The fix is normalisation. Each system's counts are divided by system-specific scalars before entering the network:
 
 | System | True count ÷ | Running count ÷ |
-|--------|-------------|----------------|
+|--------|--------------|-----------------|
 | Hi-Lo | 10 | 20 |
 | KO | 10 | 20 |
 | Omega II | 20 | 40 |
