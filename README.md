@@ -25,25 +25,26 @@
 8. [Training the Strategy AI](#-training-the-strategy-ai)
 9. [Simulating Strategy Performance](#-simulating-strategy-performance)
 10. [Training the Card Detector (YOLO)](#-training-the-card-detector-yolo)
-11. [Project Structure — Every File Explained](#-project-structure--every-file-explained)
-12. [Customising Settings](#-customising-settings)
-13. [Counting Systems — Switching, Customising, and Training](#-counting-systems--switching-customising-and-training)
-14. [How to Use the Dashboard](#-how-to-use-the-dashboard)
-15. [Three Card Entry Modes](#-three-card-entry-modes)
-16. [Card Routing (Player / Dealer / Seen)](#-card-routing-player--dealer--seen)
-17. [Split Hand Workflow](#-split-hand-workflow)
-18. [Keyboard Shortcuts](#-keyboard-shortcuts)
-19. [Currency Settings](#-currency-settings)
-20. [Editing the Frontend (JS/React files)](#-editing-the-frontend-jsreact-files)
-21. [Running the Tests](#-running-the-tests)
-22. [Desktop Overlay (Live Mode)](#-desktop-overlay-live-mode)
-23. [Illustrious 18 + Fab 4 — Complete Reference](#-illustrious-18--fab-4--complete-reference)
-24. [Dashboard Panels — Analytics, Risk, Stop Alerts, Shuffle Tracker](#-dashboard-panels--analytics-risk-stop-alerts-shuffle-tracker)
-25. [Deployment — Putting It Online](#-deployment--putting-it-online)
-26. [Troubleshooting — Common Errors](#-troubleshooting--common-errors)
-27. [Model Performance & Accuracy](#-model-performance--accuracy)
-28. [Architecture Reference](#-architecture-reference)
-29. [Bug Fix Changelog](#-bug-fix-changelog)
+11. [Training YOLO Completely from Scratch](#-training-yolo-completely-from-scratch)
+12. [Project Structure — Every File Explained](#-project-structure--every-file-explained)
+13. [Customising Settings](#-customising-settings)
+14. [Counting Systems — Switching, Customising, and Training](#-counting-systems--switching-customising-and-training)
+15. [How to Use the Dashboard](#-how-to-use-the-dashboard)
+16. [Three Card Entry Modes](#-three-card-entry-modes)
+17. [Card Routing (Player / Dealer / Seen)](#-card-routing-player--dealer--seen)
+18. [Split Hand Workflow](#-split-hand-workflow)
+19. [Keyboard Shortcuts](#-keyboard-shortcuts)
+20. [Currency Settings](#-currency-settings)
+21. [Editing the Frontend (JS/React files)](#-editing-the-frontend-jsreact-files)
+22. [Running the Tests](#-running-the-tests)
+23. [Desktop Overlay (Live Mode)](#-desktop-overlay-live-mode)
+24. [Illustrious 18 + Fab 4 — Complete Reference](#-illustrious-18--fab-4--complete-reference)
+25. [Dashboard Panels — Analytics, Risk, Stop Alerts, Shuffle Tracker](#-dashboard-panels--analytics-risk-stop-alerts-shuffle-tracker)
+26. [Deployment — Putting It Online](#-deployment--putting-it-online)
+27. [Troubleshooting — Common Errors](#-troubleshooting--common-errors)
+28. [Model Performance & Accuracy](#-model-performance--accuracy)
+29. [Architecture Reference](#-architecture-reference)
+30. [Bug Fix Changelog](#-bug-fix-changelog)
 
 ---
 
@@ -648,6 +649,413 @@ The system automatically falls back to:
 2. **Tesseract OCR** reads the rank text (A, K, Q, J, 10, 9…) from each card
 
 This fallback achieves ~85% accuracy on clean screenshots. For blurry or dark images it can drop to ~60%. YOLO achieves 95%+ on the same images, so training it is worthwhile if you plan to use screenshot or live scan modes.
+
+---
+
+## 🔁 Training YOLO Completely from Scratch
+
+This section covers the **full end-to-end process** for someone starting with nothing — no dataset, no model weights, no prior YOLO knowledge. Follow every step in order.
+
+### When should you train from scratch?
+
+- You are setting up the project for the first time and want card detection to work
+- You deleted `models/card_detector.pt` and need to recreate it
+- You changed the card rendering style or background presets in `generate_dataset.py` and want to retrain on the new images
+- Your detection accuracy is poor and you want a completely clean new model (not a resumed run)
+
+### Prerequisites — what you need before starting
+
+**1. Python packages installed** — run this if you haven't already:
+
+```bash
+pip install -r requirements.txt
+```
+
+The `ultralytics` package (which provides YOLOv8) is included in `requirements.txt`. Verify it installed:
+
+```bash
+python -c "from ultralytics import YOLO; print('YOLOv8 ready')"
+```
+
+**2. Disk space** — the dataset and model files take:
+
+| Item | Size |
+|------|------|
+| 10,000 generated images (minimum) | ~800 MB |
+| 25,000 generated images (recommended) | ~2 GB |
+| Pretrained YOLOv8s weights (auto-downloaded) | ~22 MB |
+| Trained model output (`card_detector.pt`) | ~11 MB |
+| Total (10k dataset, recommended) | ~850 MB |
+
+**3. Internet connection (one-time only)** — the first time you run `train_yolo.py`, YOLOv8 automatically downloads the pretrained ImageNet weights for the model size you choose (e.g. `yolov8s.pt`). This download is ~22 MB and is cached in `~/.cache/ultralytics/`. All subsequent runs use the cached file — no internet needed after the first time.
+
+If you are on a machine with no internet, pre-download the weights file manually from [https://github.com/ultralytics/assets/releases](https://github.com/ultralytics/assets/releases) and place it in the project root as `yolov8s.pt`.
+
+---
+
+### Step 1 — Clean slate (skip if this is your first time)
+
+If you have a previous training run and want to start completely fresh, delete the old files first. **Skip this step entirely if you have never trained before.**
+
+**Windows (PowerShell):**
+```powershell
+Remove-Item -Recurse -Force yolo\dataset         -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force yolo\runs             -ErrorAction SilentlyContinue
+Remove-Item              yolo\best_card_model.pt  -ErrorAction SilentlyContinue
+Remove-Item              models\card_detector.pt  -ErrorAction SilentlyContinue
+```
+
+**macOS / Linux:**
+```bash
+rm -rf yolo/dataset
+rm -rf yolo/runs
+rm -f  yolo/best_card_model.pt
+rm -f  models/card_detector.pt
+```
+
+After deleting, confirm nothing remains:
+```bash
+ls yolo/
+# Should only show: generate_dataset.py  train_yolo.py
+```
+
+---
+
+### Step 2 — Generate the synthetic training dataset
+
+The dataset generator creates thousands of artificial casino-table scenes programmatically. Each scene contains 1–7 playing cards rendered with randomised sizes, angles, positions, lighting, and backgrounds. No real card photos or internet access required.
+
+**What the generator creates:**
+
+```
+yolo/dataset/
+├── images/
+│   ├── train/   ← 80% of images (used to train the model)
+│   ├── val/     ← 10% of images (checked during training to prevent overfitting)
+│   └── test/    ← 10% of images (final accuracy measurement after training)
+├── labels/
+│   ├── train/   ← one .txt file per training image listing all cards + positions
+│   ├── val/     ← same for validation images
+│   └── test/    ← same for test images
+├── dataset.yaml ← the config file that tells YOLO where the data is
+└── stats.json   ← summary of how many instances of each card class were generated
+```
+
+Each label file contains one line per visible card in that image, in YOLO format:
+```
+class_id  centre_x  centre_y  width  height
+```
+All values are normalised to `[0, 1]` relative to the image dimensions.
+
+**Choosing the number of images:**
+
+| `--images` value | Generation time | Disk space | Detection accuracy |
+|-----------------|----------------|-----------|-------------------|
+| `5000` | ~2 min | ~400 MB | ~90% mAP — quick test only |
+| `10000` | ~5 min | ~800 MB | ~93% mAP — good for most use |
+| `25000` | ~12 min | ~2 GB | **~96% mAP — recommended** |
+| `50000` | ~25 min | ~4 GB | ~97%+ mAP — diminishing returns |
+
+**Run the generator:**
+
+```bash
+# Minimum — good for testing the pipeline works:
+python yolo/generate_dataset.py --images 10000
+
+# Recommended — better accuracy with manageable time and disk:
+python yolo/generate_dataset.py --images 25000
+
+# Quick test to verify the generator itself works (takes ~1 minute):
+python yolo/generate_dataset.py --images 1000 --output yolo/test_dataset
+```
+
+You will see a progress bar like this as it runs:
+```
+============================================================
+  SYNTHETIC CARD DATASET GENERATOR
+============================================================
+  Output:       yolo/dataset
+  Total images: 10,000
+  Train:        8,000  (80%)
+  Val:          1,000  (10%)
+  Test:         1,000  (10%)
+  Classes:      52  (all 52 cards)
+  Resolution:   640×480
+  Font: DejaVuSans-Bold.ttf
+
+  Generating train: 8,000 images…
+    [████████████████████] 8,000/8,000  (100%)
+
+  Generating val: 1,000 images…
+    [████████████████████] 1,000/1,000  (100%)
+
+  Generating test: 1,000 images…
+    [████████████████████] 1,000/1,000  (100%)
+
+  ✅  Dataset complete!
+  Total label instances: 31,847
+  Labels per class: min=521  max=682  avg=612
+  Config file: yolo/dataset/dataset.yaml
+
+  Next step:
+    python yolo/train_yolo.py
+============================================================
+```
+
+**Verify the dataset was created correctly:**
+```bash
+# Check the folder structure:
+ls yolo/dataset/images/train/ | wc -l   # should equal 80% of your --images value
+ls yolo/dataset/images/val/   | wc -l   # should equal 10%
+ls yolo/dataset/images/test/  | wc -l   # should equal 10%
+
+# Make sure the config file exists:
+cat yolo/dataset/dataset.yaml            # should list 52 class names
+```
+
+If any folder is empty or `dataset.yaml` is missing, re-run the generator.
+
+---
+
+### Step 3 — Train the YOLO model
+
+Now you train YOLOv8 on the dataset you just generated. The trainer downloads pretrained ImageNet weights, then fine-tunes the network to recognise playing cards.
+
+**Choose your model size based on your hardware:**
+
+| Flag | Model | File size | CPU speed | GPU speed | mAP (25k dataset) |
+|------|-------|----------|----------|----------|-------------------|
+| `--model yolov8n` | Nano | 3 MB | ~20 min | ~3 min | ~91% |
+| `--model yolov8s` | Small | 11 MB | ~50 min | ~8 min | **~96% ← default** |
+| `--model yolov8m` | Medium | 25 MB | ~90 min | ~15 min | ~97% |
+| `--model yolov8l` | Large | 43 MB | ~3 hours | ~25 min | ~98% |
+| `--model yolov8x` | Extra | 68 MB | ~5 hours | ~40 min | ~98%+ |
+
+**If you are on CPU (no GPU):** use `yolov8n` or `yolov8s` with `--imgsz 416` to keep training time reasonable.
+
+**If you have an NVIDIA GPU:** `yolov8s` or `yolov8m` are the sweet spot — much better accuracy at similar time to CPU `yolov8n`.
+
+**Standard training command (recommended for most users):**
+```bash
+python yolo/train_yolo.py
+```
+This uses `yolov8s`, 100 epochs, batch size 16, image size 640 — the best default settings.
+
+**Fast CPU training (weak hardware, no GPU):**
+```bash
+python yolo/train_yolo.py --model yolov8n --imgsz 416 --batch 8
+```
+
+**GPU training for best accuracy:**
+```bash
+python yolo/train_yolo.py --model yolov8m --epochs 150
+```
+
+**Fix DataLoader errors on Windows (if you see multiprocessing crashes):**
+```bash
+python yolo/train_yolo.py --workers 0
+```
+
+**What training looks like** — the terminal prints one line per epoch:
+```
+  Epoch    GPU_mem   box_loss   cls_loss   dfl_loss  Instances       Size
+   1/100      1.2G      1.823      4.231      1.204         45        640: 100%
+   2/100      1.2G      1.612      3.840      1.166         52        640: 100%
+   ...
+  20/100      1.2G      0.821      1.203      0.914         38        640: 100%
+               Class     Images  Instances      Box(P          R      mAP50  mAP50-95)
+                 all       1000      4231      0.954      0.941      0.967      0.821
+```
+
+The `mAP50` column is your key metric — you want this above 0.90. It typically exceeds 0.95 by epoch 30–50 with the recommended settings.
+
+**Early stopping** — training automatically stops if mAP50 does not improve for 20 consecutive epochs. You do not need to sit and watch it. When it finishes, it prints:
+
+```
+============================================================
+  ✅  Training complete in 48.3min
+  Best weights saved to:
+    yolo/best_card_model.pt
+    models/card_detector.pt  ← used by dashboard automatically
+
+  Final metrics:
+    mAP@50:    0.967  (>0.90 = excellent)
+    mAP@50-95: 0.821  (>0.75 = excellent)
+    Precision: 0.954
+    Recall:    0.941
+
+  Next step:
+    python main.py web
+    The dashboard will automatically use the YOLO model.
+============================================================
+```
+
+**Output files created by training:**
+
+| File | What it is |
+|------|-----------|
+| `models/card_detector.pt` | The trained model — this is what the dashboard loads automatically |
+| `yolo/best_card_model.pt` | Same file, backup copy in the yolo/ folder |
+| `yolo/runs/card_detector/weights/best.pt` | YOLO's own copy of the best checkpoint |
+| `yolo/runs/card_detector/weights/last.pt` | The final epoch checkpoint — used by `--resume` |
+| `yolo/runs/card_detector/results.csv` | mAP, loss, precision, recall per epoch — open in Excel to plot |
+| `yolo/runs/card_detector/confusion_matrix.png` | Which cards the model confuses with each other |
+| `yolo/runs/card_detector/PR_curve.png` | Precision–recall curve |
+
+---
+
+### Step 4 — Verify the model loaded correctly
+
+Start the app and check the terminal output:
+
+```bash
+python main.py web
+```
+
+You should see:
+```
+✅  YOLO card detector loaded from models/card_detector.pt
+```
+
+If you see `⚠️  YOLO not available — using Tesseract fallback`, check that `models/card_detector.pt` exists and re-run training if it is missing.
+
+---
+
+### Step 5 — Quick accuracy test (optional but recommended)
+
+Run the model on a freshly generated test scene to see what it detects:
+
+```bash
+python yolo/train_yolo.py --test
+```
+
+Or test on a real screenshot you have saved:
+```bash
+python yolo/train_yolo.py --test path/to/your/screenshot.jpg
+```
+
+Output example:
+```
+Detected cards in screenshot.jpg:
+   A of spades    confidence=98%
+   9 of hearts    confidence=95%
+   K of clubs     confidence=91%
+   Q of diamonds  confidence=89%
+```
+
+If confidence is consistently below 70%, consider retraining with more images (`--images 25000`) or a larger model (`--model yolov8m`).
+
+---
+
+### Step 6 — Evaluate on the full test set (optional)
+
+This runs the model on all images in `yolo/dataset/images/test/` and prints detailed accuracy metrics, including per-class mAP (so you can see which specific cards are hardest to detect):
+
+```bash
+python yolo/train_yolo.py --eval
+```
+
+Output example:
+```
+Test set results:
+  mAP@50:    0.9670
+  mAP@50-95: 0.8210
+
+Per-class results (lowest first):
+  10_hearts      mAP50=0.921   ← "10" is hardest — two-digit rank
+  10_spades      mAP50=0.934
+  10_diamonds    mAP50=0.938
+  ...
+  K_clubs        mAP50=0.991   ← Face cards are easiest
+  A_spades       mAP50=0.993
+```
+
+If `10_*` cards consistently score lower, that is expected — the digit "10" takes more space than single-digit ranks and can get cut off on small cards. Retraining with more images or a larger card size can improve these.
+
+---
+
+### Troubleshooting YOLO training
+
+**`Error: Dataset not found at yolo/dataset/dataset.yaml`**
+
+You must run Step 2 (generate the dataset) before training. Run:
+```bash
+python yolo/generate_dataset.py --images 10000
+```
+
+**`CUDA out of memory` during training**
+
+Reduce the batch size:
+```bash
+python yolo/train_yolo.py --batch 8    # default is 16
+# or even smaller:
+python yolo/train_yolo.py --batch 4
+```
+
+**`RuntimeError: DataLoader worker exited unexpectedly` on Windows**
+
+This is a Windows multiprocessing issue. Fix it by setting workers to 0:
+```bash
+python yolo/train_yolo.py --workers 0
+```
+
+**Training stopped partway through — how do I resume?**
+
+```bash
+python yolo/train_yolo.py --resume
+```
+
+This reads `yolo/runs/card_detector/weights/last.pt` and continues from the last completed epoch. The patience counter is also restored.
+
+**mAP is stuck below 0.80 after training**
+
+This usually means the dataset is too small. Try:
+```bash
+# Delete the small dataset and regenerate with more images:
+rm -rf yolo/dataset
+python yolo/generate_dataset.py --images 25000
+python yolo/train_yolo.py
+```
+
+**The model trained fine but the dashboard still uses Tesseract**
+
+Check that `models/card_detector.pt` exists:
+```bash
+ls -lh models/card_detector.pt
+```
+
+If it does not exist, the model file was not copied correctly. Copy it manually:
+```bash
+cp yolo/best_card_model.pt models/card_detector.pt
+```
+
+Then restart the app with `python main.py web`.
+
+**Font rendering looks wrong — card ranks are garbled**
+
+The dataset generator tries several system font paths. On minimal Linux installs, no fonts may be available. Install DejaVu fonts:
+```bash
+# Linux / WSL:
+sudo apt install fonts-dejavu-core
+
+# macOS (if Arial isn't found):
+brew install --cask font-dejavu-sans-mono-for-powerline
+```
+
+Then re-run the dataset generator — the new images will have correct rank text.
+
+---
+
+### Complete from-scratch checklist
+
+Use this as a checklist to make sure every step is done:
+
+- [ ] `pip install -r requirements.txt` completed without errors
+- [ ] `python -c "from ultralytics import YOLO; print('ok')"` prints `ok`
+- [ ] `python yolo/generate_dataset.py --images 10000` completed — `yolo/dataset/dataset.yaml` exists
+- [ ] `python yolo/train_yolo.py` completed — `models/card_detector.pt` exists
+- [ ] `python main.py web` shows `✅  YOLO card detector loaded` in the terminal
+- [ ] Screenshot or Live mode in the dashboard detects cards correctly
 
 ---
 
