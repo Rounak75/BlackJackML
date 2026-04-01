@@ -45,7 +45,7 @@ from blackjack.counting import CardCounter
 from blackjack.strategy import BasicStrategy
 from blackjack.deviations import DeviationEngine
 from blackjack.betting import BettingEngine
-from config import GameConfig, MLConfig, BettingConfig
+from config import CountingConfig, GameConfig, MLConfig, BettingConfig
 
 
 class Simulator:
@@ -56,7 +56,7 @@ class Simulator:
     def __init__(self, config: GameConfig = None):
         self.config = config or GameConfig()
         self.table = BlackjackTable(self.config)
-        self.counter = CardCounter("hi_lo", self.config.NUM_DECKS)
+        self.counter = CardCounter(CountingConfig.DEFAULT_SYSTEM, self.config.NUM_DECKS)
         self.strategy = BasicStrategy(self.config)
         self.deviation_engine = DeviationEngine(self.strategy)
         self.betting_engine = BettingEngine()
