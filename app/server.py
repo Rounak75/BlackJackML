@@ -209,6 +209,21 @@ if _ml_available:
 else:
     print(f"  ⚠️   ML model not found at {_model_path} — using rule-based engine only")
 
+# ── Model metadata for dashboard badge ────────────────────────────────────────
+_ml_model_info = {"loaded": False, "accuracy": None, "epoch": None}
+if _ml_available:
+    try:
+        import torch as _torch_tmp
+        _ckpt = _torch_tmp.load(_model_path, map_location='cpu', weights_only=True)
+        _ml_model_info = {
+            "loaded": True,
+            "accuracy": round(_ckpt.get("accuracy", 0) * 100, 1),
+            "epoch": _ckpt.get("epoch", 0) + 1,
+        }
+        del _ckpt, _torch_tmp
+    except Exception:
+        _ml_model_info = {"loaded": True, "accuracy": None, "epoch": None}
+
 # FIX BUG 1: dealer now has a full Hand, not just a single upcard Card.
 current_player_hand  = Hand()
 current_dealer_hand  = Hand()   # was: current_dealer_upcard = None
@@ -224,6 +239,79 @@ session_history = []
 # Wire up after helpers are defined below.
 live_scanner = None
 
+# \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+# PER-SESSION STATE ISOLATION
+# \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
+# Each browser tab / WebSocket connection gets its own game session.
+# This prevents two tabs from corrupting each other's state.
+import threading as _threading
+import functools as _functools
+class GameSession:
+    """Per-connection game state. Each browser tab gets its own session."""
+    __slots__ = (
+        'shoe', 'counter', 'betting_engine', 'shuffle_tracker',
+        'player_hand', 'dealer_hand', 'split_hands',
+        'active_hand_index', 'num_splits_done', 'session_history',
+    )
+    def __init__(self):
+        self.shoe              = Shoe(game_config.NUM_DECKS, game_config.PENETRATION)
+        self.counter           = CardCounter(CountingConfig.DEFAULT_SYSTEM, game_config.NUM_DECKS)
+        self.betting_engine    = BettingEngine()
+        self.shuffle_tracker   = ShuffleTracker(game_config.NUM_DECKS)
+        self.player_hand       = Hand()
+        self.dealer_hand       = Hand()
+        self.split_hands       = []
+        self.active_hand_index = 0
+        self.num_splits_done   = 0
+        self.session_history   = []
+sessions = {}   # sid -> GameSession
+_session_lock = _threading.Lock()
+def _load_session_globals():
+    """Copy session state into module globals so helper functions work unchanged."""
+    global shoe, counter, betting_engine, shuffle_tracker
+    global current_player_hand, current_dealer_hand
+    global split_hands, active_hand_index, num_splits_done, session_history
+    s = sessions.get(request.sid)
+    if s is None:
+        return
+    shoe                = s.shoe
+    counter             = s.counter
+    betting_engine      = s.betting_engine
+    shuffle_tracker      = s.shuffle_tracker
+    current_player_hand = s.player_hand
+    current_dealer_hand = s.dealer_hand
+    split_hands         = s.split_hands
+    active_hand_index   = s.active_hand_index
+    num_splits_done     = s.num_splits_done
+    session_history     = s.session_history
+def _save_session_globals():
+    """Copy module globals back into the session object."""
+    s = sessions.get(request.sid)
+    if s is None:
+        return
+    s.shoe              = shoe
+    s.counter           = counter
+    s.betting_engine    = betting_engine
+    s.shuffle_tracker   = shuffle_tracker
+    s.player_hand       = current_player_hand
+    s.dealer_hand       = current_dealer_hand
+    s.split_hands       = split_hands
+    s.active_hand_index = active_hand_index
+    s.num_splits_done   = num_splits_done
+    s.session_history   = session_history
+def with_session(fn):
+    """Decorator: load session state before handler, save after.
+    Uses a lock so concurrent handlers from different sessions
+    don't clobber each other's module globals."""
+    @_functools.wraps(fn)
+    def _wrapper(*args, **kwargs):
+        with _session_lock:
+            _load_session_globals()
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                _save_session_globals()
+    return _wrapper
 
 # ══════════════════════════════════════════════════════════════
 # CARD MAPPING
@@ -794,6 +882,7 @@ def get_full_state():
         # insurance: separate from side_bets — it is a game mechanic.
         "insurance":         _get_insurance_data(dealer_upcard_card),
         "ml_available":      _ml_available,
+        "ml_model_info":     _ml_model_info,
         # ── Analytics: N₀ + Shoe Quality (new) ───────────────────────────
         "analytics": {
             "n0":           betting_engine.get_session_stats().get("n0"),
@@ -859,10 +948,22 @@ def api_detect_cards():
 
 @socketio.on('connect')
 def handle_connect(*args, **kwargs):
-    _safe_emit('state_update', get_full_state())
+    sid = request.sid
+    if sid not in sessions:
+        sessions[sid] = GameSession()
+    _load_session_globals()
+    try:
+        _safe_emit('state_update', get_full_state())
+    finally:
+        _save_session_globals()
+
+@socketio.on('disconnect')
+def handle_disconnect():
+    sessions.pop(request.sid, None)
 
 
 @socketio.on('deal_card')
+@with_session
 def handle_deal_card(data):
     """
     Handle a card being entered into the system.
@@ -903,6 +1004,7 @@ def handle_deal_card(data):
 
 
 @socketio.on('player_split')
+@with_session
 def handle_player_split(data=None):
     """
     Handle the player choosing to split their pair.
@@ -956,6 +1058,7 @@ def handle_player_split(data=None):
 
 
 @socketio.on('next_split_hand')
+@with_session
 def handle_next_split_hand(data=None):
     """
     Advance to the next split hand.
@@ -983,6 +1086,7 @@ def handle_next_split_hand(data=None):
 
 
 @socketio.on('undo_split_card')
+@with_session
 def handle_undo_split_card(data=None):
     """
     Undo the last card dealt to the currently active split hand.
@@ -1036,6 +1140,7 @@ def handle_undo_split_card(data=None):
 
 
 @socketio.on('new_hand')
+@with_session
 def handle_new_hand(data=None):
     """
     Clear current hand state to start a new hand.
@@ -1056,6 +1161,7 @@ def handle_new_hand(data=None):
 
 
 @socketio.on('shuffle')
+@with_session
 def handle_shuffle(data=None):
     """
     Handle a real physical shoe shuffle by the casino dealer.
@@ -1085,6 +1191,7 @@ def handle_shuffle(data=None):
 
 
 @socketio.on('change_system')
+@with_session
 def handle_change_system(data):
     """Switch counting system — replays card log through new system tags."""
     global counter
@@ -1106,6 +1213,7 @@ def handle_change_system(data):
 
 
 @socketio.on('record_result')
+@with_session
 def handle_record_result(data):
     """
     Record financial result of a completed hand.
@@ -1129,6 +1237,7 @@ def handle_record_result(data):
 
 
 @socketio.on('set_stop_thresholds')
+@with_session
 def handle_set_stop_thresholds(data):
     """
     Update stop-loss / stop-win thresholds from the frontend settings UI.

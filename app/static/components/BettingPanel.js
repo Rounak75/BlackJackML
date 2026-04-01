@@ -222,7 +222,7 @@ function BettingPanel({
   // Suggest leaving / dropping to minimum when count turns unfavourable
   // after the player has been winning (positive session profit).
   const tc      = count?.true ?? 0;
-  const session = sessionObj?.total_profit ?? 0;
+  const session = betting?.total_profit ?? 0;
   const showCashout = tc < -1 && session > 0;
 
   if (!betting) {

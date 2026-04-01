@@ -37,10 +37,10 @@ build() {
   echo "📦  Bundling in load order..."
   {
     echo "/* BlackjackML bundle — compiled $(date -u '+%Y-%m-%dT%H:%M:%SZ') */"
-    for f in constants utils Widget TopBar ActionPanel BettingPanel \
+    for f in constants utils Widget TopBar ActionPanel CompDepAlert BettingPanel \
               SideBetPanel HandDisplay CardGrid StrategyRefTable \
               ShoePanel EdgeMeter SessionStats ShuffleTracker \
-              CountHistory I18Panel LiveOverlayPanel CenterToolBar \
+              CountHistory I18Panel AnalyticsPanel LiveOverlayPanel CenterToolBar \
               SplitHandPanel SideCountPanel CasinoRiskMeter StopAlerts App; do
       echo "/* ── $f ── */"
       cat "$OUT_DIR/$f.js"
@@ -76,10 +76,37 @@ PYEOF
   node "$BUILD_DIR/minify.js"
 
   echo "🔍  Syntax checking..."
-  node --check "$BUNDLE_MIN" && echo "✅  Build complete → app/static/bundle.min.js" || {
+  node --check "$BUNDLE_MIN" && echo "  ✅  Syntax OK" || {
     echo "❌  Syntax error in bundle — check build output above"
     exit 1
   }
+
+  echo "🧪  Smoke testing bundle..."
+  SMOKE_FAIL=0
+  for global in \
+    'class ErrorBoundary' \
+    'function App(' \
+    'function mountApp(' \
+    'function Widget(' \
+    'function TopBar(' \
+    'function ActionPanel(' \
+    'function BettingPanel(' \
+    'function HandDisplay(' \
+    'function CardGrid(' \
+    'function LiveOverlayPanel(' \
+    'function CompDepAlert(' \
+    'function AnalyticsPanel('; do
+    if ! grep -q "$global" "$BUNDLE_MIN"; then
+      echo "  MISSING: $global"
+      SMOKE_FAIL=1
+    fi
+  done
+  if [ "$SMOKE_FAIL" -eq 1 ]; then
+    echo "❌  Bundle is missing required definitions — check load order"
+    exit 1
+  fi
+  echo "  All required globals found"
+  echo "✅  Build complete → app/static/bundle.min.js"
 }
 
 if [[ "$1" == "--watch" ]]; then

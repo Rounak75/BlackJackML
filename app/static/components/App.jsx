@@ -476,7 +476,7 @@ function App() {
         <div className="flex flex-col gap-2.5">
 
           {/* AI action recommendation */}
-          <ActionPanel recommendation={rec} count={count} />
+          <ActionPanel recommendation={rec} count={count} mlModelInfo={gameState?.ml_model_info} />
 
           {/* Composition-dependent strategy alert for Hard 16 vs 10 */}
           <CompDepAlert recommendation={rec} trueCount={count?.true} />

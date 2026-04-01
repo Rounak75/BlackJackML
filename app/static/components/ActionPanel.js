@@ -14,13 +14,33 @@
  *   count          — count object from server
  */
 
-function ActionPanel({ recommendation, count }) {
+function ActionPanel({ recommendation, count, mlModelInfo }) {
   const action = recommendation ? recommendation.action : null;
   const isDev  = recommendation && recommendation.is_deviation;
   const lines  = action ? buildExplanation(action, recommendation, count) : null;
 
+  const modelLoaded    = mlModelInfo && mlModelInfo.loaded;
+  const modelBadgeColor = modelLoaded ? '#44e882' : '#94a7c4';
+  const modelBadgeBg    = modelLoaded ? 'rgba(68,232,130,0.10)' : 'rgba(148,167,196,0.10)';
+  const modelBadgeText  = modelLoaded
+    ? (mlModelInfo.accuracy != null
+        ? `Model: ${mlModelInfo.accuracy}% accuracy — epoch ${mlModelInfo.epoch}`
+        : 'ML Model loaded')
+    : 'No model — basic strategy only';
+
   return (
     <Widget title="AI Recommendation" accent="var(--gold)">
+
+      {/* Model status badge */}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+        padding: '4px 10px', borderRadius: 20, fontSize: 9, fontWeight: 600,
+        background: modelBadgeBg, border: `1px solid ${modelBadgeColor}40`,
+        color: modelBadgeColor, marginBottom: 8, fontFamily: 'var(--font-mono, monospace)',
+      }}>
+        <span style={{ width: 6, height: 6, borderRadius: '50%', background: modelBadgeColor, flexShrink: 0 }} />
+        {modelBadgeText}
+      </div>
 
       {/* Big action text */}
       <div className="my-4 text-center">

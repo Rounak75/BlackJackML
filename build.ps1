@@ -11,6 +11,15 @@ $BundleMin   = "$ProjectRoot\app\static\bundle.min.js"
 
 Write-Host "BlackjackML Build Starting..." -ForegroundColor Cyan
 
+# Pre-flight: check tsc is installed
+$tscCheck = cmd /c "tsc --version" 2>&1
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "ERROR: TypeScript compiler (tsc) not found." -ForegroundColor Red
+    Write-Host "Install it with:  cmd /c `"npm install -g typescript`"" -ForegroundColor Yellow
+    exit 1
+}
+Write-Host "  Using $tscCheck" -ForegroundColor Gray
+
 # Step 1 - Sync sources
 Write-Host "Step 1: Syncing sources..." -ForegroundColor Yellow
 $BuildSrc = "$BuildDir\src"
@@ -42,18 +51,21 @@ Get-ChildItem "$BuildSrc\*.js","$BuildSrc\*.tsx" | ForEach-Object {
 
 # Step 2 - Compile JSX to plain JS
 Write-Host "Step 2: Compiling JSX..." -ForegroundColor Yellow
-Push-Location $BuildDir
-try { & tsc --project tsconfig.json 2>&1 | Out-Null } catch { }
-Pop-Location
+if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
+# Use cmd /c to bypass PowerShell execution policy blocking the tsc .ps1 shim
+$tscOutput = cmd /c "cd /d `"$BuildDir`" && tsc --project tsconfig.json" 2>&1
+if ($tscOutput) {
+    $tscOutput | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkYellow }
+}
 
 # Step 3 - Bundle all compiled files in load order
 Write-Host "Step 3: Bundling files..." -ForegroundColor Yellow
 
 $loadOrder = @(
-    "constants","utils","Widget","TopBar","ActionPanel","BettingPanel",
+    "constants","utils","Widget","TopBar","ActionPanel","CompDepAlert","BettingPanel",
     "SideBetPanel","HandDisplay","CardGrid","StrategyRefTable",
     "ShoePanel","EdgeMeter","SessionStats","ShuffleTracker",
-    "CountHistory","I18Panel","LiveOverlayPanel","CenterToolBar",
+    "CountHistory","I18Panel","AnalyticsPanel","LiveOverlayPanel","CenterToolBar",
     "SplitHandPanel","SideCountPanel","CasinoRiskMeter","StopAlerts","App"
 )
 
@@ -95,6 +107,43 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 $sizeKB = [math]::Round((Get-Item $BundleMin).Length / 1024)
+
+# Step 7 - Smoke test: verify required globals exist in the bundle
+Write-Host "Step 7: Smoke testing bundle..." -ForegroundColor Yellow
+$bundleContent = Get-Content $BundleMin -Raw -Encoding UTF8
+$requiredGlobals = @(
+    "class ErrorBoundary",
+    "function App(",
+    "function mountApp(",
+    "function Widget(",
+    "function TopBar(",
+    "function ActionPanel(",
+    "function BettingPanel(",
+    "function HandDisplay(",
+    "function CardGrid(",
+    "function LiveOverlayPanel(",
+    "function CompDepAlert(",
+    "function AnalyticsPanel("
+)
+$missing = @()
+foreach ($g in $requiredGlobals) {
+    if ($bundleContent -notlike "*$g*") {
+        $missing += $g
+    }
+}
+if ($missing.Count -gt 0) {
+    Write-Host "" 
+    Write-Host "ERROR: Bundle is missing required definitions:" -ForegroundColor Red
+    foreach ($m in $missing) {
+        Write-Host "  MISSING: $m" -ForegroundColor Red
+    }
+    Write-Host "" 
+    Write-Host "The bundle compiled but is incomplete. Check that all source" -ForegroundColor Red
+    Write-Host "files in app/static/components/ are listed in the load order." -ForegroundColor Red
+    exit 1
+}
+Write-Host "  All $($requiredGlobals.Count) required globals found" -ForegroundColor Green
+
 Write-Host ""
 Write-Host "Build complete!  bundle.min.js = $sizeKB KB" -ForegroundColor Green
 Write-Host "Refresh your browser to see changes." -ForegroundColor Gray
