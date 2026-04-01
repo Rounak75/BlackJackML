@@ -42,6 +42,15 @@ import time
 from datetime import datetime
 from typing import Dict, Optional, Tuple
 
+# ── Windows UTF-8 fix ─────────────────────────────────────────────────────────
+if sys.platform == 'win32':
+    os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except (AttributeError, OSError):
+        pass
+
 import numpy as np
 import torch
 import torch.nn as nn

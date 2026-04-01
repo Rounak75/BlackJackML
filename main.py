@@ -34,7 +34,20 @@
 """
 
 import sys
+import os
 import argparse
+
+# ── Windows UTF-8 fix ─────────────────────────────────────────────────────────
+# Python on Windows defaults to cp1252 for the console, which cannot encode
+# emoji characters (✅, ⚠️, 🧠, ♠, etc.) used throughout this codebase.
+# Reconfiguring stdout/stderr to UTF-8 prevents UnicodeEncodeError crashes.
+if sys.platform == 'win32':
+    os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except (AttributeError, OSError):
+        pass  # Python < 3.7 or non-reconfigurable stream
 
 
 def main():

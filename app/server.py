@@ -57,6 +57,17 @@ from flask_socketio import SocketIO, emit
 import sys
 import os
 
+# ── Windows UTF-8 fix ─────────────────────────────────────────────────────────
+# Module-level print() calls below include emoji (✅, ⚠️, ♠). On Windows the
+# console defaults to cp1252 which can't encode them → UnicodeEncodeError.
+if sys.platform == 'win32':
+    os.environ.setdefault('PYTHONIOENCODING', 'utf-8')
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except (AttributeError, OSError):
+        pass
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from blackjack.card import Card, Shoe, Rank, Suit, ShuffleType
