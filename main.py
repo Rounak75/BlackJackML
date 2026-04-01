@@ -23,6 +23,8 @@
 ║                                                                      ║
 ║  4. python main.py train --hands 500000 --epochs 50                  ║
 ║     → Trains the neural network and saves to models/best_model.pt   ║
+║     → --system all (default): trains on all 4 counting systems      ║
+║     → --system hi_lo|ko|omega_ii|zen: single-system model           ║
 ║                                                                      ║
 ║  QUICK START:                                                         ║
 ║  ─────────────────────────                                           ║
@@ -157,6 +159,16 @@ YOLO CARD DETECTION SETUP (run these before starting the dashboard):
         "--resume", action="store_true", default=False,
         help="Continue training from models/last_checkpoint.pt instead of starting fresh."
     )
+    train_parser.add_argument(
+        "--system", default="all",
+        choices=["all", "hi_lo", "ko", "omega_ii", "zen"],
+        help=(
+            "Counting system(s) to train on. "
+            "'all' (default) mixes data from all four systems so the model "
+            "works regardless of which system you use at the table. "
+            "Pass a single system name to train a system-specific model."
+        )
+    )
 
     # Parse the arguments the user provided
     args = parser.parse_args()
@@ -203,7 +215,7 @@ YOLO CARD DETECTION SETUP (run these before starting the dashboard):
     elif args.command == "train":
         # Import the trainer and start the training pipeline
         from ml_model.train import Trainer
-        trainer = Trainer()
+        trainer = Trainer(system=getattr(args, 'system', 'all'))
         results = trainer.train(num_hands=args.hands, epochs=args.epochs,
                                 resume=args.resume)
         # The best model is saved to models/best_model.pt automatically.

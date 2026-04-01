@@ -535,6 +535,7 @@ def _get_ml_recommendation(player_hand, dealer_upcard_card):
             advantage         = counter.advantage,
             running_count     = counter.running_count,
             decks_remaining   = counter.decks_remaining,
+            system            = counter.system_name,  # pass active system for correct normalisation
         )
 
         prediction = ml_decision_model.predict(features, available_names)

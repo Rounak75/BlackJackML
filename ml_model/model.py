@@ -1,50 +1,52 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  ml_model/model.py — Advanced Neural Network Decision Optimizer             ║
+║  ml_model/model.py — Advanced Neural Network Decision Optimizer              ║
 ║                                                                              ║
 ║  ARCHITECTURE UPGRADE (v2):                                                  ║
-║  ─────────────────────────────────────────────────────────────────────────  ║
-║  OLD: Simple 3-layer MLP (256→128→64)                                       ║
-║       • Treats all 28 features equally                                      ║
-║       • Single output head for all 5 actions                                ║
-║       • ~76% accuracy at 1M hands                                           ║
+║  ─────────────────────────────────────────────────────────────────────────   ║
+║  OLD: Simple 3-layer MLP (256→128→64)                                        ║
+║       • Treats all 28 features equally                                       ║
+║       • Single output head for all 5 actions                                 ║
+║       • ~76% accuracy at 1M hands                                            ║
 ║                                                                              ║
-║  NEW: ResidualNet + Feature Attention + Separate Decision Heads             ║
-║       • Residual blocks: gradients flow deeper → richer representations    ║
-║       • Feature attention: network learns which of the 28 inputs matter    ║
-║         most for each situation (count matters more late in shoe, etc.)    ║
-║       • Separate heads per decision class:                                  ║
-║           hit_stand_head   — focuses on hand value + dealer upcard          ║
-║           double_split_head — focuses on count + shoe composition           ║
-║           surrender_head   — focuses on true count + dealer strength        ║
-║       • ~83-86% accuracy at 1M hands (+7-10% over baseline)                ║
+║  NEW: ResidualNet + Feature Attention + Separate Decision Heads              ║
+║       • Residual blocks: gradients flow deeper → richer representations      ║
+║       • Feature attention: network learns which of the 28 inputs matter      ║
+║         most for each situation (count matters more late in shoe, etc.)      ║
+║       • Separate heads per decision class:                                   ║
+║           hit_stand_head   — focuses on hand value + dealer upcard           ║
+║           double_split_head — focuses on count + shoe composition            ║
+║           surrender_head   — focuses on true count + dealer strength         ║
+║       • ~83-86% accuracy at 1M hands (+7-10% over baseline)                  ║
 ║                                                                              ║
-║  THE 28 INPUT FEATURES (unchanged from v1):                                 ║
+║  THE 28 INPUT FEATURES (unchanged from v1):                                  ║
 ║  ─────────────────────                                                       ║
-║  [0]  hand_value / 21            (normalised player total)                  ║
-║  [1]  is_soft (0 or 1)           (usable ace?)                              ║
-║  [2]  is_pair (0 or 1)           (pair in hand?)                            ║
-║  [3]  pair_value / 11            (value of paired card if any)             ║
-║  [4]  dealer_upcard / 11         (dealer's showing card)                    ║
-║  [5]  true_count / 10            (normalised true count)                    ║
-║  [6]  shuffle_adjustment / 5     (ML shuffle tracker bonus count)          ║
-║  [7]  penetration                (how far through the shoe, 0-1)           ║
-║  [8-17] remaining card probs     (P(2), P(3),..., P(10), P(Ace))           ║
-║  [18] num_cards / 10             (cards in player hand)                     ║
-║  [19] can_double (0 or 1)                                                   ║
-║  [20] can_split (0 or 1)                                                    ║
-║  [21] can_surrender (0 or 1)                                                ║
-║  [22] num_hands / 4              (split hands active)                       ║
-║  [23] bankroll_ratio             (current bet / bankroll)                   ║
-║  [24] advantage                  (estimated player edge)                    ║
-║  [25] running_count / 20         (normalised running count)                 ║
-║  [26] decks_remaining / 8        (normalised decks left)                   ║
-║  [27] is_split (0 or 1)          (post-split hand?)                        ║
+║  [0]  hand_value / 21            (normalised player total)                   ║
+║  [1]  is_soft (0 or 1)           (usable ace?)                               ║
+║  [2]  is_pair (0 or 1)           (pair in hand?)                             ║
+║  [3]  pair_value / 11            (value of paired card if any)               ║
+║  [4]  dealer_upcard / 11         (dealer's showing card)                     ║
+║  [5]  true_count / tc_scale      (system-normalised true count)              ║
+║         Hi-Lo/KO: ÷10  |  Omega II/Zen: ÷20                                  ║
+║  [6]  shuffle_adjustment / 5     (ML shuffle tracker bonus count)            ║
+║  [7]  penetration                (how far through the shoe, 0-1)             ║
+║  [8-17] remaining card probs     (P(2), P(3),..., P(10), P(Ace))             ║
+║  [18] num_cards / 10             (cards in player hand)                      ║
+║  [19] can_double (0 or 1)                                                    ║
+║  [20] can_split (0 or 1)                                                     ║
+║  [21] can_surrender (0 or 1)                                                 ║
+║  [22] num_hands / 4              (split hands active)                        ║
+║  [23] bankroll_ratio             (current bet / bankroll)                    ║
+║  [24] advantage / adv_scale      (system-normalised player edge)             ║
+║  [25] running_count / rc_scale   (system-normalised running count)           ║
+║         Hi-Lo/KO: ÷20  |  Omega II/Zen: ÷40                                  ║
+║  [26] decks_remaining / 8        (normalised decks left)                     ║
+║  [27] is_split (0 or 1)          (post-split hand?)                          ║
 ║                                                                              ║
 ║  HOW TO TRAIN:                                                               ║
-║    python main.py train --hands 1000000 --epochs 50                         ║
-║    python main.py train --hands 2000000 --epochs 60   ← recommended         ║
-║  The trained model saves to: models/best_model.pt                           ║
+║    python main.py train --hands 1000000 --epochs 50                          ║
+║    python main.py train --hands 2000000 --epochs 60   ← recommended          ║
+║  The trained model saves to: models/best_model.pt                            ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 import torch
@@ -417,15 +419,33 @@ class BlackjackDecisionModel:
         bankroll_ratio: float, advantage: float,
         running_count: float, decks_remaining: float,
         is_split: bool = False,
+        system: str = "hi_lo",
     ) -> np.ndarray:
-        """Build 28-element feature vector from game state."""
+        
+        """Build 28-element feature vector from game state.
+
+        The three count-derived features (true_count, advantage, running_count)
+        are divided by system-specific scalars so every counting system maps to
+        the same [-1, +1] range that the model was trained on.
+
+        Hi-Lo / KO  : tc/10,  rc/20,  adv/0.10
+        Omega II/Zen: tc/20,  rc/40,  adv/0.10  (+-2 tags produce larger raw counts)
+
+        The scalars are read from CountingConfig.COUNT_NORM_SCALARS so they
+        stay in sync with the training simulator automatically.
+        """
+        from config import CountingConfig
+        tc_scale, rc_scale, adv_scale = CountingConfig.COUNT_NORM_SCALARS.get(
+            system, (10.0, 20.0, 0.10)
+        )
+
         features = [
             hand_value / 21.0,
             float(is_soft),
             float(is_pair),
             pair_value / 11.0,
             dealer_upcard / 11.0,
-            true_count / 10.0,
+            true_count / tc_scale,          # [5] system-normalised TC
             shuffle_adjustment / 5.0,
             penetration,
         ]
@@ -437,8 +457,8 @@ class BlackjackDecisionModel:
             float(can_surrender),
             num_hands / 4.0,
             min(bankroll_ratio, 2.0),
-            advantage,
-            running_count / 20.0,
+            advantage / adv_scale,          # [24] system-normalised advantage
+            running_count / rc_scale,       # [25] system-normalised RC
             decks_remaining / 8.0,
             float(is_split),
         ])

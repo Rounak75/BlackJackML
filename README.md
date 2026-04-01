@@ -394,6 +394,8 @@ python main.py web --host 0.0.0.0
 | `python main.py train --hands 500000 --epochs 30` | ~10 min | ~90 sec | ~75% | Development and testing |
 | `python main.py train --hands 1000000` | ~25 min | ~5 min | **~82%** | **Recommended for real use** |
 | `python main.py train --hands 2000000 --epochs 60` | ~60 min | ~10 min | ~85%+ | Maximum accuracy |
+| `python main.py train --hands 1000000 --system all` | ~25 min | ~5 min | **~82%** | Universal model — works with all 4 counting systems (default) |
+| `python main.py train --hands 1000000 --system hi_lo` | ~25 min | ~5 min | **~82%** | Single-system model tuned to Hi-Lo only |
 
 **Always run the quick test first:**
 ```bash
@@ -960,40 +962,82 @@ Valid values are exactly: `"hi_lo"`, `"ko"`, `"omega_ii"`, `"zen"`
 
 Restart the app after saving. No retraining needed.
 
-### Training the strategy model for a specific counting system
+### Training the strategy model — single system vs. all systems
 
-> ⚠️ **Important:** This requires a one-line code fix. By default, the training simulator always uses Hi-Lo internally, even if you changed `DEFAULT_SYSTEM`. This means if you train with Omega II as your default, the model still learns Hi-Lo counts unless you make the fix below.
+The training pipeline now supports two modes controlled by the `--system` flag:
 
-**The fix — open `ml_model/simulate.py` and find line 59:**
+| Command | What it trains on | Best for |
+|---------|-------------------|---------|
+| `python main.py train --hands 1000000` | All 4 systems equally (default) | General use — model works correctly regardless of which system you switch to in the app |
+| `python main.py train --hands 1000000 --system hi_lo` | Hi-Lo only | Dedicated Hi-Lo players who never switch systems |
+| `python main.py train --hands 1000000 --system omega_ii` | Omega II only | Advanced players locked to Omega II |
+| `python main.py train --hands 1000000 --system zen` | Zen Count only | Dedicated Zen players |
 
-```python
-# BEFORE (hardcoded — always uses Hi-Lo regardless of config):
-self.counter = CardCounter("hi_lo", self.config.NUM_DECKS)
+**Recommendation:** Use `--system all` (the default) unless you are certain you will only ever use one counting system. The universal model handles all four correctly at inference time.
+
+#### Why `--system all` works correctly
+
+Omega II and Zen use ±2 card tags, so their raw running counts and true counts are roughly twice as large as Hi-Lo's. Without correction, feeding an Omega II true count of +8 into a model trained only on Hi-Lo (which rarely exceeds +5) would produce garbage.
+
+The fix is normalisation. Each system's counts are divided by system-specific scalars before entering the network:
+
+| System | True count ÷ | Running count ÷ |
+|--------|-------------|----------------|
+| Hi-Lo | 10 | 20 |
+| KO | 10 | 20 |
+| Omega II | 20 | 40 |
+| Zen | 20 | 40 |
+
+These scalars map all four systems to the same `[-1, +1]` range. Training on the mixed dataset teaches the model one universal decision surface. At inference time, `server.py` automatically passes the active system name to `model.py`, which applies the correct scalars.
+
+> **Note:** If you train `--system hi_lo` and then switch the app dropdown to Omega II mid-session, the model's count-based decisions will be degraded because the model was trained only on Hi-Lo-range inputs. Train with `--system all` to avoid this.
+
+### Deleting the trained model and retraining from scratch
+
+Do this whenever you change table rules in `config.py`, switch from a single-system model to an all-system model, or want a completely clean slate.
+
+**Step 1 — Delete the existing model files:**
+
+On Windows (PowerShell):
+```powershell
+Remove-Item models\best_model.pt        -ErrorAction SilentlyContinue
+Remove-Item models\last_checkpoint.pt   -ErrorAction SilentlyContinue
+Remove-Item models\checkpoint_epoch*.pt -ErrorAction SilentlyContinue
+Remove-Item models\training_log.csv     -ErrorAction SilentlyContinue
+Remove-Item models\training_summary.json -ErrorAction SilentlyContinue
 ```
 
-Change it to read from your config:
-
-```python
-# AFTER (reads your DEFAULT_SYSTEM from config.py):
-from config import CountingConfig
-self.counter = CardCounter(CountingConfig.DEFAULT_SYSTEM, self.config.NUM_DECKS)
+On macOS / Linux:
+```bash
+rm -f models/best_model.pt
+rm -f models/last_checkpoint.pt
+rm -f models/checkpoint_epoch*.pt
+rm -f models/training_log.csv
+rm -f models/training_summary.json
 ```
 
-**Step-by-step:**
+**Step 2 — Retrain from scratch:**
+```bash
+# Recommended — trains on all 4 counting systems (universal model)
+python main.py train --hands 1000000
 
-1. Open `ml_model/simulate.py` in your text editor
-2. Find line 59 (search for `CardCounter("hi_lo"`)
-3. Replace the line with the fixed version above
-4. Save the file
-5. Set `DEFAULT_SYSTEM` in `config.py` to whichever system you want to train for
-6. Retrain the model:
-   ```bash
-   python main.py train --hands 1000000
-   ```
+# Or for maximum accuracy
+python main.py train --hands 2000000 --epochs 60
+```
 
-The model now learns to make decisions using the true count from your chosen system. The saved `models/best_model.pt` will be tuned specifically for that system's count values.
+The trainer will detect no existing checkpoint and start from epoch 1 automatically.
 
-> **Note:** If you switch systems in the app dropdown after training, the model's count-based decisions will be less accurate because the model was trained on different count values. For best results, keep the app default system and the trained system the same.
+> **Why you must delete before retraining after a rule change:** If `best_model.pt` exists, the app continues using it until you restart. Deleting it ensures the app falls back to the rules engine immediately while the new model trains, rather than using the stale model.
+
+**Quick verification after retraining:**
+```bash
+python main.py web
+```
+The terminal should print:
+```
+✅  Strategy model loaded from models/best_model.pt
+```
+If it prints `⚠️  No trained model found` the file was not saved correctly — check that the `models/` folder exists in the project root.
 
 ### Adding a custom counting system
 
@@ -1017,11 +1061,26 @@ SYSTEMS = {
 
 Keys are card face values: 2 through 10, and 11 for Aces. Values are the count tags (+2, +1, 0, -1, -2, etc.).
 
-After adding it, you can set `DEFAULT_SYSTEM = "my_system"` and use the same `simulate.py` fix above to train a model on it.
+After adding it, also add an entry to `COUNT_NORM_SCALARS` in `CountingConfig` so the normalisation stays correct when training on your system:
 
----
+```python
+COUNT_NORM_SCALARS = {
+    "hi_lo":    ( 10.0,  20.0,  0.10 ),
+    "ko":       ( 10.0,  20.0,  0.10 ),
+    "omega_ii": ( 20.0,  40.0,  0.10 ),
+    "zen":      ( 20.0,  40.0,  0.10 ),
+    # Add your system — set tc_scale to the max |TC| you expect,
+    # rc_scale to tc_scale × max_decks_remaining (~7 for 8-deck shoe)
+    "my_system": ( 15.0,  30.0,  0.10 ),
+}
+```
 
-## 🃏 How to Use the Dashboard
+Then retrain:
+```bash
+python main.py train --hands 1000000 --system my_system
+```
+
+
 
 ### Entering cards for a hand
 
@@ -2074,5 +2133,3 @@ For educational and portfolio purposes only.
 Card counting is **legal** in most jurisdictions, but casinos are private property and may ask you to leave if they suspect you are counting cards. Using this software at a casino is entirely at your own risk. This software is not intended for illegal use.
 
 ---
-
-*Built with ♠ Python · PyTorch · YOLOv8 · Flask · React 18 · OpenCV · Tesseract · Socket.IO*

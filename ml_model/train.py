@@ -231,8 +231,18 @@ def _log_epoch_csv(
 class Trainer:
     """Train the BlackjackNet model using simulation data."""
 
-    def __init__(self, config: MLConfig = None):
+    def __init__(self, config: MLConfig = None, system: str = "all"):
         self.config = config or MLConfig()
+
+        # ── Counting system for training ──────────────────────────────────
+        # "all"  → mix data from hi_lo, ko, omega_ii, zen equally (default).
+        #          Produces one universal model that works across all systems.
+        # Any single system name → train only on that system's data.
+        from config import CountingConfig
+        valid = list(CountingConfig.SYSTEMS.keys()) + ["all"]
+        if system not in valid:
+            raise ValueError(f"system must be one of {valid}, got {system!r}")
+        self.system = system
 
     # ─── Data generation ──────────────────────────────────────────────────────
 
@@ -242,35 +252,53 @@ class Trainer:
 
         states  — float32 array of shape (N, input_dim)
         actions — int64 array of shape (N,) with values in {0,1,2,3,4}
+
+        When self.system == "all", num_hands are split equally across all four
+        counting systems and the resulting datasets are shuffled together.
+        Count features in each subset are normalised using that system's own
+        scalars (set in CountingConfig.COUNT_NORM_SCALARS), so all four systems
+        map to the same [-1, +1] range before entering the network.
         """
+        from config import CountingConfig
+
         if num_hands is None:
             num_hands = self.config.SIMULATION_HANDS
 
-        print(f"🎲  Generating training data ({num_hands:,} hands)…")
-        sim  = Simulator()
-        data = sim.simulate_hands(num_hands, use_counting=True,
-                                  use_deviations=True, verbose=True)
-
-        training_data = data["training_data"]
-        if not training_data:
-            raise ValueError("Simulator returned no training data.")
-
-        print(f"    ✓ {len(training_data):,} training samples")
-
         action_map = {"hit": 0, "stand": 1, "double": 2, "split": 3, "surrender": 4}
 
-        # ── Deduplicate ───────────────────────────────────────────────────────
-        # Keep only one sample per unique (hand_value, dealer_upcard,
-        # true_count_bucket, is_soft, is_pair) combination.
-        # Without this, basic strategy generates thousands of identical
-        # (state → action) pairs, the model memorises the lookup table,
-        # and reports 98%+ accuracy while learning nothing useful.
-        # Disabled: deduplication collapsed dataset to ~330 samples — too few
-        # to train. All samples are kept so the network has enough data.
+        def _run_sim(system_name: str, n: int) -> Tuple[np.ndarray, np.ndarray]:
+            print(f"🎲  Simulating {n:,} hands  [{system_name}]…")
+            sim = Simulator(system=system_name)
+            data = sim.simulate_hands(n, use_counting=True,
+                                      use_deviations=True, verbose=True)
+            td = data["training_data"]
+            if not td:
+                raise ValueError(f"Simulator returned no training data for system={system_name!r}.")
+            print(f"    ✓ {len(td):,} training samples  [{system_name}]")
+            s = np.array([d["state"]  for d in td], dtype=np.float32)
+            a = np.array([action_map.get(d["action"], 0) for d in td], dtype=np.int64)
+            return s, a
 
-        states  = np.array([d["state"]  for d in training_data], dtype=np.float32)
-        actions = np.array([action_map.get(d["action"], 0) for d in training_data],
-                           dtype=np.int64)
+        if self.system == "all":
+            systems = list(CountingConfig.SYSTEMS.keys())
+            # Divide hands evenly; give any remainder to the last system
+            base, rem = divmod(num_hands, len(systems))
+            all_states, all_actions = [], []
+            for i, sys_name in enumerate(systems):
+                n = base + (rem if i == len(systems) - 1 else 0)
+                s, a = _run_sim(sys_name, n)
+                all_states.append(s)
+                all_actions.append(a)
+            states  = np.concatenate(all_states,  axis=0)
+            actions = np.concatenate(all_actions, axis=0)
+            # Shuffle so systems are interleaved — prevents batch-level bias
+            rng = np.random.default_rng(seed=42)
+            idx = rng.permutation(len(states))
+            states, actions = states[idx], actions[idx]
+            print(f"    ✓ {len(states):,} total samples across all systems")
+        else:
+            states, actions = _run_sim(self.system, num_hands)
+
         return states, actions
     
     # ─── Resume helper ─────────────────────────────────────────────────────────
@@ -400,6 +428,7 @@ class Trainer:
         # ── Print header ──────────────────────────────────────────────────
         print(f"\n🧠  Training BlackjackNet  |  device = {device}")
         print(f"    Input features : {input_dim}")
+        print(f"    Counting system: {self.system}")
         print(f"    Train samples  : {len(X_tr):,}")
         print(f"    Test  samples  : {len(X_te):,}")
         print(f"    Epochs         : {start_epoch + 1} → {epochs}")

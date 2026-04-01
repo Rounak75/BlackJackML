@@ -53,10 +53,31 @@ class Simulator:
     Monte Carlo blackjack simulator for ML training and strategy validation.
     """
 
-    def __init__(self, config: GameConfig = None):
+    def __init__(self, config: GameConfig = None, system: str = None):
         self.config = config or GameConfig()
         self.table = BlackjackTable(self.config)
-        self.counter = CardCounter(CountingConfig.DEFAULT_SYSTEM, self.config.NUM_DECKS)
+
+        # ── Counting system ────────────────────────────────────────────────
+        # Defaults to whatever DEFAULT_SYSTEM is set to in config.py.
+        # Pass system="hi_lo" / "ko" / "omega_ii" / "zen" to override.
+        system = system or CountingConfig.DEFAULT_SYSTEM
+        if system not in CountingConfig.SYSTEMS:
+            raise ValueError(
+                f"Unknown counting system: {system!r}. "
+                f"Choose from {list(CountingConfig.SYSTEMS.keys())}"
+            )
+        self.system = system
+        self.counter = CardCounter(system, self.config.NUM_DECKS)
+
+        # ── Normalisation scalars for _extract_state() ─────────────────────
+        # Each system's counts live in a different numerical range.
+        # Dividing by these scalars maps all systems to roughly [-1, +1]
+        # before the features enter the neural network.
+        tc_scale, rc_scale, adv_scale = CountingConfig.COUNT_NORM_SCALARS[system]
+        self._tc_scale  = tc_scale
+        self._rc_scale  = rc_scale
+        self._adv_scale = adv_scale
+
         self.strategy = BasicStrategy(self.config)
         self.deviation_engine = DeviationEngine(self.strategy)
         self.betting_engine = BettingEngine()
@@ -264,7 +285,7 @@ class Simulator:
             float(hand.is_pair),                                          # [2]
             (hand.cards[0].count_key / 11.0) if hand.is_pair else 0.0,  # [3]
             dealer_upcard.count_key / 11.0,                              # [4]
-            self.counter.true_count / 10.0,                              # [5]
+            self.counter.true_count / self._tc_scale,                    # [5] system-normalised TC
             0.0,  # shuffle adjustment (filled during actual play)        # [6]
             self.counter.penetration,                                     # [7]
         ] + [remaining.get(i, 0.0) for i in range(2, 12)] + [           # [8-17]
@@ -274,8 +295,8 @@ class Simulator:
             float(Action.SURRENDER in hand.available_actions(self.config, hand_idx)),                                                           # [21] can_surrender
             float(num_hands) / 4.0,                                     # [22] active split hands
             min(self.betting_engine.bankroll / self.betting_engine.config.INITIAL_BANKROLL, 2.0),  # [23] bankroll ratio (capped at 2x)
-            self.counter.advantage,                                      # [24]
-            self.counter.running_count / 20.0,                          # [25]
+            self.counter.advantage / self._adv_scale,                    # [24] system-normalised advantage
+            self.counter.running_count / self._rc_scale,                 # [25] system-normalised RC
             self.counter.decks_remaining / 8.0,                         # [26]
             float(hand.is_split),                                        # [27] is this a post-split hand
         ]

@@ -140,6 +140,30 @@ class CountingConfig:
         },
     }
 
+    # ── Normalisation scalars ───────────────────────────────────────────────
+    # _extract_state() divides count features by these values so every system
+    # maps to roughly the same [-1, +1] range before entering the network.
+    #
+    # How the scalars were chosen:
+    #   true_count:    Hi-Lo and KO rarely exceed ±10 in an 8-deck shoe.
+    #                  Omega II and Zen use ±2 tags, so their TC can reach ±20.
+    #                  Scalar = max expected |TC| per system.
+    #   running_count: RC = TC × decks_remaining (max ~7 decks early in shoe).
+    #                  Hi-Lo/KO ±1 tags  → max RC ≈ ±70  → scalar 20 (orig.) is ok
+    #                  Omega II ±2 tags  → max RC ≈ ±140 → scalar 40
+    #                  Zen      ±2 tags  → max RC ≈ ±140 → scalar 40
+    #   advantage:     Derived as base_edge + TC * 0.005.  The 0.005 per-TC-unit
+    #                  factor is calibrated for Hi-Lo.  Level-2 systems have a
+    #                  similar per-TC advantage profile once TC is normalised, so
+    #                  clipping to ±0.10 (10%) covers all systems safely.
+    COUNT_NORM_SCALARS = {
+        #              true_count  running_count  advantage
+        "hi_lo":    (  10.0,        20.0,           0.10 ),
+        "ko":       (  10.0,        20.0,           0.10 ),
+        "omega_ii": (  20.0,        40.0,           0.10 ),
+        "zen":      (  20.0,        40.0,           0.10 ),
+    }
+
     # Take insurance when True Count reaches this value.
     # At TC +3, roughly 1 in 3 remaining cards is a ten-value,
     # making the 2:1 insurance bet mathematically profitable.
