@@ -96,11 +96,11 @@ This is the single most important thing to understand before setting up. There a
 │  SYSTEM 2 — Strategy AI (PyTorch Neural Network)                    │
 │                                                                     │
 │  WHAT IT DOES:  Given your current hand, the dealer's upcard, and   │
-│                 the running count — recommends the best action       │
+│                 the running count — recommends the best action      │
 │                 and optimal bet size.                               │
 │                                                                     │
-│  EXAMPLE:  "You have 16 vs dealer 10 at TC +2 → STAND"             │
-│            "Bet 4 units (₹400) — count is favourable"              │
+│  EXAMPLE:  "You have 16 vs dealer 10 at TC +2 → STAND"              │
+│            "Bet 4 units (₹400) — count is favourable"               │
 │                                                                     │
 │  HOW TO TRAIN:                                                      │
 │    python main.py train --hands 1000000                             │
@@ -1369,7 +1369,7 @@ You do not need to memorise these — the I18 Panel in the dashboard highlights 
 ### Illustrious 18 — sorted by value (most important first)
 
 | # | Your hand | Dealer upcard | Basic strategy | Deviation action | TC threshold |
-|---|-----------|--------------|---------------|-----------------|-------------|
+|---|-----------|---------------|----------------|------------------|--------------|
 | 1 | Hard 16 | 10 | Hit | **Stand** | TC ≥ 0 |
 | 2 | Pair of 10s | 5 | Stand | **Split** | TC ≥ +5 |
 | 3 | Pair of 10s | 6 | Stand | **Split** | TC ≥ +4 |
