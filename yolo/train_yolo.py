@@ -157,6 +157,21 @@ def train(
         print(f'  Loading pretrained weights: {model_size}.pt')
         model = YOLO(f'{model_size}.pt')
 
+    # ── Windows pin_memory fix ────────────────────────────────────────────────
+    # On Windows with tight VRAM, pin_memory causes "CUDA error: resource
+    # already mapped" crashes during validation data loading.  Disable it
+    # by monkey-patching DataLoader before training starts.
+    if sys.platform == 'win32' and device != 'cpu':
+        workers = 0
+        import torch.utils.data as _tud
+        _OrigDL = _tud.DataLoader
+        class _SafeDataLoader(_OrigDL):
+            def __init__(self, *args, **kwargs):
+                kwargs.setdefault('pin_memory', False)
+                super().__init__(*args, **kwargs)
+        _tud.DataLoader = _SafeDataLoader
+        print(f'  ⚙️  Windows GPU mode: workers=0, pin_memory disabled')
+
     # ── Train ─────────────────────────────────────────────────────────────────
     print(f'\n  Starting training…\n')
     start = time.time()
