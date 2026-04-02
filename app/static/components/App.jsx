@@ -104,6 +104,21 @@ function App() {
   //   'live'       → Flask server scans the screen automatically via mss
   const [scanMode, setScanMode] = useState('manual')
 
+  // ── Feature state (additive — do not modify existing state above) ─────────
+
+  // Feature 1 & 3: Active zone config from server
+  const [zoneConfig, setZoneConfig] = useState({ player_end: 0.33, dealer_end: 0.66 })
+
+  // Feature 2: Seen cards (other players) this hand
+  const [seenCards, setSeenCards] = useState([])
+
+  // Feature 4: Card confirmation mode + pending queue
+  const [confirmationMode, setConfirmationMode] = useState(false)
+  const [pendingCards, setPendingCards]         = useState([])
+
+  // Feature 5: Wonging (back-counting) mode state
+  const [wongingData, setWongingData] = useState(null)
+
 
   // ── REFS ───────────────────────────────────────────────────────────────────
   // useRef stores a value that should NOT trigger re-renders when it changes.
@@ -156,6 +171,18 @@ function App() {
             : prev
         )
       }
+
+      // Feature 1/3: sync zone config
+      if (data.zone_config) setZoneConfig(data.zone_config)
+
+      // Feature 2: sync seen cards
+      if (data.seen_cards_this_hand !== undefined) setSeenCards(data.seen_cards_this_hand)
+
+      // Feature 4: sync confirmation mode flag
+      if (data.confirmation_mode !== undefined) setConfirmationMode(data.confirmation_mode)
+
+      // Feature 5: sync wonging data
+      if (data.wonging) setWongingData(data.wonging)
     })
 
     // 'notification' = informational toasts (e.g. "Shuffled! Count reset.")
@@ -163,6 +190,9 @@ function App() {
 
     // 'error' = server ran into a problem processing a card
     socket.on('error', (data) => showToast(data.message, 'error'))
+
+    // Feature 4: real-time pending card queue updates
+    socket.on('pending_cards_update', (data) => setPendingCards(data.pending || []))
 
     // Cleanup: disconnect when App unmounts (e.g. page close or hot-reload)
     return () => socket.disconnect()
@@ -535,6 +565,11 @@ function App() {
             />
           )}
 
+          {/* Feature 2: Other players' cards — only shown when data exists */}
+          {seenCards && seenCards.length > 0 && (
+            <SeenCardsPanel seenCards={seenCards} />
+          )}
+
           {/* Card entry grid */}
           <CardGrid
             target={dealTarget}
@@ -590,6 +625,33 @@ function App() {
             onDealCard={handleDealCard}
             dealTarget={dealTarget}
           />
+
+          {/* Feature 1 & 3: Zone config + seat presets — shown in live/screenshot mode */}
+          {(scanMode === 'live' || scanMode === 'screenshot') && (
+            <ZoneConfigPanel
+              socket={socketRef.current}
+              zoneConfig={zoneConfig}
+              onApply={(msg) => showToast(msg, 'info')}
+            />
+          )}
+
+          {/* Feature 4: Card confirmation mode — shown in live mode */}
+          {scanMode === 'live' && (
+            <ConfirmationPanel
+              socket={socketRef.current}
+              confirmationMode={confirmationMode}
+              pendingCards={pendingCards}
+            />
+          )}
+
+          {/* Feature 5: Wonging / back-counting panel — shown in live mode */}
+          {scanMode === 'live' && (
+            <WongPanel
+              socket={socketRef.current}
+              wonging={wongingData}
+              count={gameState?.count}
+            />
+          )}
 
           {/* Shoe composition */}
           <ShoePanel shoe={shoe} />

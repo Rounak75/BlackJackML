@@ -32,19 +32,21 @@
 15. [How to Use the Dashboard](#-how-to-use-the-dashboard)
 16. [Three Card Entry Modes](#-three-card-entry-modes)
 17. [Card Routing (Player / Dealer / Seen)](#-card-routing-player--dealer--seen)
-18. [Split Hand Workflow](#-split-hand-workflow)
-19. [Keyboard Shortcuts](#-keyboard-shortcuts)
-20. [Currency Settings](#-currency-settings)
-21. [Editing the Frontend (JS/React files)](#-editing-the-frontend-jsreact-files)
-22. [Running the Tests](#-running-the-tests)
-23. [Desktop Overlay (Live Mode)](#-desktop-overlay-live-mode)
-24. [Illustrious 18 + Fab 4 — Complete Reference](#-illustrious-18--fab-4--complete-reference)
-25. [Dashboard Panels — Analytics, Risk, Stop Alerts, Shuffle Tracker](#-dashboard-panels--analytics-risk-stop-alerts-shuffle-tracker)
-26. [Deployment — Putting It Online](#-deployment--putting-it-online)
-27. [Troubleshooting — Common Errors](#-troubleshooting--common-errors)
-28. [Model Performance & Accuracy](#-model-performance--accuracy)
-29. [Architecture Reference](#-architecture-reference)
-30. [Bug Fix Changelog](#-bug-fix-changelog)
+18. [Advanced Tracking Features](#-advanced-tracking-features)
+19. [Split Hand Workflow](#-split-hand-workflow)
+20. [Keyboard Shortcuts](#-keyboard-shortcuts)
+21. [Currency Settings](#-currency-settings)
+22. [Editing the Frontend (JS/React files)](#-editing-the-frontend-jsreact-files)
+23. [Running the Tests](#-running-the-tests)
+24. [Desktop Overlay (Live Mode)](#-desktop-overlay-live-mode)
+25. [Illustrious 18 + Fab 4 — Complete Reference](#-illustrious-18--fab-4--complete-reference)
+26. [Dashboard Panels](#-dashboard-panels)
+27. [Deployment — Putting It Online](#-deployment--putting-it-online)
+28. [Troubleshooting — Common Errors](#-troubleshooting--common-errors)
+29. [Model Performance & Accuracy](#-model-performance--accuracy)
+30. [Architecture Reference](#-architecture-reference)
+31. [Developer Diagnostics & Testing](#-developer-diagnostics--testing)
+32. [Bug Fix Changelog](#-bug-fix-changelog)
 
 ---
 
@@ -2506,6 +2508,54 @@ React re-renders all panels
 12. emit('state_update', {...})        → full state sent to browser
 13. React: setGameState(data)          → all panels re-render
 ```
+
+---
+
+## 🚀 Advanced Tracking Features
+
+This system includes 5 advanced production-grade features built directly into the Live Scan and Screenshot architecture:
+
+### 1. Configurable Screen Zones
+The Live Scanner divides the screen horizontally to route cards to the correct hand (Player, Dealer, Others). 
+- **How to Use:** In Live Mode, open the **Zone & Seat Config** panel. Use the sliders to manually drag the boundaries that dictate the Player and Dealer regions.
+- **Why it matters:** Ensures accurate routing of cards without hardcoding fixed pixel sizes, allowing it to adapt to any casino UI.
+
+### 2. Table Position Intelligence (Seat Presets)
+Your seating position at the table changes where your cards appear on the screen.
+- **How to Use:** In the Zone Config panel, click a preset from 1 (far left) to 7 (far right).
+- **Why it matters:** Instead of manually sliding zones, it maps your physical seat to screen zones automatically. This ensures your hand always correctly receives your cards.
+
+### 3. Seen Cards Display (Multi-Player)
+Other players' cards are essential for the counting system but shouldn't interfere with your own hand.
+- **How to Use:** When cards fall into the "Other Players" zone, they are routed to the **Seen Cards Panel**. This panel dynamically appears only when these cards are detected.
+- **Why it matters:** You can visually confirm that the system correctly counted other players' hands without adding them to your total or the dealer's total. It correctly adjusts the running count.
+
+### 4. Card Confirmation Mode (Human-in-the-Loop)
+Live scanning can sometimes misidentify cards. This mode forces a manual confirmation before cards are injected into the count.
+- **How to Use:** Enable **Confirmation Mode** from the Live Overlay Panel. Detected cards will pile up in a queue where you can click "✓ Confirm" or "✕ Reject".
+- **Why it matters:** Prevents bad OCR reads from polluting your carefully maintained count during critical hands.
+
+### 5. Wonging Mode (Back-Counting)
+Wonging involves watching a table and only sitting down when the True Count (TC) is favorable.
+- **How to Use:** Enable through the **Wonging Panel**. All detected cards will be forced to the `seen` pile regardless of their zone. Watch for the signal to turn jade green (`SIT DOWN NOW`).
+- **Signal Logic:** TC ≥ +2 (Sit Down), TC < -1 (Leave Table), otherwise (Keep Watching).
+- **Why it matters:** Allows you to preserve your bankroll by entering the game exactly when the mathematical edge shifts in your favor.
+
+### Advanced Feature Integration (API & WebSockets)
+All 5 advanced tracking features natively synchronize with the UI in real-time. For developers building custom headless clients, the backend exposes the following new control paths:
+*   **Zone Configuration**: `POST /api/zones` payload `{'player_end': 0.35, 'dealer_end': 0.65}` or `socket.emit('set_zones', ...)`
+*   **Seat Presets**: `POST /api/seat_preset` payload `{'seat': 4}` or `socket.emit('set_seat_preset', ...)`
+*   **Card Confirmation**: `POST /api/confirmation_mode` payload `{'enabled': true}` or `socket.emit('set_confirmation_mode', ...)` -> Handle queue with `confirm_card` and `reject_card`.
+*   **Wonging Mode**: `POST /api/wonging_mode` payload `{'enabled': true}` or `socket.emit('set_wonging_mode', ...)`
+
+---
+
+## 🛠️ Developer Diagnostics & Testing
+
+The server ships with two built-in health diagnostic layers designed to smoke-test environments, especially after adding new frontend components or changing state payloads.
+
+*   **Syntax & Compilation Check (`http://localhost:5000/diag`)**: Provides a localized Babel compilation loop that compiles every raw React `.js` and `.jsx` component in isolation. It outputs `✅` or `❌ JS ERROR` directly mapping to the file if you introduce a syntax error before running `build.ps1`.
+*   **Environment & Payload Test (`http://localhost:5000/test`)**: A visual checklist validating that `bundle.min.js` successfully built, the WebSocket server is accepting connections, and that the `/api/state` endpoint is correctly resolving all Advanced Tracking state variables (like Wonging flags or Zone configurations) without returning a truncated payload.
 
 ---
 

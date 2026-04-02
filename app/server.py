@@ -57,6 +57,9 @@ from flask_socketio import SocketIO, emit
 import sys
 import os
 
+import threading as _threading
+import functools as _functools
+
 # ── Windows UTF-8 fix ─────────────────────────────────────────────────────────
 # Module-level print() calls below include emoji (✅, ⚠️, ♠). On Windows the
 # console defaults to cp1252 which can't encode them → UnicodeEncodeError.
@@ -239,31 +242,73 @@ session_history = []
 # Wire up after helpers are defined below.
 live_scanner = None
 
+# ══════════════════════════════════════════════════════════════
+# FEATURE STATE — additive, non-breaking
+# ══════════════════════════════════════════════════════════════
+
+# Feature 1: Configurable zone boundaries (replaces hardcoded 0.33 / 0.66)
+_zone_config = {
+    'player_end':  0.33,   # rel_x < player_end → player hand
+    'dealer_end':  0.66,   # player_end ≤ rel_x < dealer_end → dealer hand
+    # rel_x >= dealer_end → seen (other players)
+}
+
+# Seat presets: 7 seats, index 0=far-left, 6=far-right
+# Each preset defines (player_end, dealer_end) so zones shift with seat.
+# Dealer is always roughly in the centre of the table; player zone slides.
+_SEAT_PRESETS = [
+    # seat 1 (far left) — player cards on the very left edge
+    {'player_end': 0.20, 'dealer_end': 0.55},
+    {'player_end': 0.24, 'dealer_end': 0.58},
+    {'player_end': 0.28, 'dealer_end': 0.61},
+    # seat 4 (centre, default)
+    {'player_end': 0.33, 'dealer_end': 0.66},
+    {'player_end': 0.40, 'dealer_end': 0.72},
+    {'player_end': 0.48, 'dealer_end': 0.78},
+    # seat 7 (far right) — player cards on the right side
+    {'player_end': 0.56, 'dealer_end': 0.84},
+]
+
+# Feature 2: Seen-cards tracking (multi-player, per-hand)
+_seen_cards_this_hand: list = []   # list of card strings, reset on new hand
+
+# Feature 4: Card confirmation mode
+_confirmation_mode: bool = False
+_pending_cards: list = []          # [{'rank', 'suit', 'target', 'id'}, ...]
+_pending_lock = _threading.Lock()
+_pending_id_counter: int = 0
+
+# Feature 5: Wonging (back-counting) mode
+_wonging_mode: bool = False
+# Wonging does NOT reset the count — it just redirects all detections to 'seen'
+
 # \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 # PER-SESSION STATE ISOLATION
 # \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 # Each browser tab / WebSocket connection gets its own game session.
 # This prevents two tabs from corrupting each other's state.
-import threading as _threading
-import functools as _functools
+
 class GameSession:
     """Per-connection game state. Each browser tab gets its own session."""
     __slots__ = (
         'shoe', 'counter', 'betting_engine', 'shuffle_tracker',
         'player_hand', 'dealer_hand', 'split_hands',
         'active_hand_index', 'num_splits_done', 'session_history',
+        # Feature 2: seen-cards tracking
+        'seen_cards_this_hand',
     )
     def __init__(self):
-        self.shoe              = Shoe(game_config.NUM_DECKS, game_config.PENETRATION)
-        self.counter           = CardCounter(CountingConfig.DEFAULT_SYSTEM, game_config.NUM_DECKS)
-        self.betting_engine    = BettingEngine()
-        self.shuffle_tracker   = ShuffleTracker(game_config.NUM_DECKS)
-        self.player_hand       = Hand()
-        self.dealer_hand       = Hand()
-        self.split_hands       = []
-        self.active_hand_index = 0
-        self.num_splits_done   = 0
-        self.session_history   = []
+        self.shoe                 = Shoe(game_config.NUM_DECKS, game_config.PENETRATION)
+        self.counter              = CardCounter(CountingConfig.DEFAULT_SYSTEM, game_config.NUM_DECKS)
+        self.betting_engine       = BettingEngine()
+        self.shuffle_tracker      = ShuffleTracker(game_config.NUM_DECKS)
+        self.player_hand          = Hand()
+        self.dealer_hand          = Hand()
+        self.split_hands          = []
+        self.active_hand_index    = 0
+        self.num_splits_done      = 0
+        self.session_history      = []
+        self.seen_cards_this_hand = []
 sessions = {}   # sid -> GameSession
 _session_lock = _threading.Lock()
 def _load_session_globals():
@@ -271,34 +316,37 @@ def _load_session_globals():
     global shoe, counter, betting_engine, shuffle_tracker
     global current_player_hand, current_dealer_hand
     global split_hands, active_hand_index, num_splits_done, session_history
+    global _seen_cards_this_hand
     s = sessions.get(request.sid)
     if s is None:
         return
-    shoe                = s.shoe
-    counter             = s.counter
-    betting_engine      = s.betting_engine
-    shuffle_tracker      = s.shuffle_tracker
-    current_player_hand = s.player_hand
-    current_dealer_hand = s.dealer_hand
-    split_hands         = s.split_hands
-    active_hand_index   = s.active_hand_index
-    num_splits_done     = s.num_splits_done
-    session_history     = s.session_history
+    shoe                    = s.shoe
+    counter                 = s.counter
+    betting_engine          = s.betting_engine
+    shuffle_tracker         = s.shuffle_tracker
+    current_player_hand     = s.player_hand
+    current_dealer_hand     = s.dealer_hand
+    split_hands             = s.split_hands
+    active_hand_index       = s.active_hand_index
+    num_splits_done         = s.num_splits_done
+    session_history         = s.session_history
+    _seen_cards_this_hand   = s.seen_cards_this_hand
 def _save_session_globals():
     """Copy module globals back into the session object."""
     s = sessions.get(request.sid)
     if s is None:
         return
-    s.shoe              = shoe
-    s.counter           = counter
-    s.betting_engine    = betting_engine
-    s.shuffle_tracker   = shuffle_tracker
-    s.player_hand       = current_player_hand
-    s.dealer_hand       = current_dealer_hand
-    s.split_hands       = split_hands
-    s.active_hand_index = active_hand_index
-    s.num_splits_done   = num_splits_done
-    s.session_history   = session_history
+    s.shoe                  = shoe
+    s.counter               = counter
+    s.betting_engine        = betting_engine
+    s.shuffle_tracker       = shuffle_tracker
+    s.player_hand           = current_player_hand
+    s.dealer_hand           = current_dealer_hand
+    s.split_hands           = split_hands
+    s.active_hand_index     = active_hand_index
+    s.num_splits_done       = num_splits_done
+    s.session_history       = session_history
+    s.seen_cards_this_hand  = _seen_cards_this_hand
 def with_session(fn):
     """Decorator: load session state before handler, save after.
     Uses a lock so concurrent handlers from different sessions
@@ -353,11 +401,13 @@ def _reset_hand_state():
     The running count must persist across all hands within one shoe.
     """
     global current_player_hand, current_dealer_hand, split_hands, active_hand_index, num_splits_done
-    current_player_hand = Hand()
-    current_dealer_hand = Hand()
-    split_hands         = []
-    active_hand_index   = 0
-    num_splits_done     = 0
+    global _seen_cards_this_hand
+    current_player_hand     = Hand()
+    current_dealer_hand     = Hand()
+    split_hands             = []
+    active_hand_index       = 0
+    num_splits_done         = 0
+    _seen_cards_this_hand   = []   # Feature 2: reset per-hand seen cards
 
 
 # ══════════════════════════════════════════════════════════════
@@ -424,7 +474,9 @@ def _process_card_entry(card: Card, target: str, suit_str: str):
             current_player_hand.add_card(card)
     elif target == TARGET_DEALER:
         current_dealer_hand.add_card(card)
-    # TARGET_SEEN: counted above, not added to any displayed hand
+    else:
+        # TARGET_SEEN: counted above — also store for multi-player display (Feature 2)
+        _seen_cards_this_hand.append(str(card))
 
 
 # ══════════════════════════════════════════════════════════════
@@ -752,6 +804,35 @@ def _build_split_data(dealer_upcard_card, tc: float) -> list:
     return split_hand_data
 
 
+def _build_wonging_data() -> dict:
+    """
+    Feature 5: Wonging (back-counting) mode state.
+    Provides the TC-based sit/leave signal without resetting the count.
+    """
+    tc = counter.true_count
+    tc_r = round(tc, 2)
+    if tc >= 2.0:
+        signal     = 'SIT DOWN NOW'
+        signal_col = 'jade'
+        delta      = 0.0
+    elif tc < -1.0:
+        signal     = 'LEAVE TABLE'
+        signal_col = 'ruby'
+        delta      = round(tc - (-1.0), 2)   # negative: how far below threshold
+    else:
+        signal     = 'KEEP WATCHING'
+        signal_col = 'gold'
+        delta      = round(2.0 - tc, 2)       # positive: how far from entry threshold
+    return {
+        'enabled': _wonging_mode,
+        'true_count': tc_r,
+        'signal': signal,
+        'signal_color': signal_col,
+        'delta_to_entry': round(2.0 - tc, 2),   # always show delta to +2 entry
+        'delta_to_leave': round(tc - (-1.0), 2), # always show delta to -1 exit
+    }
+
+
 # ══════════════════════════════════════════════════════════════
 # STATE BUILDER
 # ══════════════════════════════════════════════════════════════
@@ -889,6 +970,14 @@ def get_full_state():
             "n0":           betting_engine.get_session_stats().get("n0"),
             "shoe_quality": counter.shoe_quality_score,
         },
+        # ── Feature 2: Seen cards (other players, this hand) ──────────────
+        "seen_cards_this_hand": list(_seen_cards_this_hand),
+        # ── Feature 1: Active zone config ─────────────────────────────────
+        "zone_config": dict(_zone_config),
+        # ── Feature 4: Confirmation mode flag ─────────────────────────────
+        "confirmation_mode": _confirmation_mode,
+        # ── Feature 5: Wonging mode + decision signal ─────────────────────
+        "wonging": _build_wonging_data(),
     }
 
 
@@ -1171,7 +1260,7 @@ def handle_shuffle(data=None):
     Only click this when you see the actual dealer collect and reshuffle
     all the cards into a new shoe. Not between hands.
     """
-    global shoe
+
 
     shuffle_type = data.get('type', 'machine') if data else 'machine'
 
@@ -1261,6 +1350,172 @@ def handle_set_stop_thresholds(data):
 
 
 # ══════════════════════════════════════════════════════════════
+# FEATURE 1 — Zone Configuration + Seat Presets
+# ══════════════════════════════════════════════════════════════
+
+@socketio.on('set_zones')
+@with_session
+def handle_set_zones(data=None):
+    """Update card routing zone boundaries. Values clamped to [0.0, 1.0]."""
+    # global _zone_config (unused)
+    data = data or {}
+    pe = float(data.get('player_end', _zone_config['player_end']))
+    de = float(data.get('dealer_end', _zone_config['dealer_end']))
+    # Clamp and enforce: player_end < dealer_end, both in [0,1]
+    pe = max(0.0, min(0.99, pe))
+    de = max(pe + 0.01, min(1.0, de))
+    _zone_config['player_end'] = round(pe, 3)
+    _zone_config['dealer_end'] = round(de, 3)
+    _safe_emit('state_update', get_full_state())
+    emit('notification', {'type': 'info', 'message': f'Zones updated: player<{pe:.0%} dealer<{de:.0%}'})
+
+
+@socketio.on('set_seat_preset')
+@with_session
+def handle_set_seat_preset(data=None):
+    """Apply a seat preset (seat 1–7, index 0–6) to zone boundaries."""
+    # global _zone_config (unused)
+    data  = data or {}
+    seat  = int(data.get('seat', 4)) - 1   # convert 1-based to 0-based
+    seat  = max(0, min(6, seat))
+    preset = _SEAT_PRESETS[seat]
+    _zone_config['player_end'] = preset['player_end']
+    _zone_config['dealer_end'] = preset['dealer_end']
+    _safe_emit('state_update', get_full_state())
+    emit('notification', {'type': 'info', 'message': f'Seat {seat+1} preset applied'})
+
+
+@app.route('/api/zones', methods=['GET', 'POST'])
+def api_zones():
+    """REST fallback for zone config get/set."""
+    # global _zone_config (unused)
+    if request.method == 'POST':
+        data = request.get_json(force=True) or {}
+        pe = float(data.get('player_end', _zone_config['player_end']))
+        de = float(data.get('dealer_end', _zone_config['dealer_end']))
+        pe = max(0.0, min(0.99, pe))
+        de = max(pe + 0.01, min(1.0, de))
+        _zone_config['player_end'] = round(pe, 3)
+        _zone_config['dealer_end'] = round(de, 3)
+    return jsonify({'zone_config': _zone_config, 'seat_presets': _SEAT_PRESETS})
+
+
+@app.route('/api/seat_preset', methods=['POST'])
+def api_seat_preset():
+    """REST: apply a seat preset by seat number (1–7)."""
+    # global _zone_config (unused)
+    data  = request.get_json(force=True) or {}
+    seat  = int(data.get('seat', 4)) - 1
+    seat  = max(0, min(6, seat))
+    preset = _SEAT_PRESETS[seat]
+    _zone_config['player_end'] = preset['player_end']
+    _zone_config['dealer_end'] = preset['dealer_end']
+    return jsonify({'zone_config': _zone_config, 'seat': seat + 1})
+
+
+# ══════════════════════════════════════════════════════════════
+# FEATURE 4 — Card Confirmation Mode
+# ══════════════════════════════════════════════════════════════
+
+@socketio.on('set_confirmation_mode')
+def handle_set_confirmation_mode(data=None):
+    """Enable / disable card confirmation mode (human-in-the-loop)."""
+    global _confirmation_mode
+    enabled = bool((data or {}).get('enabled', False))
+    _confirmation_mode = enabled
+    if not enabled:
+        # Discard any queued cards when mode is turned off
+        with _pending_lock:
+            _pending_cards.clear()
+    emit('confirmation_mode_changed', {'enabled': _confirmation_mode})
+    emit('notification', {
+        'type': 'info',
+        'message': 'Confirmation mode ON — confirm each detected card' if enabled
+                   else 'Confirmation mode OFF — cards applied directly'
+    })
+
+
+@socketio.on('confirm_card')
+@with_session
+def handle_confirm_card(data=None):
+    """User approved a pending card — apply it to the game."""
+    global _pending_cards
+    card_id = (data or {}).get('id')
+    with _pending_lock:
+        card = next((c for c in _pending_cards if c['id'] == card_id), None)
+        if card:
+            _pending_cards = [c for c in _pending_cards if c['id'] != card_id]
+        else:
+            emit('notification', {'type': 'warning', 'message': 'Card already processed'})
+            return
+    # Apply the confirmed card exactly like a normal deal_card
+    r = RANK_MAP.get(str(card['rank']).upper())
+    s = SUIT_MAP.get(str(card['suit']).lower())
+    if r and s:
+        _process_card_entry(Card(r, s), card['target'], str(card['suit']).lower())
+    _safe_emit('state_update', get_full_state())
+    emit('pending_cards_update', {'pending': list(_pending_cards)})
+
+
+@socketio.on('reject_card')
+def handle_reject_card(data=None):
+    """User rejected a pending card — discard it silently."""
+    global _pending_cards
+    card_id = (data or {}).get('id')
+    with _pending_lock:
+        _pending_cards = [c for c in _pending_cards if c['id'] != card_id]
+    emit('pending_cards_update', {'pending': list(_pending_cards)})
+
+
+@app.route('/api/confirmation_mode', methods=['GET', 'POST'])
+def api_confirmation_mode():
+    """REST: get or set confirmation mode."""
+    global _confirmation_mode
+    if request.method == 'POST':
+        data = request.get_json(force=True) or {}
+        _confirmation_mode = bool(data.get('enabled', False))
+        if not _confirmation_mode:
+            with _pending_lock:
+                _pending_cards.clear()
+    return jsonify({'enabled': _confirmation_mode, 'pending_count': len(_pending_cards)})
+
+
+@app.route('/api/pending_cards')
+def api_pending_cards():
+    """REST: list currently pending cards awaiting confirmation."""
+    return jsonify({'pending': list(_pending_cards)})
+
+
+# ══════════════════════════════════════════════════════════════
+# FEATURE 5 — Wonging Mode
+# ══════════════════════════════════════════════════════════════
+
+@socketio.on('set_wonging_mode')
+@with_session
+def handle_set_wonging_mode(data=None):
+    """Enable / disable wonging (back-counting) mode.
+    Does NOT reset the running count — count state is preserved."""
+    global _wonging_mode
+    _wonging_mode = bool((data or {}).get('enabled', False))
+    _safe_emit('state_update', get_full_state())
+    emit('notification', {
+        'type': 'info',
+        'message': 'Wonging ON — all cards tracked as seen. Watch for TC ≥ +2 to sit.' if _wonging_mode
+                   else 'Wonging OFF — cards routed normally'
+    })
+
+
+@app.route('/api/wonging', methods=['GET', 'POST'])
+def api_wonging():
+    """REST: get or toggle wonging mode."""
+    global _wonging_mode
+    if request.method == 'POST':
+        data = request.get_json(force=True) or {}
+        _wonging_mode = bool(data.get('enabled', _wonging_mode))
+    return jsonify({'enabled': _wonging_mode})
+
+
+# ══════════════════════════════════════════════════════════════
 # LIVE SCANNER — socket handlers + REST routes
 # ══════════════════════════════════════════════════════════════
 # Initialise the scanner now that _process_card_entry / _reset_hand_state
@@ -1270,7 +1525,40 @@ from app.live_scanner import LiveScanner as _LiveScanner
 
 def _apply_card(rank, suit, target=TARGET_SEEN):
     """Bridge: scanner thread → deal_card handler (thread-safe).
-    Uses _process_card_entry so card tracking logic stays in one place."""
+
+    Feature 4: If confirmation mode is ON, queue instead of applying.
+    Feature 5: If wonging mode is ON, redirect all cards to 'seen'.
+    Uses _process_card_entry so card tracking logic stays in one place.
+    """
+    global _pending_id_counter
+
+    # Feature 5: wonging overrides target — everything goes to 'seen'
+    if _wonging_mode:
+        target = TARGET_SEEN
+
+    # Feature 4: queue card for human confirmation
+    if _confirmation_mode:
+
+        with _pending_lock:
+            _pending_id_counter += 1
+            card_entry = {
+                'id':     _pending_id_counter,
+                'rank':   str(rank).upper(),
+                'suit':   str(suit).lower(),
+                'target': target,
+            }
+            # Deduplicate: don't queue the same rank+suit+target twice
+            already = any(
+                c['rank'] == card_entry['rank'] and
+                c['suit'] == card_entry['suit'] and
+                c['target'] == card_entry['target']
+                for c in _pending_cards
+            )
+            if not already:
+                _pending_cards.append(card_entry)
+        socketio.emit('pending_cards_update', {'pending': list(_pending_cards)})
+        return
+
     try:
         r = RANK_MAP.get(str(rank).upper())
         s = SUIT_MAP.get(str(suit).lower())
@@ -1295,6 +1583,7 @@ live_scanner = _LiveScanner(
     get_state_fn=get_full_state,
     apply_card_fn=_apply_card,
     reset_hand_fn=_reset_hand,
+    get_zone_fn=lambda: _zone_config,
 )
 
 

@@ -70,6 +70,7 @@ mss>=9.0.0              # OS-level screen capture — invisible to casino browse
 requests>=2.31.0        # HTTP client — used for remote API calls if needed
 python-dotenv>=1.0.0    # loads .env files for secret management
 
-# ── Testing ───────────────────────────────────────────────────────────────────
+# ── Testing & Linting ──────────────────────────────────────────────────────────
 pytest>=7.4.0           # unit test runner — run with: pytest
 pytest-cov>=4.1.0       # coverage reporting — run with: pytest --cov
+flake8>=6.1.0           # linter — enforces PEP 8 and catches unused globally scoped variables

@@ -118,11 +118,14 @@ class LiveScanner:
 
     def __init__(self, socketio, get_state_fn: Callable,
                  apply_card_fn: Callable, reset_hand_fn: Callable,
-                 fps: float = DEFAULT_FPS):
+                 fps: float = DEFAULT_FPS,
+                 get_zone_fn: Optional[Callable] = None):
         self.socketio       = socketio
         self.get_state_fn   = get_state_fn
         self.apply_card_fn  = apply_card_fn
         self.reset_hand_fn  = reset_hand_fn
+        # Feature 1: callable that returns current zone config dict (or None)
+        self._get_zone_fn   = get_zone_fn
 
         self._fps            = max(MIN_FPS, min(MAX_FPS, fps))
         self._roi            = None        # None = full screen
@@ -138,6 +141,10 @@ class LiveScanner:
         self._last_card_t    = 0.0
         self._frames         = 0
         self._applied        = 0
+
+        # Feature 1: dynamic zone boundaries (updated each tick from get_zone_fn)
+        self._zone_player_end = 0.33
+        self._zone_dealer_end = 0.66
 
         self._backend = detect_backend()
         log.info(f'[Live] Backend: {self._backend}')
@@ -212,6 +219,16 @@ class LiveScanner:
             time.sleep(max(0.0, (1.0 / self._fps) - (time.time() - t0)))
 
     def _tick(self):
+        # Feature 1: refresh zone boundaries before each frame
+        if self._get_zone_fn is not None:
+            try:
+                zc = self._get_zone_fn()
+                if zc:
+                    self._zone_player_end = float(zc.get('player_end', 0.33))
+                    self._zone_dealer_end = float(zc.get('dealer_end', 0.66))
+            except Exception:
+                pass
+
         # 1. Grab frame
         frame = _grab_mss(self._roi) if self._backend == 'mss' else _grab_pil(self._roi)
         if frame is None:
@@ -289,12 +306,17 @@ class LiveScanner:
                     card_x   = card['bbox'][0]
                     rel_x    = card_x / roi_w   # 0.0 = left edge, 1.0 = right edge
 
-                    if rel_x < 0.33:
-                        target = 'player'        # left third → your cards
-                    elif rel_x < 0.66:
-                        target = 'dealer'        # centre third → dealer cards
+                    # Feature 1: use dynamic zone boundaries from server config
+                    # Boundaries are read from _zone_config injected via set_zone_fn
+                    player_end = self._zone_player_end
+                    dealer_end = self._zone_dealer_end
+
+                    if rel_x < player_end:
+                        target = 'player'        # left zone → your cards
+                    elif rel_x < dealer_end:
+                        target = 'dealer'        # centre zone → dealer cards
                     else:
-                        target = 'seen'          # right third → other players (count only)
+                        target = 'seen'          # right zone → other players (count only)
 
                     try:
                         self.apply_card_fn(card['rank'], card['suit'], target)

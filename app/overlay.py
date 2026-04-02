@@ -328,7 +328,7 @@ class RegionSelector:
         label.place(relx=0.5, rely=0.02, anchor='n')
 
         def on_press(e):
-            nonlocal start_x, start_y, rect_id
+            nonlocal start_x, start_y
             start_x, start_y = e.x, e.y
             if rect_id:
                 canvas.delete(rect_id)

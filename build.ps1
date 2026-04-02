@@ -66,7 +66,9 @@ $loadOrder = @(
     "SideBetPanel","HandDisplay","CardGrid","StrategyRefTable",
     "ShoePanel","EdgeMeter","SessionStats","ShuffleTracker",
     "CountHistory","I18Panel","AnalyticsPanel","LiveOverlayPanel","CenterToolBar",
-    "SplitHandPanel","SideCountPanel","CasinoRiskMeter","StopAlerts","App"
+    "SplitHandPanel","SideCountPanel","CasinoRiskMeter","StopAlerts",
+    "SeenCardsPanel","ZoneConfigPanel","ConfirmationPanel","WongPanel",
+    "App"
 )
 
 $timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -123,7 +125,11 @@ $requiredGlobals = @(
     "function CardGrid(",
     "function LiveOverlayPanel(",
     "function CompDepAlert(",
-    "function AnalyticsPanel("
+    "function AnalyticsPanel(",
+    "function SeenCardsPanel(",
+    "function ZoneConfigPanel(",
+    "function ConfirmationPanel(",
+    "function WongPanel("
 )
 $missing = @()
 foreach ($g in $requiredGlobals) {

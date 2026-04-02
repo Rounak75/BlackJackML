@@ -98,6 +98,8 @@ desktop.ini
 *.log
 *.tmp
 *.temp
+flake8_output.txt
+test_out.txt
 logs/
 .pytest_cache/
 # pytest coverage HTML report
