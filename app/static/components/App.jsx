@@ -199,29 +199,6 @@ function App() {
   }, [])   // empty [] = run once only, on first mount
 
 
-  // ── KEYBOARD SHORTCUTS ─────────────────────────────────────────────────────
-  // This effect adds keyboard listeners. It re-runs when lastBet changes
-  // so the handler captures the latest bet value (avoiding stale closure).
-  useEffect(() => {
-    const handler = (e) => {
-      // Ignore keystrokes while typing in input or select elements
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return
-
-      if (e.key === 'n' || e.key === 'N') handleNewHand()      // N = new hand
-      if (e.key === 's' || e.key === 'S') handleShuffle()      // S = reshuffle
-      if (e.key === 'p' || e.key === 'P') setTarget('player')  // P = deal to player
-      if (e.key === 'd' || e.key === 'D') setTarget('dealer')  // D = deal to dealer
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault()   // stop browser from intercepting Ctrl+Z (undo in inputs etc.)
-        handleUndo()
-      }  // Ctrl+Z / Cmd+Z = undo
-    }
-    window.addEventListener('keydown', handler)
-    // Cleanup removes the listener before attaching the new one on next render
-    return () => window.removeEventListener('keydown', handler)
-  }, [lastBet, handleNewHand, handleShuffle, handleUndo])
-
-
   // ── HANDLERS ───────────────────────────────────────────────────────────────
   // useCallback memoises these functions — they keep the same reference between
   // renders unless their listed dependencies change. This prevents child
@@ -256,7 +233,9 @@ function App() {
    * Only a real casino reshuffle should reset the count (see handleShuffle).
    */
   const handleSplit = useCallback(() => {
-    // Emit split event to server — server creates two hands
+    // Push a sentinel so handleUndo knows not to cross the split boundary.
+    // The sentinel is not a card — it marks the point where the split happened.
+    undoStack.current.push({ type: 'split' })
     socketRef.current?.emit('player_split')
   }, [])
 
@@ -361,20 +340,42 @@ function App() {
       showToast('Nothing to undo', 'warning')
       return
     }
-    const replay  = [...undoStack.current.slice(0, -1)]                         // all but last
-    const removed = undoStack.current[undoStack.current.length - 1]              // the removed card
+
+    // ── Split-aware undo ────────────────────────────────────────────────────
+    // When a split is in progress, use the server's surgical undo_split_card
+    // which removes only the last card from the active split hand.
+    //
+    // BOUNDARY GUARD: handleSplit pushes a {type:'split'} sentinel onto the
+    // stack. If the top entry IS that sentinel it means the active split hand
+    // is down to its founding card — there's nothing left to undo within the
+    // split. We stop here rather than crossing into pre-split territory.
+    const currentSplitHands = gameStateRef.current?.split_hands ?? []
+    if (currentSplitHands.length > 0) {
+      const top = undoStack.current[undoStack.current.length - 1]
+      // Reached the split sentinel — nothing left to undo in this split
+      if (!top || top.type === 'split') {
+        showToast('Nothing to undo — at the start of the split', 'warning')
+        return
+      }
+      const removed = top
+      undoStack.current = undoStack.current.slice(0, -1)
+      socketRef.current?.emit('undo_split_card')
+      showToast(`Undid ${removed?.rank ?? 'card'} from split hand`, 'info')
+      return
+    }
+
+    // ── Normal (non-split) undo — full replay ───────────────────────────────
+    // No split in progress: reset the hand and re-emit all cards except the last.
+    const replay  = [...undoStack.current.slice(0, -1)]   // all but last
+    const removed = undoStack.current[undoStack.current.length - 1]
 
     undoStack.current = []
     dealTargetRef.current = 'player'
     setDealTarget('player')
 
-    // If a split is in progress, we need to clear the split state before replaying.
-    // The server's 'new_hand' event already clears split_hands, so no special
-    // 'undo_split' event is needed — new_hand handles it cleanly.
-    socketRef.current?.emit('new_hand')   // wipe server state (also clears split_hands)
+    socketRef.current?.emit('new_hand')   // wipe server state
 
-    // Re-emit all saved cards in order, with 80ms gaps so the server
-    // has time to process each one before the next arrives.
+    // Re-emit saved cards in order with 80ms gaps (server processes sequentially)
     replay.forEach((c, i) => {
       setTimeout(() => {
         undoStack.current.push(c)
@@ -384,6 +385,29 @@ function App() {
 
     showToast(`Undid ${removed.rank} → ${removed.target}`, 'info')
   }, [])
+
+
+  // ── KEYBOARD SHORTCUTS ─────────────────────────────────────────────────────
+  // Placed AFTER all handlers so the closure captures defined functions.
+  // (useCallback with [] gives stable references — dep array only re-runs
+  // this effect when lastBet changes, not on every render.)
+  useEffect(() => {
+    const handler = (e) => {
+      // Ignore keystrokes while typing in input or select elements
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return
+
+      if (e.key === 'n' || e.key === 'N') handleNewHand()      // N = new hand
+      if (e.key === 's' || e.key === 'S') handleShuffle()      // S = reshuffle
+      if (e.key === 'p' || e.key === 'P') setTarget('player')  // P = deal to player
+      if (e.key === 'd' || e.key === 'D') setTarget('dealer')  // D = deal to dealer
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
+        e.preventDefault()   // stop browser from intercepting Ctrl+Z
+        handleUndo()
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [lastBet, handleNewHand, handleShuffle, handleUndo])
 
 
   // ── DERIVED STATE ──────────────────────────────────────────────────────────

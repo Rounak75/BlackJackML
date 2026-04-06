@@ -49,7 +49,7 @@ function SplitHandCard({ cardStr }) {
   );
 }
 
-function SplitHandZone({ hand, handNumber, isActive, dealerUpcard, onComplete }) {
+function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, onComplete }) {
   const { useState } = React;
 
   if (!hand) return null;
@@ -150,7 +150,9 @@ function SplitHandZone({ hand, handNumber, isActive, dealerUpcard, onComplete })
             ? '1px solid rgba(255,92,92,0.4)' : '1px solid rgba(106,175,255,0.4)',
           color: isBust ? '#ff5c5c' : '#6aafff',
         }}>
-          {isBust ? `✗ Hand ${handNumber} Busted → Next Hand` : `✓ Done with Hand ${handNumber} → Next Hand`}
+          {isBust
+            ? (isLastHand ? `✗ Hand ${handNumber} Busted — Now Deal Dealer` : `✗ Hand ${handNumber} Busted → Next Hand`)
+            : (isLastHand ? `✓ Stand — Done with Hand ${handNumber}` : `✓ Done with Hand ${handNumber} → Next Hand`)}
         </button>
       )}
     </div>
@@ -215,8 +217,9 @@ function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, socket, onN
             hand={hand}
             handNumber={i + 1}
             isActive={i === activeHandIndex}
+            isLastHand={i === splitHands.length - 1}
             dealerUpcard={dealerUpcard}
-            onComplete={i === activeHandIndex && i < splitHands.length - 1 ? handleComplete : null}
+            onComplete={i === activeHandIndex ? handleComplete : null}
           />
         ))}
       </div>

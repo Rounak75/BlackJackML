@@ -53,7 +53,7 @@ build() {
   # Each component file declares `const { useState } = React` for its own scope.
   # When concatenated into one file, duplicate `const` declarations cause a
   # SyntaxError. Convert all hook destructures to `var` which allows redeclaration.
-  python3 - << 'PYEOF'
+  python3 - "$BUNDLE" << 'PYEOF'
 import re, sys
 bundle = sys.argv[1]
 with open(bundle) as f:
@@ -71,7 +71,6 @@ with open(bundle, 'w') as f:
     f.write(src)
 print("  Hook declarations fixed")
 PYEOF
-  "$BUNDLE"
 
   echo "🗜️   Minifying..."
   node "$BUILD_DIR/minify.js"

@@ -1198,6 +1198,16 @@ def handle_undo_split_card(data=None):
         emit('notification', {'type': 'warning', 'message': 'No cards to undo on this hand'})
         return
 
+    # Guard: the first card on each split hand is the founding card from the
+    # original pair. Removing it would corrupt the split structure entirely.
+    # Undo is only permitted when the hand has MORE than 1 card.
+    if len(active_hand.cards) <= 1:
+        emit('notification', {
+            'type': 'warning',
+            'message': 'Cannot undo: this is the founding split card. Press New Hand to restart.'
+        })
+        return
+
     # Remove the last card from the active split hand
     removed_card = active_hand.cards.pop()
 
