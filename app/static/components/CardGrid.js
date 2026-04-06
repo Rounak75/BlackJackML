@@ -14,7 +14,7 @@
  *   • Split/Undo have descriptive aria-labels
  */
 
-function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands }) {
+function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands, scanMode }) {
   const { useState } = React;
   const [suitFilter, setSuitFilter] = useState('all');
 

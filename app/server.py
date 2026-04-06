@@ -1443,6 +1443,7 @@ def handle_set_confirmation_mode(data=None):
         'message': 'Confirmation mode ON — confirm each detected card' if enabled
                    else 'Confirmation mode OFF — cards applied directly'
     })
+    _safe_emit('state_update', get_full_state())
 
 
 @socketio.on('confirm_card')
