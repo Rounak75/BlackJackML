@@ -282,6 +282,12 @@ _pending_id_counter: int = 0
 _wonging_mode: bool = False
 # Wonging does NOT reset the count — it just redirects all detections to 'seen'
 
+# Undo support: counter snapshot at start of current hand (server-side)
+# Set by handle_new_hand; consumed and cleared by handle_undo_hand.
+# Stored as a dict: {running_count, cards_seen, card_log, aces_seen, tens_seen,
+#                    count_history_len}
+_hand_start_counter_snapshot = None
+
 # \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
 # PER-SESSION STATE ISOLATION
 # \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
@@ -296,19 +302,24 @@ class GameSession:
         'active_hand_index', 'num_splits_done', 'session_history',
         # Feature 2: seen-cards tracking
         'seen_cards_this_hand',
+        # Undo support: counter snapshot taken at the start of each hand.
+        # Restored by handle_undo_hand so replay cards count from the
+        # correct baseline instead of stacking on the already-counted hand.
+        'hand_start_counter_snapshot',
     )
     def __init__(self):
-        self.shoe                 = Shoe(game_config.NUM_DECKS, game_config.PENETRATION)
-        self.counter              = CardCounter(CountingConfig.DEFAULT_SYSTEM, game_config.NUM_DECKS)
-        self.betting_engine       = BettingEngine()
-        self.shuffle_tracker      = ShuffleTracker(game_config.NUM_DECKS)
-        self.player_hand          = Hand()
-        self.dealer_hand          = Hand()
-        self.split_hands          = []
-        self.active_hand_index    = 0
-        self.num_splits_done      = 0
-        self.session_history      = []
-        self.seen_cards_this_hand = []
+        self.shoe                        = Shoe(game_config.NUM_DECKS, game_config.PENETRATION)
+        self.counter                     = CardCounter(CountingConfig.DEFAULT_SYSTEM, game_config.NUM_DECKS)
+        self.betting_engine              = BettingEngine()
+        self.shuffle_tracker             = ShuffleTracker(game_config.NUM_DECKS)
+        self.player_hand                 = Hand()
+        self.dealer_hand                 = Hand()
+        self.split_hands                 = []
+        self.active_hand_index           = 0
+        self.num_splits_done             = 0
+        self.session_history             = []
+        self.seen_cards_this_hand        = []
+        self.hand_start_counter_snapshot = None   # set by handle_new_hand
 sessions = {}   # sid -> GameSession
 _session_lock = _threading.Lock()
 def _load_session_globals():
@@ -316,37 +327,39 @@ def _load_session_globals():
     global shoe, counter, betting_engine, shuffle_tracker
     global current_player_hand, current_dealer_hand
     global split_hands, active_hand_index, num_splits_done, session_history
-    global _seen_cards_this_hand
+    global _seen_cards_this_hand, _hand_start_counter_snapshot
     s = sessions.get(request.sid)
     if s is None:
         return
-    shoe                    = s.shoe
-    counter                 = s.counter
-    betting_engine          = s.betting_engine
-    shuffle_tracker         = s.shuffle_tracker
-    current_player_hand     = s.player_hand
-    current_dealer_hand     = s.dealer_hand
-    split_hands             = s.split_hands
-    active_hand_index       = s.active_hand_index
-    num_splits_done         = s.num_splits_done
-    session_history         = s.session_history
-    _seen_cards_this_hand   = s.seen_cards_this_hand
+    shoe                          = s.shoe
+    counter                       = s.counter
+    betting_engine                = s.betting_engine
+    shuffle_tracker               = s.shuffle_tracker
+    current_player_hand           = s.player_hand
+    current_dealer_hand           = s.dealer_hand
+    split_hands                   = s.split_hands
+    active_hand_index             = s.active_hand_index
+    num_splits_done               = s.num_splits_done
+    session_history               = s.session_history
+    _seen_cards_this_hand         = s.seen_cards_this_hand
+    _hand_start_counter_snapshot  = s.hand_start_counter_snapshot
 def _save_session_globals():
     """Copy module globals back into the session object."""
     s = sessions.get(request.sid)
     if s is None:
         return
-    s.shoe                  = shoe
-    s.counter               = counter
-    s.betting_engine        = betting_engine
-    s.shuffle_tracker       = shuffle_tracker
-    s.player_hand           = current_player_hand
-    s.dealer_hand           = current_dealer_hand
-    s.split_hands           = split_hands
-    s.active_hand_index     = active_hand_index
-    s.num_splits_done       = num_splits_done
-    s.session_history       = session_history
-    s.seen_cards_this_hand  = _seen_cards_this_hand
+    s.shoe                           = shoe
+    s.counter                        = counter
+    s.betting_engine                 = betting_engine
+    s.shuffle_tracker                = shuffle_tracker
+    s.player_hand                    = current_player_hand
+    s.dealer_hand                    = current_dealer_hand
+    s.split_hands                    = split_hands
+    s.active_hand_index              = active_hand_index
+    s.num_splits_done                = num_splits_done
+    s.session_history                = session_history
+    s.seen_cards_this_hand           = _seen_cards_this_hand
+    s.hand_start_counter_snapshot    = _hand_start_counter_snapshot
 def with_session(fn):
     """Decorator: load session state before handler, save after.
     Uses a lock so concurrent handlers from different sessions
@@ -1251,12 +1264,89 @@ def handle_new_hand(data=None):
         The running count continues across all hands in the same shoe —
         exactly as a real card counter does at the casino table.
 
+    UNDO SUPPORT:
+        Saves a counter snapshot BEFORE resetting hand state.
+        This snapshot captures the count at the END of the just-finished
+        hand, which is the correct STARTING baseline for the new hand.
+        handle_undo_hand restores this snapshot so that undo replay
+        rebuilds the count correctly from the pre-hand baseline.
+
     Correct usage:
         Between every hand → emit 'new_hand'
         When dealer physically shuffles → emit 'shuffle' (resets count)
     """
+    global _hand_start_counter_snapshot
+    # Save counter state NOW — this is the baseline for the upcoming hand.
+    # Any undo during the new hand will restore to exactly this point.
+    _hand_start_counter_snapshot = {
+        'running_count':    counter.running_count,
+        'cards_seen':       counter.cards_seen,
+        'card_log':         list(counter._card_log),
+        'aces_seen':        counter.aces_seen,
+        'tens_seen':        counter.tens_seen,
+        'count_history_len': len(counter.count_history),
+        # Shoe snapshot: save cards/dealt lists so undo can restore them.
+        # Without this, replayed cards get double-removed from the shoe.
+        'shoe_cards':       list(shoe.cards),
+        'shoe_dealt':       list(shoe.dealt),
+    }
     _reset_hand_state()
     # counter and shoe are intentionally NOT touched here
+    _safe_emit('state_update', get_full_state())
+
+
+@socketio.on('undo_hand')
+@with_session
+def handle_undo_hand(data=None):
+    """
+    Reset hand state AND counter state for undo replay.
+
+    Used exclusively by handleUndo in App.jsx.  Unlike 'new_hand' (which
+    preserves the count across hands), this event also rolls back the counter
+    to the snapshot saved at the START of the current hand by handle_new_hand.
+
+    Why server-side snapshot (not client-supplied):
+        The client receives count_history[-60:] which may be truncated.
+        Reading cards_seen from count_history[-1] gives a wrong value if
+        the history was capped. The server always has the authoritative value.
+
+    Without this, undo replay re-emits cards on top of an already-counted
+    hand, producing a doubled / wrong running count and true count.
+    """
+    global _hand_start_counter_snapshot
+    _reset_hand_state()
+
+    snap = _hand_start_counter_snapshot
+    if snap:
+        # Restore the counter to exactly where it was at the start of this hand
+        counter.running_count = snap['running_count']
+        counter.cards_seen    = snap['cards_seen']
+        counter._card_log     = list(snap['card_log'])
+        counter.aces_seen     = snap['aces_seen']
+        counter.tens_seen     = snap['tens_seen']
+        # Trim count_history to the length it had at hand start.
+        # The per-card entries beyond this point belong to the hand being undone.
+        hist_len = snap['count_history_len']
+        if len(counter.count_history) > hist_len:
+            counter.count_history = counter.count_history[:hist_len]
+        # Restore shoe state so replayed cards don't get double-removed.
+        # Without this, shoe.remaining_by_rank goes negative and display corrupts.
+        if 'shoe_cards' in snap:
+            shoe.cards = list(snap['shoe_cards'])
+            shoe.dealt = list(snap['shoe_dealt'])
+    else:
+        # No snapshot: first hand of the session — counter should already be at
+        # zero, but reset explicitly for safety. Replayed cards rebuild from zero.
+        counter.running_count = 0
+        counter.cards_seen    = 0
+        counter._card_log     = []
+        counter.count_history = []
+        counter.aces_seen     = 0
+        counter.tens_seen     = 0
+        # Also reset shoe to fresh state for first-hand undo
+        shoe.cards = list(shoe.cards) + list(shoe.dealt)
+        shoe.dealt = []
+
     _safe_emit('state_update', get_full_state())
 
 

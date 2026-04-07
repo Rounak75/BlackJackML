@@ -64,7 +64,7 @@ class CardCounter:
 
     SYSTEMS = CountingConfig.SYSTEMS
 
-    def __init__(self, system: str = "hi_lo", num_decks: int = 6):
+    def __init__(self, system: str = "hi_lo", num_decks: int = 6, burn_cards: int = 1):
         # Validate system name against those defined in config.py
         if system not in self.SYSTEMS:
             raise ValueError(f"Unknown system: {system}. Choose from {list(self.SYSTEMS.keys())}")
@@ -72,6 +72,12 @@ class CardCounter:
         self.system_name = system
         self.values = self.SYSTEMS[system]
         self.num_decks = num_decks
+        # Subtract burn card(s) from the total so decks_remaining and true_count
+        # match the Shoe's actual card count. Without this, the counter assumes
+        # num_decks*52 cards exist but the Shoe removes burn_cards on init,
+        # causing decks_remaining to be inflated by burn_cards/52 for the
+        # entire session — a small but systematic true count error.
+        self._total_cards = num_decks * 52 - burn_cards
         self.running_count = 0      # The live count you keep in your head
         self.cards_seen = 0         # Total cards counted (for true count calc)
         self.count_history: List[Dict] = []
@@ -132,8 +138,7 @@ class CardCounter:
 
     @property
     def decks_remaining(self) -> float:
-        total = self.num_decks * 52
-        remaining = total - self.cards_seen
+        remaining = self._total_cards - self.cards_seen
         return max(remaining / 52.0, 0.25)  # Floor at 0.25 (13 cards) — more accurate late-shoe TC
 
     @property
@@ -151,8 +156,7 @@ class CardCounter:
 
     @property
     def penetration(self) -> float:
-        total = self.num_decks * 52
-        return self.cards_seen / total if total > 0 else 0.0
+        return self.cards_seen / self._total_cards if self._total_cards > 0 else 0.0
 
     # ── Side count properties ───────────────────────────────────────────────
 
@@ -169,18 +173,16 @@ class CardCounter:
     @property
     def aces_expected(self) -> float:
         """Expected Aces remaining based on cards_seen (null hypothesis)."""
-        total_cards = self.num_decks * 52
         total_aces  = self.num_decks * 4
-        remaining   = total_cards - self.cards_seen
-        return total_aces * (remaining / total_cards) if total_cards > 0 else 0.0
+        remaining   = self._total_cards - self.cards_seen
+        return total_aces * (remaining / self._total_cards) if self._total_cards > 0 else 0.0
 
     @property
     def tens_expected(self) -> float:
         """Expected 10-value cards remaining based on cards_seen."""
-        total_cards = self.num_decks * 52
         total_tens  = self.num_decks * 16
-        remaining   = total_cards - self.cards_seen
-        return total_tens * (remaining / total_cards) if total_cards > 0 else 0.0
+        remaining   = self._total_cards - self.cards_seen
+        return total_tens * (remaining / self._total_cards) if self._total_cards > 0 else 0.0
 
     @property
     def ace_adjustment(self) -> float:

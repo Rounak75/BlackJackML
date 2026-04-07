@@ -1,40 +1,21 @@
+// @ts-nocheck
 /*
  * components/App.js — The Root Component
  * ═══════════════════════════════════════════════════════════════════════════
  *
- * BEGINNER GUIDE — What is a "root component"?
- * ─────────────────────────────────────────────
- * Think of App.js as the MANAGER of the entire dashboard.
- * It owns all the shared data (called "state") and passes pieces of
- * it down to child components that need it.
- *
- * The data flow looks like this:
- *
- *   Flask server  →  WebSocket  →  App.js  →  TopBar / ActionPanel / CardGrid…
- *       (Python)      (socket.io)  (owns state)   (just display the data)
- *
- * When the user clicks a card in CardGrid, the event bubbles UP to App.js,
- * which sends it to the server. The server responds with new game state,
- * which flows back DOWN to every display component. This one-way data flow
- * keeps everything predictable and easy to debug.
- *
- * KEY REACT CONCEPTS USED HERE:
- * ──────────────────────────────
- * useState    — stores data; changing it causes the UI to re-render
- * useEffect   — runs code at the right time (on mount, on value change)
- * useRef      — stores a value WITHOUT causing re-renders (socket, undo stack)
- * useCallback — memoises a function so child components don't re-render needlessly
- *
- * WHAT THIS FILE DOES:
- * ─────────────────────
- * 1. Opens a WebSocket connection to Flask and listens for game-state updates
- * 2. Owns all shared state (game data, deal target, scan mode, bet amounts)
- * 3. Defines handlers for every user action (deal card, new hand, shuffle, undo)
- * 4. Renders the three-column dashboard and passes props to each panel
+ * UX AUDIT OVERHAUL:
+ *   Issue #1  — ActionPanel moved to center column top (already done)
+ *   Issue #3  — Right column: Tier 1 (always visible) + Tier 2 (accordion)
+ *   Issue #4  — CenterToolbar stripped to unique data only
+ *   Issue #5  — scanMode passed to CardGrid for collapse logic
+ *   Issue #8  — CompDepAlert removed as standalone; inline in ActionPanel
+ *   Issue #9  — StrategyRefTable moved to right column Tier 2 accordion
+ *   Issue #10 — SessionStats + SideBetPanel moved to right column
+ *   Issue #11 — CountHistoryPanel moved to right column Tier 2
+ *   Issue #12 — TopBar receives currentAction for action stripe
+ *   NEW       — Status bar at bottom (trading-style)
+ *   NEW       — Grid narrowed: 260px | 1fr | 260px
  */
-
-// ── Pull out the React hooks we need ──────────────────────────────────────────
-// React is loaded globally from CDN in index.html, so we destructure here.
 
 const { useState, useEffect, useRef, useCallback } = React;
 class ErrorBoundary extends React.Component {
@@ -50,7 +31,7 @@ class ErrorBoundary extends React.Component {
       return (
         <div style={{padding:30,fontFamily:'monospace',background:'#0a0e18',color:'#f0f4ff',minHeight:'100vh'}}>
           <div style={{color:'#ff5c5c',fontSize:22,marginBottom:16,fontWeight:800}}>BlackjackML — Render Error</div>
-          <div style={{background:'#1a2236',padding:16,borderRadius:8,marginBottom:16,border:'1px solid rgba(255,92,92,0.4)',color:'#ff9a9a',fontSize:14,lineHeight:1.7}}>{this.state.error}</div>
+          <div style={{background:'#1c2540',padding:16,borderRadius:8,marginBottom:16,border:'1px solid rgba(255,92,92,0.4)',color:'#ff9a9a',fontSize:14,lineHeight:1.7}}>{this.state.error}</div>
           <div style={{background:'#111827',padding:16,borderRadius:8,color:'#94a7c4',fontSize:11,whiteSpace:'pre-wrap',maxHeight:400,overflowY:'auto'}}>{this.state.stack}</div>
           <p style={{color:'#ffd447',marginTop:16,fontSize:12}}>Screenshot this and share it.</p>
         </div>
@@ -67,174 +48,77 @@ class ErrorBoundary extends React.Component {
 function App() {
 
   // ── STATE ──────────────────────────────────────────────────────────────────
-  // useState(initialValue) returns [currentValue, setterFn].
-  // Calling the setter causes React to re-render the component with the new value.
-
-  // The full game-state object sent by Flask every time something changes.
-  // null = not yet received (shows loading screen instead of the dashboard).
   const [gameState,  setGameState]  = useState(null)
-
-  // Which hand the next card will go to: 'player', 'dealer', or 'seen'.
-  // 'seen' = card is counted for the running count but NOT added to either
-  //          displayed hand (useful for burn cards or mid-hand seen cards).
   const [dealTarget, setDealTarget] = useState('player')
-
-  // The last server-recommended bet size — used to pre-fill the bet input.
   const [lastBet,    setLastBet]    = useState(10)
-
-  // The bet the user has actually chosen (may differ from the recommendation).
   const [customBet,  setCustomBet]  = useState(10)
-
-  // Currency display settings (symbol, code) — user can change in BettingPanel.
   const [currency, setCurrency] = useState({
     code: 'INR', symbol: '₹', name: 'Indian Rupee', isCrypto: false
   })
-
-  // Whether the player doubled down this hand.
-  // Lifted into App so HandDisplay can show a "DOUBLED" banner.
   const [isDoubled, setIsDoubled] = useState(false)
-
-  // Whether the player took insurance this hand.
-  // Lifted into App so HandDisplay can show the insurance settlement.
   const [tookInsurance, setTookInsurance] = useState(false)
-
-  // Which card-entry mode is active (controls the Card Scanner panel):
-  //   'manual'     → user clicks the 52-card grid
-  //   'screenshot' → user pastes an OS screenshot, CV reads the cards
-  //   'live'       → Flask server scans the screen automatically via mss
   const [scanMode, setScanMode] = useState('manual')
 
-  // ── Feature state (additive — do not modify existing state above) ─────────
-
-  // Feature 1 & 3: Active zone config from server
+  // Feature state
   const [zoneConfig, setZoneConfig] = useState({ player_end: 0.33, dealer_end: 0.66 })
-
-  // Feature 2: Seen cards (other players) this hand
   const [seenCards, setSeenCards] = useState([])
-
-  // Feature 4: Card confirmation mode + pending queue
   const [confirmationMode, setConfirmationMode] = useState(false)
   const [pendingCards, setPendingCards]         = useState([])
-
-  // Feature 5: Wonging (back-counting) mode state
   const [wongingData, setWongingData] = useState(null)
 
+  // Status bar — last update timestamp
+  const [lastUpdateTime, setLastUpdateTime] = useState(null)
 
   // ── REFS ───────────────────────────────────────────────────────────────────
-  // useRef stores a value that should NOT trigger re-renders when it changes.
-  // Think of it as a "box" you can read/write at any time without React noticing.
-
-  // The active Socket.IO connection to the Flask server.
-  // We store it in a ref (not state) because swapping the socket object should
-  // NOT cause a visual re-render — it's infrastructure, not display data.
   const socketRef = useRef(null)
-
-  // A stack of every card dealt this hand, in order.
-  // Used by the Undo feature: pop the last card and replay all the others.
   const undoStack = useRef([])
-
-  // A ref that mirrors the dealTarget state value.
-  // Why? Callbacks created with useCallback "close over" state values at
-  // creation time. If dealTarget changes later the callback still sees the OLD
-  // value (a stale closure). By reading the REF instead we always get current.
   const dealTargetRef = useRef('player')
-
-  // A ref that mirrors gameState so callbacks (handleUndo etc.) can always
-  // read the LATEST game state without needing it in their dependency arrays.
   const gameStateRef = useRef(null)
 
-  // Helper: update both state (re-render) AND the ref (stays always-current).
   const setTarget = (t) => { dealTargetRef.current = t; setDealTarget(t); }
 
 
   // ── WEBSOCKET SETUP ────────────────────────────────────────────────────────
-  // useEffect with [] runs ONCE when the component first appears on screen.
-  // The returned function is a "cleanup" — it runs on unmount (page close).
   useEffect(() => {
-    // io() connects to the Socket.IO server (Flask) on the same origin.
     const socket = io()
-    socketRef.current = socket   // save so all handlers can reach it
+    socketRef.current = socket
 
-    // 'state_update' is the main data channel from the server.
-    // It fires after every card dealt, every new hand, every shuffle, etc.
     socket.on('state_update', (data) => {
       setGameState(data)
-      gameStateRef.current = data   // keep ref in sync so callbacks always see latest state
+      gameStateRef.current = data
+      setLastUpdateTime(Date.now())
 
-      // Auto-update the recommended bet if the user hasn't overridden it.
       if (data.betting) {
         setLastBet(data.betting.recommended_bet || 10)
         setCustomBet(prev =>
-          // Only auto-update if user is still following the recommendation
           prev === lastBet
             ? (data.betting.recommended_bet || 10)
             : prev
         )
       }
 
-      // Feature 1/3: sync zone config
       if (data.zone_config) setZoneConfig(data.zone_config)
-
-      // Feature 2: sync seen cards
       if (data.seen_cards_this_hand !== undefined) setSeenCards(data.seen_cards_this_hand)
-
-      // Feature 4: sync confirmation mode flag
       if (data.confirmation_mode !== undefined) setConfirmationMode(data.confirmation_mode)
-
-      // Feature 5: sync wonging data
       if (data.wonging) setWongingData(data.wonging)
     })
 
-    // 'notification' = informational toasts (e.g. "Shuffled! Count reset.")
     socket.on('notification', (data) => showToast(data.message, data.type || 'info'))
-
-    // 'error' = server ran into a problem processing a card
     socket.on('error', (data) => showToast(data.message, 'error'))
-
-    // Feature 4: real-time pending card queue updates
     socket.on('pending_cards_update', (data) => setPendingCards(data.pending || []))
 
-    // Cleanup: disconnect when App unmounts (e.g. page close or hot-reload)
     return () => socket.disconnect()
-  }, [])   // empty [] = run once only, on first mount
+  }, [])
 
 
   // ── HANDLERS ───────────────────────────────────────────────────────────────
-  // useCallback memoises these functions — they keep the same reference between
-  // renders unless their listed dependencies change. This prevents child
-  // components from re-rendering just because App re-rendered.
-
-  /**
-   * handleDealCard — submit a single card to the server.
-   *
-   * Called by:
-   *   • CardGrid (user clicks a card button)
-   *   • ScreenshotMode (CV applies a detected card)
-   *   • LiveMode (server pushes a detected card via WebSocket)
-   *
-   * targetOverride lets CV modes specify per-card routing ('player' / 'dealer' /
-   * 'seen') instead of using the global dealTarget toggle.
-   */
   const handleDealCard = useCallback((rank, suit, targetOverride) => {
-    // Read ref for current target — avoids stale-closure bug
     const target = targetOverride || dealTargetRef.current
-    // Save to undo stack for potential replay
     undoStack.current.push({ rank, suit, target })
-    // Send to server — server counts the card, updates strategy, emits state_update
     socketRef.current?.emit('deal_card', { rank, suit, target })
-  }, [])   // no deps — reads only refs, not state
+  }, [])
 
-
-  /**
-   * handleNewHand — clear hands and start a fresh round.
-   *
-   * IMPORTANT: this does NOT reset the count!
-   * The running count accumulates across ALL hands within the same shoe.
-   * Only a real casino reshuffle should reset the count (see handleShuffle).
-   */
   const handleSplit = useCallback(() => {
-    // Push a sentinel so handleUndo knows not to cross the split boundary.
-    // The sentinel is not a card — it marks the point where the split happened.
     undoStack.current.push({ type: 'split' })
     socketRef.current?.emit('player_split')
   }, [])
@@ -244,115 +128,56 @@ function App() {
   }, [])
 
   const handleNewHand = useCallback(() => {
-    undoStack.current = []           // clear undo stack — new hand, fresh start
-    dealTargetRef.current = 'player' // every new hand starts by dealing to player
+    undoStack.current = []
+    dealTargetRef.current = 'player'
     setDealTarget('player')
-    socketRef.current?.emit('new_hand')   // server clears player and dealer hands
+    socketRef.current?.emit('new_hand')
     showToast('New hand — count continues', 'info')
   }, [])
 
-
-  /**
-   * handleShuffle — reset count and shoe tracking.
-   *
-   * Call this ONLY when the casino dealer physically reshuffles the cards.
-   * This wipes the running count back to zero and resets shoe penetration.
-   * Calling it between normal hands is wrong — you would lose your count!
-   */
   const handleShuffle = useCallback(() => {
-    // Read the shuffle type dropdown (riffle / strip / machine etc.)
     const shuffleType = document.getElementById('shuffle-type')?.value || 'machine'
     undoStack.current = []
     socketRef.current?.emit('shuffle', { type: shuffleType })
   }, [])
 
-
-  /**
-   * handleChangeSystem — switch active card-counting system.
-   * Options: 'hi_lo', 'ko', 'omega_ii', 'zen'
-   * The server recalculates from the same cards-seen history.
-   */
   const handleChangeSystem = useCallback((system) => {
     socketRef.current?.emit('change_system', { system })
     showToast(`Switched to ${system.replace('_', '-').toUpperCase()}`, 'info')
   }, [])
 
-
-  /**
-   * handleRecordResult — log the financial outcome of a completed hand.
-   *
-   * Parameters:
-   *   result        'win' | 'loss' | 'push'
-   *   bet           the amount wagered
-   *   precalcProfit (optional) pre-calculated profit from BettingPanel
-   *
-   * precalcProfit is provided by BettingPanel's auto-resolve buttons.
-   * It correctly accounts for:
-   *   • Doubled bet (stake is 2×)
-   *   • Blackjack 3:2 payout (+1.5× instead of +1×)
-   *   • Insurance settlement (2:1 on half the bet if dealer has BJ)
-   *   • Surrender (lose only half the bet)
-   *
-   * Without precalcProfit we fall back to a simpler +bet / -bet / 0 calc,
-   * which is fine for keyboard shortcuts but imprecise for edge cases.
-   */
   const handleRecordResult = useCallback((result, bet, precalcProfit) => {
     const profit = precalcProfit !== undefined
-      ? precalcProfit                     // BettingPanel's accurate figure
-      : result === 'win'  ?  bet          // simple fallback
+      ? precalcProfit
+      : result === 'win'  ?  bet
       : result === 'loss' ? -bet
       : 0
 
-    socketRef.current?.emit('record_result', { bet, profit })  // update bankroll on server
-    socketRef.current?.emit('new_hand')                         // clear hands for next round
+    socketRef.current?.emit('record_result', { bet, profit })
+    socketRef.current?.emit('new_hand')
 
     undoStack.current = []
     dealTargetRef.current = 'player'
     setDealTarget('player')
 
-    // Reset per-hand flags so the next hand starts clean
     setIsDoubled(false)
     setTookInsurance(false)
 
-    // Show a result toast (green for win, red for loss, grey for push)
     showToast(
       `${result.toUpperCase()} — ${formatMoney(profit, currency.symbol)}`,
       result === 'win' ? 'success' : result === 'loss' ? 'error' : 'info'
     )
   }, [currency])
 
-
-  /**
-   * handleUndo — remove the last card dealt this hand.
-   *
-   * Why we replay instead of just "un-emitting" one card:
-   * The server's state (running count, shoe composition, hand totals) is the
-   * accumulated result of all cards seen IN ORDER. There is no "subtract one
-   * card" operation — we have to reset to zero and replay from scratch.
-   *
-   * Steps:
-   *   1. Save all cards except the last one
-   *   2. Tell server 'new_hand' to wipe current state (emits 'undo_split' first if split is active)
-   *   3. Re-emit the saved cards with small delays (server needs to process in order)
-   */
   const handleUndo = useCallback(() => {
     if (undoStack.current.length === 0) {
       showToast('Nothing to undo', 'warning')
       return
     }
 
-    // ── Split-aware undo ────────────────────────────────────────────────────
-    // When a split is in progress, use the server's surgical undo_split_card
-    // which removes only the last card from the active split hand.
-    //
-    // BOUNDARY GUARD: handleSplit pushes a {type:'split'} sentinel onto the
-    // stack. If the top entry IS that sentinel it means the active split hand
-    // is down to its founding card — there's nothing left to undo within the
-    // split. We stop here rather than crossing into pre-split territory.
     const currentSplitHands = gameStateRef.current?.split_hands ?? []
     if (currentSplitHands.length > 0) {
       const top = undoStack.current[undoStack.current.length - 1]
-      // Reached the split sentinel — nothing left to undo in this split
       if (!top || top.type === 'split') {
         showToast('Nothing to undo — at the start of the split', 'warning')
         return
@@ -364,23 +189,20 @@ function App() {
       return
     }
 
-    // ── Normal (non-split) undo — full replay ───────────────────────────────
-    // No split in progress: reset the hand and re-emit all cards except the last.
-    const replay  = [...undoStack.current.slice(0, -1)]   // all but last
+    const replay  = [...undoStack.current.slice(0, -1)]
     const removed = undoStack.current[undoStack.current.length - 1]
 
     undoStack.current = []
     dealTargetRef.current = 'player'
     setDealTarget('player')
 
-    socketRef.current?.emit('new_hand')   // wipe server state
+    socketRef.current?.emit('undo_hand')
 
-    // Re-emit saved cards in order with 80ms gaps (server processes sequentially)
     replay.forEach((c, i) => {
       setTimeout(() => {
         undoStack.current.push(c)
         socketRef.current?.emit('deal_card', { rank: c.rank, suit: c.suit, target: c.target })
-      }, 80 * i + 120)   // 120ms head start, then 80ms between cards
+      }, 80 * i + 120)
     })
 
     showToast(`Undid ${removed.rank} → ${removed.target}`, 'info')
@@ -388,20 +210,16 @@ function App() {
 
 
   // ── KEYBOARD SHORTCUTS ─────────────────────────────────────────────────────
-  // Placed AFTER all handlers so the closure captures defined functions.
-  // (useCallback with [] gives stable references — dep array only re-runs
-  // this effect when lastBet changes, not on every render.)
   useEffect(() => {
     const handler = (e) => {
-      // Ignore keystrokes while typing in input or select elements
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return
 
-      if (e.key === 'n' || e.key === 'N') handleNewHand()      // N = new hand
-      if (e.key === 's' || e.key === 'S') handleShuffle()      // S = reshuffle
-      if (e.key === 'p' || e.key === 'P') setTarget('player')  // P = deal to player
-      if (e.key === 'd' || e.key === 'D') setTarget('dealer')  // D = deal to dealer
+      if (e.key === 'n' || e.key === 'N') handleNewHand()
+      if (e.key === 's' || e.key === 'S') handleShuffle()
+      if (e.key === 'p' || e.key === 'P') setTarget('player')
+      if (e.key === 'd' || e.key === 'D') setTarget('dealer')
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault()   // stop browser from intercepting Ctrl+Z
+        e.preventDefault()
         handleUndo()
       }
     }
@@ -411,48 +229,32 @@ function App() {
 
 
   // ── DERIVED STATE ──────────────────────────────────────────────────────────
-  // Destructure named sub-sections from gameState for cleaner prop passing.
-  // Optional chaining (?.) safely returns undefined when gameState is null,
-  // so we never crash while waiting for the first server update.
-
-  const count      = gameState?.count            // running/true count, advantage
-  const shoe       = gameState?.shoe             // cards remaining, decks left
-  const rec        = gameState?.recommendation   // AI action recommendation
-  const betting    = gameState?.betting          // bet size, Kelly, risk of ruin
-  const sideBets   = gameState?.side_bets        // Perfect Pairs / 21+3 / Lucky Ladies
-  const tracker    = gameState?.shuffle_tracker  // ML shuffle-tracking state
-  const session    = gameState?.session          // win rate, profit, hands played
-  const playerHand = gameState?.player_hand      // player's cards + total + flags
-  const dealerUp   = gameState?.dealer_upcard    // dealer's face-up card (string)
-  const dealerHand = gameState?.dealer_hand      // full dealer hand (all cards)
-  const history        = gameState?.count_history       // last 60 count snapshots
-  const sideCounts     = gameState?.side_counts         // ace + ten side count state
-  const casinoRisk     = gameState?.casino_risk         // counter detection risk meter
-  const splitHands     = gameState?.split_hands    ?? []// split hand array
+  const count      = gameState?.count
+  const shoe       = gameState?.shoe
+  const rec        = gameState?.recommendation
+  const betting    = gameState?.betting
+  const sideBets   = gameState?.side_bets
+  const tracker    = gameState?.shuffle_tracker
+  const session    = gameState?.session
+  const playerHand = gameState?.player_hand
+  const dealerUp   = gameState?.dealer_upcard
+  const dealerHand = gameState?.dealer_hand
+  const history        = gameState?.count_history
+  const sideCounts     = gameState?.side_counts
+  const casinoRisk     = gameState?.casino_risk
+  const splitHands     = gameState?.split_hands    ?? []
   const activeHandIdx  = gameState?.active_hand_index ?? 0
-
-  // Insurance is a core game mechanic (not a side bet) — it's its own key.
-  // It's only populated when the dealer's upcard is an Ace.
   const insurance = gameState?.insurance
 
 
-  // ── DEALER DRAW DETECTION (S17 rule) ──────────────────────────────────────
-  // S17 = "dealer Stands on all 17s" — the standard rule.
-  // The dealer MUST draw on 16 or less, and MUST stand on 17 or more.
-  //
-  // We detect this so the UI can automatically switch the deal target to
-  // 'dealer' when it's the dealer's turn, saving the user a button click.
-  //
-  // We prefer the server's authoritative `must_draw` flag when available.
-  // If it hasn't arrived yet, we compute it locally as a fallback.
-
+  // ── DEALER DRAW DETECTION ──────────────────────────────────────────────────
   const dealerMustDraw = !!(dealerHand && (
     dealerHand.must_draw !== undefined
-      ? dealerHand.must_draw              // server says so (authoritative)
-      : (dealerHand.card_count >= 2       // has at least 2 cards
-         && !dealerHand.is_bust           // not already bust
-         && !dealerHand.is_blackjack      // not blackjack
-         && dealerHand.value < 17)        // under 17: must hit
+      ? dealerHand.must_draw
+      : (dealerHand.card_count >= 2
+         && !dealerHand.is_bust
+         && !dealerHand.is_blackjack
+         && dealerHand.value < 17)
   ))
 
   const dealerStandsFlag = !!(dealerHand && (
@@ -460,18 +262,15 @@ function App() {
       ? dealerHand.dealer_stands
       : (dealerHand.card_count >= 2
          && !dealerHand.is_bust
-         && dealerHand.value >= 17)       // 17 or more: must stand
+         && dealerHand.value >= 17)
   ))
 
-  // Auto-switch deal target to 'dealer' whenever it's the dealer's turn
   useEffect(() => {
     if (dealerMustDraw) setTarget('dealer')
   }, [dealerMustDraw])
 
 
   // ── LOADING SCREEN ─────────────────────────────────────────────────────────
-  // gameState stays null until the first WebSocket update arrives.
-  // Show a simple loading screen instead of a broken/empty dashboard.
   if (!gameState) {
     return (
       <div className="flex items-center justify-center min-h-screen"
@@ -486,7 +285,7 @@ function App() {
           </div>
           <div className="text-xs" style={{ color: '#b8ccdf' }}>
             Make sure{' '}
-            <code style={{ background:'#1a2236', padding:'2px 6px', borderRadius:4, color:'#ffd447' }}>
+            <code style={{ background:'#1c2540', padding:'2px 6px', borderRadius:4, color:'#ffd447' }}>
               python main.py web
             </code>
             {' '}is running
@@ -496,46 +295,36 @@ function App() {
     )
   }
 
+  // ── Status bar data ────────────────────────────────────────────────────────
+  const handsPlayed = session?.hands_played ?? 0
+  const lastUpdateAgo = lastUpdateTime ? Math.round((Date.now() - lastUpdateTime) / 1000) : null
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
-  // JSX looks like HTML but compiles to JavaScript function calls.
-  // Rules:
-  //   • Use className instead of class (class is reserved in JS)
-  //   • Curly braces {} inject any JavaScript expression
-  //   • Self-closing tags need a slash: <Component />
-  //   • Comments inside JSX use {/* ... */}
   return (
-    <div className="min-h-screen font-body" style={{ background: '#0a0e18', color: '#f0f4ff' }}>
+    <div className="min-h-screen font-body" style={{ background: '#0a0e18', color: '#f0f4ff', display: 'flex', flexDirection: 'column' }}>
 
-      {/* ── TOP BAR ───────────────────────────────────────────────────────
-          Sticky header showing running count, true count, deal target toggle,
-          new hand / shuffle buttons, and counting system selector. */}
+      {/* ── TOP BAR (Issue #12: condensed brand, Issue #2: TC hero) ───── */}
       <TopBar
         count={count}
         onNewHand={handleNewHand}
         onShuffle={handleShuffle}
         onChangeSystem={handleChangeSystem}
+        currentAction={rec?.action}
       />
 
-      {/* ── THREE-COLUMN GRID ─────────────────────────────────────────────
-          Layout: fixed 280px left | flexible center | fixed 280px right
-          gap:10px between columns, 10px outer padding */}
+      {/* ── THREE-COLUMN GRID ─────────────────────────────────────────
+          Layout: 260px left | flexible center | 260px right */}
       <div className="dashboard-grid" style={{
         display: 'grid',
-        gridTemplateColumns: '280px 1fr 280px',
+        gridTemplateColumns: '260px 1fr 260px',
         gap: 10, padding: 10, alignItems: 'start',
+        flex: 1,
       }}>
 
-        {/* ── LEFT COLUMN ───────────────────────────────────────────────── */}
+        {/* ── LEFT COLUMN ───────────────────────────────────────────── */}
         <div className="flex flex-col gap-2.5">
 
-          {/* AI action recommendation */}
-          <ActionPanel recommendation={rec} count={count} mlModelInfo={gameState?.ml_model_info} />
-
-          {/* Composition-dependent strategy alert for Hard 16 vs 10 */}
-          <CompDepAlert recommendation={rec} trueCount={count?.true} />
-
-          {/* Bet sizing — Kelly criterion, custom bet, auto-resolve */}
+          {/* Bet sizing — phase-aware (Issue #6) */}
           <BettingPanel
             betting={betting}
             count={count}
@@ -554,14 +343,28 @@ function App() {
             onTookInsuranceChange={setTookInsurance}
           />
 
-          {/* Basic strategy grid */}
+          {/* Basic Strategy Grid — moved here from right column for easier access */}
           <StrategyRefTable playerHand={playerHand} dealerUpcard={dealerUp} />
+
+          {/* Ace & Ten Side Counts — moved here from right column */}
+          <SideCountPanel sideCounts={sideCounts} count={count} />
 
         </div>
 
 
-        {/* ── CENTER COLUMN ─────────────────────────────────────────────── */}
+        {/* ── CENTER COLUMN ─────────────────────────────────────────── */}
         <div className="flex flex-col gap-2.5">
+
+          {/* ── Action recommendation banner (Issue #1: center, 4rem) ── */}
+          <ActionPanel
+            recommendation={rec}
+            count={count}
+            mlModelInfo={gameState?.ml_model_info}
+            compDep16={rec?.comp_dep_16}
+          />
+
+          {/* CompDepAlert removed as standalone (Issue #8) —
+              now inline badge in ActionPanel */}
 
           {/* Hand display */}
           <HandDisplay
@@ -578,7 +381,7 @@ function App() {
             currency={currency}
           />
 
-          {/* Split hand panel — shown only when player has split */}
+          {/* Split hand panel */}
           {splitHands && splitHands.length > 0 && (
             <SplitHandPanel
               splitHands={splitHands}
@@ -589,12 +392,12 @@ function App() {
             />
           )}
 
-          {/* Feature 2: Other players' cards — only shown when data exists */}
+          {/* Seen cards */}
           {seenCards && seenCards.length > 0 && (
             <SeenCardsPanel seenCards={seenCards} />
           )}
 
-          {/* Card entry grid */}
+          {/* Card entry grid (Issue #5: collapses in live/screenshot) */}
           <CardGrid
             target={dealTarget}
             onTargetChange={setTarget}
@@ -605,60 +408,25 @@ function App() {
             canSplit={!!(playerHand?.can_split && splitHands.length === 0)}
             dealerMustDraw={dealerMustDraw}
             dealerStands={dealerStandsFlag}
+            scanMode={scanMode}
           />
 
-          {/* Compact info strip — now includes side counts + casino risk */}
+          {/* CenterToolbar — stripped to unique data only (Issue #4) */}
           <CenterToolbar
             recommendation={rec}
             count={count}
             playerHand={playerHand}
             dealerUpcard={dealerUp}
-            betting={betting}
-            history={history}
-            session={session}
-            currency={currency}
-            sideCounts={sideCounts}
-            casinoRisk={casinoRisk}
+            sideBets={sideBets}
+            analytics={gameState?.analytics}
           />
-
-          {/* ── Center data grid — fills empty space below cards */}
-          <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-
-            {/* Side Bet EV + Session Stats side by side, equal height */}
-            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, alignItems:'stretch' }}>
-              <SideBetPanel sideBets={sideBets} />
-              <SessionStats session={session} currency={currency} />
-            </div>
-
-            {/* Count history sparkline */}
-            <CountHistoryPanel history={history} />
-
-          </div>
         </div>
 
 
-        {/* ── RIGHT COLUMN ──────────────────────────────────────────────── */}
-        {/*
-         * TIER STRUCTURE
-         * ──────────────
-         * Tier 1 — Always visible. These three panels drive live decisions
-         *          and need to be in peripheral vision at all times.
-         *
-         * Tier 2 — Collapsed by default. Reference / analytics panels the
-         *          user consults between hands, not during them. Each is an
-         *          <AccordionPanel> that expands on click.
-         *
-         * Scan-mode panels (LiveOverlay, ZoneConfig, ConfirmationPanel,
-         * WongPanel) appear above Tier 1 only when relevant — they are
-         * already conditionally rendered so no change needed there.
-         *
-         * StopAlerts is rendered as a floating overlay at the app root
-         * level (see below the grid) so it is never buried by scroll.
-         */}
+        {/* ── RIGHT COLUMN ──────────────────────────────────────────── */}
         <div className="panel-right flex flex-col gap-2.5">
 
-          {/* ── Card scanner — Manual / Screenshot / Live Scan ──────────
-              Unchanged. Stays at the top; it's the primary input control. */}
+          {/* ── Card scanner — Manual / Screenshot / Live Scan ── */}
           <LiveOverlayPanel
             socket={socketRef.current}
             count={gameState?.count}
@@ -668,7 +436,7 @@ function App() {
             dealTarget={dealTarget}
           />
 
-          {/* Feature 1 & 3: Zone config — only in live/screenshot mode */}
+          {/* Zone config — only in live/screenshot mode */}
           {(scanMode === 'live' || scanMode === 'screenshot') && (
             <ZoneConfigPanel
               socket={socketRef.current}
@@ -677,7 +445,7 @@ function App() {
             />
           )}
 
-          {/* Feature 4: Confirmation mode — only in live mode */}
+          {/* Confirmation mode — only in live mode */}
           {scanMode === 'live' && (
             <ConfirmationPanel
               socket={socketRef.current}
@@ -686,7 +454,7 @@ function App() {
             />
           )}
 
-          {/* Feature 5: Wonging — only in live mode */}
+          {/* Wonging — only in live mode */}
           {scanMode === 'live' && (
             <WongPanel
               socket={socketRef.current}
@@ -695,22 +463,43 @@ function App() {
             />
           )}
 
-          {/* ── TIER 1: Live decision panels (always visible) ─────────── */}
+          {/* ── TIER 1: Live decision panels (always visible) ─── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {/* Casino risk — highest urgency, goes first */}
-            <CasinoRiskMeter casinoRisk={casinoRisk} />
-
-            {/* Player edge vs house */}
             <EdgeMeter count={count} />
-
-            {/* Shoe composition + penetration */}
             <ShoePanel shoe={shoe} />
+
+            {/* Session Analytics — always visible below shoe */}
+            <AnalyticsPanel analytics={gameState?.analytics} />
+
+            {/* SessionStats — hands, P&L, win rate */}
+            <SessionStats session={session} currency={currency} />
+
+            {/* Stop Alerts config — always visible, styled prominently */}
+            <div style={{
+              background: '#111827',
+              border: '1.5px solid rgba(255,212,71,0.35)',
+              borderRadius: 12,
+              padding: 0,
+              boxShadow: '0 0 12px rgba(255,212,71,0.06)',
+            }}>
+              <StopAlertsConfig session={session} currency={currency} socket={socketRef.current} />
+            </div>
           </div>
 
-          {/* ── TIER 2: Reference / analytics (collapsed by default) ────
-              Each <AccordionPanel> wraps one existing component.
-              The label prop becomes the clickable header row.           */}
+          {/* ── TIER 2: Reference / analytics (collapsed by default) ── */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+
+            <AccordionPanel label="Side Bet EV">
+              <SideBetPanel sideBets={sideBets} />
+            </AccordionPanel>
+
+            <AccordionPanel label="Casino Risk Meter">
+              <CasinoRiskMeter casinoRisk={casinoRisk} />
+            </AccordionPanel>
+
+            <AccordionPanel label="Count History">
+              <CountHistoryPanel history={history} />
+            </AccordionPanel>
 
             <AccordionPanel label="Illustrious 18 & Fab 4">
               <I18Panel count={count} />
@@ -720,31 +509,15 @@ function App() {
               <ShuffleTrackerPanel tracker={tracker} />
             </AccordionPanel>
 
-            <AccordionPanel label="Ace & Ten Side Counts">
-              <SideCountPanel sideCounts={sideCounts} count={count} />
-            </AccordionPanel>
-
-            <AccordionPanel label="Session Analytics">
-              <AnalyticsPanel analytics={gameState?.analytics} />
-            </AccordionPanel>
-
           </div>
 
         </div>
-        {/* ── StopAlerts rendered OUTSIDE the column grid ───────────────
-            Was previously buried at the bottom of the right column scroll.
-            Now it floats as a fixed overlay so it fires immediately and is
-            never hidden behind scroll position. See the overlay div below. */}
 
       </div>
 
-      {/* ── StopAlerts floating overlay ───────────────────────────────────
-          Rendered outside the three-column grid so it fires on top of
-          everything and is never hidden behind a scroll position.
-          pointer-events: none on the wrapper lets clicks pass through
-          to the dashboard; the alert itself re-enables pointer-events.  */}
+      {/* ── StopAlerts floating overlay ───────────────────────────── */}
       <div style={{
-        position: 'fixed', bottom: 16, right: 16,
+        position: 'fixed', bottom: 46, right: 16,
         zIndex: 1000, pointerEvents: 'none',
       }}>
         <div style={{ pointerEvents: 'auto' }}>
@@ -752,21 +525,45 @@ function App() {
         </div>
       </div>
 
-      {/* Keyboard shortcut reminder at the bottom of the page */}
-      <div className="shortcut-hint">
-        <kbd>N</kbd> <span>New Hand</span>
-        <span className="sep">·</span>
-        <kbd>S</kbd> <span>Real Shuffle</span>
-        <span className="sep">·</span>
-        <kbd>P</kbd> <span>Player</span>
-        <span className="sep">·</span>
-        <kbd>D</kbd> <span>Dealer</span>
+      {/* ── Status bar — trading-style (bottom) ───────────────────── */}
+      <div className="status-bar">
+        <span className="dot" />
+        <span>Connected</span>
+        <span className="sep">│</span>
+        <span>Hand #{handsPlayed}</span>
+        <span className="sep">│</span>
+        <span>
+          Last update: {lastUpdateAgo !== null ? (lastUpdateAgo < 2 ? 'just now' : `${lastUpdateAgo}s ago`) : '—'}
+        </span>
+        <span className="sep">│</span>
+        <span>
+          <kbd style={{
+            background: '#212d45', border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 3, padding: '1px 4px', fontSize: '0.6rem',
+            fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
+          }}>N</kbd> New
+          {' '}<kbd style={{
+            background: '#212d45', border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 3, padding: '1px 4px', fontSize: '0.6rem',
+            fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
+          }}>S</kbd> Shuffle
+          {' '}<kbd style={{
+            background: '#212d45', border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 3, padding: '1px 4px', fontSize: '0.6rem',
+            fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
+          }}>P</kbd> Player
+          {' '}<kbd style={{
+            background: '#212d45', border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 3, padding: '1px 4px', fontSize: '0.6rem',
+            fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
+          }}>D</kbd> Dealer
+        </span>
       </div>
     </div>
   )
 }
 
-// Mount React app — waits for DOM to be ready so #root div exists
+// Mount React app
 function mountApp() {
   var container = document.getElementById('root');
   if (!container) { setTimeout(mountApp, 10); return; }

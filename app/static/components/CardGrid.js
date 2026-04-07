@@ -3,20 +3,24 @@
  * ─────────────────────────────────────────────────────────
  * 52-button card deal grid (4 suits × 13 ranks).
  *
+ * UX AUDIT — Issue #5:
+ *   In live/screenshot mode, the grid collapses to a compact
+ *   strip with an expand button. In manual mode, full grid.
+ *
  * ACCESSIBILITY IMPROVEMENTS:
- *   • Every card button has a descriptive aria-label:
- *     e.g. "Deal Ace of Spades to player"
- *   • Suit filter tabs have aria-pressed for selected state
+ *   • Every card button has a descriptive aria-label
+ *   • Suit filter tabs have aria-pressed
  *   • Target selector buttons have aria-pressed + aria-label
  *   • The card grid has role="group" + aria-label
- *   • Dealer alert banners use role="alert" for immediate AT announcement
- *   • Depleted cards have aria-disabled="true" (screen reader info)
+ *   • Dealer alert banners use role="alert"
+ *   • Depleted cards have aria-disabled="true"
  *   • Split/Undo have descriptive aria-labels
  */
 
 function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands, scanMode }) {
   const { useState } = React;
   const [suitFilter, setSuitFilter] = useState('all');
+  const [gridExpanded, setGridExpanded] = useState(false);
 
   const rankToKey = { A: 11, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, J: 10, Q: 10, K: 10 };
   const maxByKey  = { 2: 24, 3: 24, 4: 24, 5: 24, 6: 24, 7: 24, 8: 24, 9: 24, 10: 96, 11: 24 };
@@ -35,13 +39,16 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
     { t: 'seen',   label: '👁 Seen',   ariaLabel: 'Mark card as seen (count only, no hand)' },
   ];
 
-  // Human-readable suit name for aria-labels
   const suitFullName = { spades: 'Spades', hearts: 'Hearts', diamonds: 'Diamonds', clubs: 'Clubs' };
+
+  // Issue #5: collapse grid in live/screenshot mode
+  const isManualMode = !scanMode || scanMode === 'manual';
+  const showGrid = isManualMode || gridExpanded;
 
   return (
     <div
-      className="rounded-xl p-3"
-      style={{ background: '#1a2236', border: '1.5px solid rgba(255,255,255,0.12)' }}
+      className={`rounded-xl p-3 ${!showGrid ? 'card-grid-collapsed' : ''}`}
+      style={{ background: '#1c2540', border: '1.5px solid rgba(255,255,255,0.12)' }}
       role="group"
       aria-label="Card entry panel"
     >
@@ -52,35 +59,64 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
           style={{ color: '#b8ccdf' }}
           aria-hidden="true"
         >
-          Click to Deal
+          {isManualMode ? 'Click to Deal' : (showGrid ? 'Card Grid (Expanded)' : 'Card Grid')}
         </span>
 
-        {/* Suit filter tabs */}
-        <div className="flex gap-1" role="group" aria-label="Filter cards by suit">
-          {suitFilters.map(({ key, label, red, ariaLabel }) => (
+        <div className="flex items-center gap-2">
+          {/* Collapse/expand toggle for non-manual modes */}
+          {!isManualMode && (
             <button
-              key={key}
-              onClick={() => setSuitFilter(key)}
-              aria-pressed={suitFilter === key}
-              aria-label={ariaLabel}
-              className="text-xs px-2 py-0.5 rounded-md transition-all"
+              onClick={() => setGridExpanded(e => !e)}
+              className="text-[10px] px-2 py-0.5 rounded-md font-semibold transition-all"
               style={{
-                background: suitFilter === key ? '#212d45' : 'transparent',
-                border: `1.5px solid ${suitFilter === key ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.1)'}`,
-                color: suitFilter === key
-                  ? (red ? '#ff7a7a' : '#f0f4ff')
-                  : (red ? '#ff9999aa' : '#b8ccdf'),
-                fontWeight: suitFilter === key ? 700 : 400,
+                background: gridExpanded ? 'rgba(255,212,71,0.1)' : 'transparent',
+                border: `1px solid ${gridExpanded ? 'rgba(255,212,71,0.4)' : 'rgba(255,255,255,0.12)'}`,
+                color: gridExpanded ? '#ffd447' : '#b8ccdf',
               }}
             >
-              {label}
+              {gridExpanded ? 'Collapse ▲' : 'Expand Grid ▼'}
             </button>
-          ))}
+          )}
+
+          {/* Suit filter tabs — only shown when grid is visible */}
+          {showGrid && (
+            <div className="flex gap-1" role="group" aria-label="Filter cards by suit">
+              {suitFilters.map(({ key, label, red, ariaLabel }) => (
+                <button
+                  key={key}
+                  onClick={() => setSuitFilter(key)}
+                  aria-pressed={suitFilter === key}
+                  aria-label={ariaLabel}
+                  className="text-xs px-2 py-0.5 rounded-md transition-all"
+                  style={{
+                    background: suitFilter === key ? '#212d45' : 'transparent',
+                    border: `1.5px solid ${suitFilter === key ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.1)'}`,
+                    color: suitFilter === key
+                      ? (red ? '#ff7a7a' : '#f0f4ff')
+                      : (red ? '#ff9999aa' : '#b8ccdf'),
+                    fontWeight: suitFilter === key ? 700 : 400,
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Dealer must-draw banner — role="alert" so AT announces immediately */}
-      {dealerMustDraw && (
+      {/* Expand prompt for collapsed state */}
+      {!isManualMode && !showGrid && (
+        <button
+          onClick={() => setGridExpanded(true)}
+          className="card-grid-expand-btn"
+        >
+          🃏 Tap to expand 52-card grid for manual entry
+        </button>
+      )}
+
+      {/* Dealer must-draw banner */}
+      {dealerMustDraw && showGrid && (
         <div
           role="alert"
           className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg text-xs font-semibold"
@@ -97,7 +133,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
       )}
 
       {/* Dealer stands banner */}
-      {dealerStands && (
+      {dealerStands && showGrid && (
         <div
           role="status"
           className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg text-xs font-semibold"
@@ -154,7 +190,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
       </div>
 
       {/* Action buttons row: Split + Undo */}
-      <div className="flex gap-2 mb-3">
+      <div className="flex gap-2 mb-3 card-grid-actions">
         {canSplit ? (
           <button
             onClick={onSplit}

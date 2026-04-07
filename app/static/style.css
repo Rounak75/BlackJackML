@@ -11,7 +11,7 @@
   /* Backgrounds */
   --bg-0: #0a0e18;
   --bg-1: #111827;
-  --bg-2: #1a2236;
+  --bg-2: #1c2540;
   --bg-3: #212d45;
   --bg-4: #2a3a58;
 
@@ -84,11 +84,11 @@ body {
   transition: color 0.3s var(--ease), text-shadow 0.3s var(--ease);
 }
 
-.action-hit       { color: var(--action-hit);       text-shadow: 0 0 22px rgba(68, 232, 130, 0.55); }
-.action-stand     { color: var(--action-stand);     text-shadow: 0 0 22px rgba(106, 175, 255, 0.55); }
-.action-double    { color: var(--action-double);    text-shadow: 0 0 22px rgba(255, 212, 71, 0.55); }
-.action-split     { color: var(--action-split);     text-shadow: 0 0 22px rgba(185, 155, 255, 0.55); }
-.action-surrender { color: var(--action-surrender); text-shadow: 0 0 22px rgba(255, 92, 92, 0.55); }
+.action-hit       { color: var(--action-hit);       text-shadow: 0 0 20px rgba(68, 232, 130, 0.55); }
+.action-stand     { color: var(--action-stand);     text-shadow: 0 0 20px rgba(106, 175, 255, 0.55); }
+.action-double    { color: var(--action-double);    text-shadow: 0 0 20px rgba(255, 212, 71, 0.55); }
+.action-split     { color: var(--action-split);     text-shadow: 0 0 20px rgba(185, 155, 255, 0.55); }
+.action-surrender { color: var(--action-surrender); text-shadow: 0 0 20px rgba(255, 92, 92, 0.55); }
 
 /* ══════════════════════════════════════════════════════════
    MINI PLAYING CARDS
@@ -506,4 +506,100 @@ body {
   .card-grid-inner {
     grid-template-columns: repeat(7, 1fr) !important;
   }
+}
+
+/* ══════════════════════════════════════════════════════════
+   ACTION COLOUR STRIPE — 4px top bar on ActionPanel / TopBar
+   ══════════════════════════════════════════════════════════ */
+.action-stripe {
+  height: 4px;
+  width: 100%;
+  transition: background 0.3s var(--ease);
+  flex-shrink: 0;
+}
+.action-stripe.hit       { background: var(--action-hit); }
+.action-stripe.stand     { background: var(--action-stand); }
+.action-stripe.double    { background: var(--action-double); }
+.action-stripe.split     { background: var(--action-split); }
+.action-stripe.surrender { background: var(--action-surrender); }
+.action-stripe.none      { background: rgba(255,255,255,0.06); }
+
+/* ══════════════════════════════════════════════════════════
+   STATUS BAR — fixed bottom bar (trading-style)
+   ══════════════════════════════════════════════════════════ */
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 6px 20px;
+  font-size: 0.65rem;
+  font-family: 'DM Mono', monospace;
+  color: var(--text-2);
+  background: var(--bg-1);
+  border-top: 1px solid var(--border);
+}
+
+.status-bar .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--jade);
+  box-shadow: 0 0 6px var(--jade);
+  flex-shrink: 0;
+}
+
+.status-bar .sep {
+  color: rgba(255,255,255,0.15);
+}
+
+/* ══════════════════════════════════════════════════════════
+   CARD GRID — collapsed state for live/screenshot mode
+   ══════════════════════════════════════════════════════════ */
+.card-grid-collapsed .card-grid-inner {
+  display: none !important;
+}
+
+.card-grid-collapsed .card-grid-actions {
+  display: none !important;
+}
+
+.card-grid-expand-btn {
+  width: 100%;
+  padding: 8px;
+  border-radius: 8px;
+  background: var(--bg-1);
+  border: 1.5px dashed var(--border);
+  color: var(--text-2);
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--t);
+  font-family: 'DM Sans', sans-serif;
+}
+
+.card-grid-expand-btn:hover {
+  background: var(--bg-3);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+/* ══════════════════════════════════════════════════════════
+   TC FLASH — one-shot flash when count crosses threshold
+   ══════════════════════════════════════════════════════════ */
+@keyframes tc-flash {
+  0%   { background: rgba(255,212,71,0.35); }
+  100% { background: transparent; }
+}
+
+.tc-flash {
+  animation: tc-flash 0.8s ease-out;
+}
+
+/* ══════════════════════════════════════════════════════════
+   LIVE PULSE — reusable pulse keyframe
+   ══════════════════════════════════════════════════════════ */
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
 }
