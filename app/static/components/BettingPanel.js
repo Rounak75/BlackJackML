@@ -91,8 +91,18 @@ function BettingPanel({
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
   const [currencySearch,     setCurrencySearch]     = useState('');
   // Tracks whether we already auto-fired for this hand to avoid double-emit
-  const autoFiredRef = useRef(false);
-  const inputRef     = useRef(null);
+  const autoFiredRef     = useRef(false);
+  // Holds the pending auto-resolve setTimeout ID so we can cancel it if
+  // a new hand starts before the 900ms window expires.
+  //
+  // Bug this fixes: the delayed onRecordResult -> new_hand emit was landing
+  // AFTER the user had already dealt 1-3 cards into the next hand. The server
+  // would clear both hands via _reset_hand_state(), making those cards vanish
+  // from the display. The counter still counted them (running_count correct)
+  // but the hand showed them missing — appearing as if the first 3 cards of
+  // every hand weren't being counted.
+  const autoResolveTimer = useRef(null);
+  const inputRef         = useRef(null);
 
   const cur       = currency || CURRENCIES[0];
   const adv       = betting ? (betting.player_advantage || 0) : 0;
@@ -132,7 +142,16 @@ function BettingPanel({
     // Need at least 2 player cards and 2 dealer cards to resolve
     if (pCards < 2 || dCards < 2) {
       // Reset auto-fire guard when a new hand starts (no cards yet)
-      if (pCards === 0) autoFiredRef.current = false;
+      if (pCards === 0) {
+        autoFiredRef.current = false;
+        // Cancel any pending auto-resolve from the previous hand.
+        // Without this, the delayed new_hand emit lands after the user has
+        // already dealt cards into the next hand, wiping them from the display.
+        if (autoResolveTimer.current) {
+          clearTimeout(autoResolveTimer.current);
+          autoResolveTimer.current = null;
+        }
+      }
       return;
     }
 
@@ -210,8 +229,11 @@ function BettingPanel({
     // Fire auto-resolve — mark as fired so we don't double-emit
     autoFiredRef.current = true;
 
-    // Small delay so the user can see the final state before it clears
-    setTimeout(() => {
+    // Small delay so the user can see the final state before it clears.
+    // Store the timer ID so it can be cancelled if a new hand starts
+    // before the 900ms window expires (see pCards === 0 guard above).
+    autoResolveTimer.current = setTimeout(() => {
+      autoResolveTimer.current = null;
       onRecordResult(result, effectiveBet, profit);
       // Toggles are reset in App.handleRecordResult — no need to call here
     }, 900);

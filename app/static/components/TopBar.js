@@ -175,22 +175,106 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
       </div>
 
       {/* ── Live Count Display ─────────────────────────── */}
+      {/*
+       * Layout rationale (Issue #2):
+       *
+       * Before: all four stats were peer-equal in the same pill.
+       * True Count drives live decisions; the others are context.
+       * A user mid-hand scanning in a split second must be able to
+       * read the TC without parsing four equal-weight labels.
+       *
+       * After:
+       *   Left cluster  — RC (small) + ML Enhanced (small), stacked
+       *   Centre hero   — TRUE COUNT at ~3× the size, standalone
+       *   Right cluster — Advantage (small), standalone
+       *
+       * The dividers between hero and clusters are taller (48px) to
+       * frame the TC visually. The left/right clusters use a muted
+       * secondary background so they recede behind the hero.
+       */}
       <div
-        className="flex items-center gap-5 rounded-xl px-6 py-2.5 flex-1 justify-center max-w-xl"
-        style={{ background: '#111827', border: '1.5px solid rgba(255,255,255,0.14)' }}
+        className="flex items-center rounded-xl flex-1 justify-center max-w-2xl"
+        style={{
+          background: '#111827',
+          border: '1.5px solid rgba(255,255,255,0.14)',
+          overflow: 'hidden',
+        }}
       >
-        <CountBlock label="Running" title="Running Count: raw sum of all card tags seen (+1 low, -1 high)" value={rc} colorVal={rc} mono />
-        <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.15)' }} />
-        <CountBlock label="True Count" title="True Count: Running Count ÷ Decks Remaining. Use this for strategy decisions." value={tc.toFixed(1)} colorVal={tc} large mono />
-        <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.15)' }} />
-        <CountBlock label="ML Enhanced" title="ML-enhanced true count: adjusts for shuffle patterns tracked by LSTM model" value={etc.toFixed(1)} colorVal={etc} mono />
-        <div style={{ width: 1, height: 32, background: 'rgba(255,255,255,0.15)' }} />
-        <CountBlock
-          label="Advantage"
-          value={`${adv >= 0 ? '+' : ''}${adv.toFixed(2)}%`}
-          colorVal={adv}
-          mono
-        />
+
+        {/* Left cluster — RC + ML Enhanced, stacked, muted background */}
+        <div
+          style={{
+            display: 'flex', flexDirection: 'column', gap: 2,
+            padding: '6px 16px',
+            background: 'rgba(255,255,255,0.03)',
+            alignSelf: 'stretch', justifyContent: 'center',
+          }}
+        >
+          <CountBlock
+            label="RC"
+            title="Running Count: raw sum of all card tags seen (+1 low, −1 high)"
+            value={rc}
+            colorVal={rc}
+            mono
+            secondary
+          />
+          <div style={{ height: 1, background: 'rgba(255,255,255,0.07)' }} />
+          <CountBlock
+            label="ML"
+            title="ML-enhanced true count: adjusts for shuffle patterns tracked by LSTM model"
+            value={etc.toFixed(1)}
+            colorVal={etc}
+            mono
+            secondary
+          />
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
+
+        {/* ── TRUE COUNT — hero ─────────────────────────────────────── */}
+        <div
+          className="flex flex-col items-center justify-center"
+          style={{ padding: '10px 28px' }}
+          title="True Count: Running Count ÷ Decks Remaining. Use this for all strategy decisions."
+        >
+          <div
+            style={{
+              fontSize: '0.65rem', textTransform: 'uppercase',
+              letterSpacing: '0.12em', fontWeight: 700,
+              color: '#b8ccdf', marginBottom: 4,
+            }}
+          >
+            True Count
+          </div>
+          <div
+            className={`font-mono font-bold leading-none ${countClass(tc)}`}
+            style={{ fontSize: '2.4rem' }}
+          >
+            {tc.toFixed(1)}
+          </div>
+        </div>
+
+        {/* Divider */}
+        <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
+
+        {/* Right cluster — Advantage, muted background */}
+        <div
+          style={{
+            padding: '6px 16px',
+            background: 'rgba(255,255,255,0.03)',
+            alignSelf: 'stretch', display: 'flex', alignItems: 'center',
+          }}
+        >
+          <CountBlock
+            label="Edge"
+            value={`${adv >= 0 ? '+' : ''}${adv.toFixed(2)}%`}
+            colorVal={adv}
+            mono
+            secondary
+          />
+        </div>
+
       </div>
 
       {/* ── Controls ───────────────────────────────────── */}
@@ -296,19 +380,36 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem }) {
 
 /*
  * CountBlock — single stat cell inside the top bar count display.
+ *
+ * Props:
+ *   label     — short label shown above the value
+ *   value     — formatted string to display
+ *   colorVal  — raw number used to pick the colour class (pos/neg/hot/neutral)
+ *   mono      — use monospace font for the value
+ *   secondary — true for the small cluster stats (RC, ML, Edge);
+ *               false/omitted for standalone cells (unused after the
+ *               hero refactor but kept for any future callers)
+ *   title     — tooltip on hover
  */
-function CountBlock({ label, value, colorVal, large, mono, title }) {
+function CountBlock({ label, value, colorVal, mono, secondary, title }) {
   const cls = countClass(colorVal);
   return (
-    <div className="text-center">
+    <div className="text-center" title={title}>
       <div
-        className="text-[9px] uppercase tracking-widest font-semibold mb-1"
-        style={{ color: '#b8ccdf' }}
+        style={{
+          fontSize: secondary ? '0.6rem' : '0.7rem',
+          textTransform: 'uppercase',
+          letterSpacing: '0.1em',
+          fontWeight: 600,
+          color: '#8fa5be',
+          marginBottom: 2,
+        }}
       >
         {label}
       </div>
       <div
-        className={`${large ? 'text-2xl' : 'text-lg'} font-bold leading-none ${mono ? 'font-mono' : ''} ${cls}`}
+        className={`font-bold leading-none ${mono ? 'font-mono' : ''} ${cls}`}
+        style={{ fontSize: secondary ? '1rem' : '1.25rem' }}
       >
         {value}
       </div>

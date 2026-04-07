@@ -638,9 +638,27 @@ function App() {
 
 
         {/* ── RIGHT COLUMN ──────────────────────────────────────────────── */}
+        {/*
+         * TIER STRUCTURE
+         * ──────────────
+         * Tier 1 — Always visible. These three panels drive live decisions
+         *          and need to be in peripheral vision at all times.
+         *
+         * Tier 2 — Collapsed by default. Reference / analytics panels the
+         *          user consults between hands, not during them. Each is an
+         *          <AccordionPanel> that expands on click.
+         *
+         * Scan-mode panels (LiveOverlay, ZoneConfig, ConfirmationPanel,
+         * WongPanel) appear above Tier 1 only when relevant — they are
+         * already conditionally rendered so no change needed there.
+         *
+         * StopAlerts is rendered as a floating overlay at the app root
+         * level (see below the grid) so it is never buried by scroll.
+         */}
         <div className="panel-right flex flex-col gap-2.5">
 
-          {/* Card scanner — Manual / Screenshot / Live Scan */}
+          {/* ── Card scanner — Manual / Screenshot / Live Scan ──────────
+              Unchanged. Stays at the top; it's the primary input control. */}
           <LiveOverlayPanel
             socket={socketRef.current}
             count={gameState?.count}
@@ -650,7 +668,7 @@ function App() {
             dealTarget={dealTarget}
           />
 
-          {/* Feature 1 & 3: Zone config + seat presets — shown in live/screenshot mode */}
+          {/* Feature 1 & 3: Zone config — only in live/screenshot mode */}
           {(scanMode === 'live' || scanMode === 'screenshot') && (
             <ZoneConfigPanel
               socket={socketRef.current}
@@ -659,7 +677,7 @@ function App() {
             />
           )}
 
-          {/* Feature 4: Card confirmation mode — shown in live mode */}
+          {/* Feature 4: Confirmation mode — only in live mode */}
           {scanMode === 'live' && (
             <ConfirmationPanel
               socket={socketRef.current}
@@ -668,7 +686,7 @@ function App() {
             />
           )}
 
-          {/* Feature 5: Wonging / back-counting panel — shown in live mode */}
+          {/* Feature 5: Wonging — only in live mode */}
           {scanMode === 'live' && (
             <WongPanel
               socket={socketRef.current}
@@ -677,31 +695,61 @@ function App() {
             />
           )}
 
-          {/* Shoe composition */}
-          <ShoePanel shoe={shoe} />
+          {/* ── TIER 1: Live decision panels (always visible) ─────────── */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {/* Casino risk — highest urgency, goes first */}
+            <CasinoRiskMeter casinoRisk={casinoRisk} />
 
-          {/* Edge meter */}
-          <EdgeMeter count={count} />
+            {/* Player edge vs house */}
+            <EdgeMeter count={count} />
 
-          {/* Illustrious 18 + Fab 4 */}
-          <I18Panel count={count} />
+            {/* Shoe composition + penetration */}
+            <ShoePanel shoe={shoe} />
+          </div>
 
-          {/* ML shuffle tracker */}
-          <ShuffleTrackerPanel tracker={tracker} />
+          {/* ── TIER 2: Reference / analytics (collapsed by default) ────
+              Each <AccordionPanel> wraps one existing component.
+              The label prop becomes the clickable header row.           */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
 
-          {/* Ace + Ten side count — Ace-adjusted TC for bet sizing */}
-          <SideCountPanel sideCounts={sideCounts} count={count} />
+            <AccordionPanel label="Illustrious 18 & Fab 4">
+              <I18Panel count={count} />
+            </AccordionPanel>
 
-          {/* Casino counter detection risk meter */}
-          <CasinoRiskMeter casinoRisk={casinoRisk} />
+            <AccordionPanel label="Shuffle Tracker (ML)">
+              <ShuffleTrackerPanel tracker={tracker} />
+            </AccordionPanel>
 
-          {/* Stop-loss / stop-win alerts with audio */}
-          <StopAlerts session={session} currency={currency} socket={socketRef.current} />
+            <AccordionPanel label="Ace & Ten Side Counts">
+              <SideCountPanel sideCounts={sideCounts} count={count} />
+            </AccordionPanel>
 
-          {/* N₀ + Shoe Quality Score */}
-          <AnalyticsPanel analytics={gameState?.analytics} />
+            <AccordionPanel label="Session Analytics">
+              <AnalyticsPanel analytics={gameState?.analytics} />
+            </AccordionPanel>
+
+          </div>
+
         </div>
+        {/* ── StopAlerts rendered OUTSIDE the column grid ───────────────
+            Was previously buried at the bottom of the right column scroll.
+            Now it floats as a fixed overlay so it fires immediately and is
+            never hidden behind scroll position. See the overlay div below. */}
 
+      </div>
+
+      {/* ── StopAlerts floating overlay ───────────────────────────────────
+          Rendered outside the three-column grid so it fires on top of
+          everything and is never hidden behind a scroll position.
+          pointer-events: none on the wrapper lets clicks pass through
+          to the dashboard; the alert itself re-enables pointer-events.  */}
+      <div style={{
+        position: 'fixed', bottom: 16, right: 16,
+        zIndex: 1000, pointerEvents: 'none',
+      }}>
+        <div style={{ pointerEvents: 'auto' }}>
+          <StopAlerts session={session} currency={currency} socket={socketRef.current} />
+        </div>
       </div>
 
       {/* Keyboard shortcut reminder at the bottom of the page */}

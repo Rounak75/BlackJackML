@@ -1,51 +1,49 @@
 /*
  * components/StopAlerts.js
  * ─────────────────────────────────────────────────────────
- * Stop-Loss / Stop-Win alert panel with audio notification.
+ * Stop-Loss / Stop-Win alert — floating overlay toast,
+ * NOT an inline panel.
  *
- * Configurable thresholds that fire when:
- *   • Session profit drops below stop-loss (e.g. -₹5,000)
- *   • Session profit rises above stop-win  (e.g. +₹3,000)
+ * BEFORE: Always-visible Widget in the right column scroll.
+ *         The "Continue Playing" row rendered at ₹0 P&L,
+ *         overlapping CasinoRiskMeter and cluttering idle state.
  *
- * Features:
- *   • Persistent banner when threshold crossed
- *   • Audio beep (Web Audio API — no file needed)
- *   • Snooze button (dismiss for 10 hands)
- *   • Progress bar showing current P&L vs targets
- *   • Backend-authoritative should_leave flag (server owns state)
- *   • Threshold edits emit set_stop_thresholds to server for persistence
+ * AFTER:  Returns null when idle. A compact warning toast slides in
+ *         from the bottom-right when within 20% of a threshold.
+ *         A full urgent banner replaces it when the threshold is hit.
+ *         Positioned by the fixed-overlay wrapper in App.jsx.
  *
- * Props:
- *   session  — session object { total_profit, hands_played,
- *                               should_leave, stop_reason,
- *                               stop_loss, stop_win }
+ * Three display states:
+ *   IDLE      — null (renders nothing, zero layout impact)
+ *   WARNING   — compact toast: "Approaching stop-loss — ₹800 buffer"
+ *   TRIGGERED — full banner with Snooze / Dismiss, pulsing border
+ *
+ * Props unchanged:
+ *   session  — { total_profit, hands_played, should_leave,
+ *                stop_reason, stop_loss, stop_win }
  *   currency — { symbol }
- *   socket   — socket.io instance for emitting set_stop_thresholds
+ *   socket   — socket.io instance for set_stop_thresholds
  */
 
 function StopAlerts({ session, currency, socket }) {
   const { useState, useEffect, useRef } = React;
 
-  const profit  = session?.total_profit ?? 0;
-  const hands   = session?.hands_played ?? 0;
-  const sym     = currency?.symbol ?? '₹';
+  const profit = session?.total_profit ?? 0;
+  const hands  = session?.hands_played ?? 0;
+  const sym    = currency?.symbol ?? '₹';
 
-  // ── Thresholds: initialise from server state when it arrives, then track locally ──
-  // session.stop_loss and session.stop_win are the server-authoritative values.
-  // We only fall back to defaults if the server hasn't sent them yet.
   const serverStopLoss = session?.stop_loss ?? -5000;
   const serverStopWin  = session?.stop_win  ??  3000;
 
-  const [stopLoss,   setStopLoss]   = useState(serverStopLoss);
-  const [stopWin,    setStopWin]    = useState(serverStopWin);
-  const [snoozedAt,  setSnoozedAt]  = useState(null);  // hand count when snoozed
-  const [dismissed,  setDismissed]  = useState({ loss: false, win: false });
-  const [editing,    setEditing]    = useState(false);
-  const [tempLoss,   setTempLoss]   = useState(serverStopLoss);
-  const [tempWin,    setTempWin]    = useState(serverStopWin);
+  const [stopLoss,  setStopLoss]  = useState(serverStopLoss);
+  const [stopWin,   setStopWin]   = useState(serverStopWin);
+  const [snoozedAt, setSnoozedAt] = useState(null);
+  const [dismissed, setDismissed] = useState({ loss: false, win: false });
+  const [editing,   setEditing]   = useState(false);
+  const [tempLoss,  setTempLoss]  = useState(serverStopLoss);
+  const [tempWin,   setTempWin]   = useState(serverStopWin);
   const alertedRef = useRef({ loss: false, win: false });
 
-  // Sync local thresholds if server sends updated values (e.g. after reconnect)
   useEffect(() => {
     if (!editing) {
       setStopLoss(serverStopLoss);
@@ -53,12 +51,9 @@ function StopAlerts({ session, currency, socket }) {
     }
   }, [serverStopLoss, serverStopWin]);
 
-  // ── Backend-authoritative should_leave overrides local threshold calc ──
-  // Use server flag when available; fall back to client-side calculation.
   const backendShouldLeave = session?.should_leave ?? false;
-  const backendStopReason  = session?.stop_reason  ?? null;   // 'STOP_LOSS' | 'STOP_WIN' | null
+  const backendStopReason  = session?.stop_reason  ?? null;
 
-  // Web Audio beep — no file needed, pure tone via oscillator
   const playAlert = (type) => {
     try {
       const ctx  = new (window.AudioContext || window.webkitAudioContext)();
@@ -66,26 +61,30 @@ function StopAlerts({ session, currency, socket }) {
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
-      osc.frequency.value = type === 'loss' ? 220 : 660;  // low=loss, high=win
+      osc.frequency.value = type === 'loss' ? 220 : 660;
       osc.type = 'sine';
       gain.gain.setValueAtTime(0.4, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.8);
       osc.start(ctx.currentTime);
       osc.stop(ctx.currentTime + 0.8);
-    } catch (e) { /* audio blocked — silent */ }
+    } catch (e) {}
   };
 
   const snoozeActive = snoozedAt !== null && (hands - snoozedAt) < 10;
 
-  // Prefer backend-authoritative flag; fall back to local threshold calc
   const lossHit = backendShouldLeave
     ? backendStopReason === 'STOP_LOSS'
     : profit <= stopLoss;
-  const winHit  = backendShouldLeave
+  const winHit = backendShouldLeave
     ? backendStopReason === 'STOP_WIN'
     : profit >= stopWin;
 
-  // Fire alerts when thresholds crossed for the first time
+  // Within 20% of the threshold range — show a warning before it fires
+  const lossRange   = Math.abs(stopLoss);
+  const winRange    = stopWin;
+  const lossWarning = !lossHit && profit < 0 && Math.abs(profit) >= lossRange * 0.8;
+  const winWarning  = !winHit  && profit > 0 && profit >= winRange * 0.8;
+
   useEffect(() => {
     if (lossHit && !alertedRef.current.loss && !dismissed.loss) {
       alertedRef.current.loss = true;
@@ -99,214 +98,196 @@ function StopAlerts({ session, currency, socket }) {
     if (!winHit)  alertedRef.current.win  = false;
   }, [lossHit, winHit]);
 
-  const snooze = () => { setSnoozedAt(hands); };
+  const snooze  = () => setSnoozedAt(hands);
   const dismiss = (type) => setDismissed(d => ({ ...d, [type]: true }));
 
-  // Progress toward targets
-  const lossRange  = Math.abs(stopLoss);
-  const winRange   = stopWin;
-  const lossFill   = Math.min(1, Math.max(0, (profit - stopLoss) / lossRange));
-  const winFill    = Math.min(1, Math.max(0, profit / winRange));
+  const showLossAlert   = lossHit     && !dismissed.loss && !snoozeActive;
+  const showWinAlert    = winHit      && !dismissed.win  && !snoozeActive;
+  const showLossWarning = lossWarning && !dismissed.loss && !snoozeActive;
+  const showWinWarning  = winWarning  && !dismissed.win  && !snoozeActive;
 
-  const showLossAlert = lossHit && !dismissed.loss && !snoozeActive;
-  const showWinAlert  = winHit  && !dismissed.win  && !snoozeActive;
+  // ── IDLE: render nothing ────────────────────────────────────────────────
+  if (!showLossAlert && !showWinAlert && !showLossWarning && !showWinWarning && !editing) {
+    return null;
+  }
+
+  const isTriggered = showLossAlert || showWinAlert;
+  const isLoss      = showLossAlert || showLossWarning;
+
+  const shellStyle = {
+    width: 280,
+    background: '#111827',
+    border: `1.5px solid ${
+      isTriggered
+        ? (isLoss ? 'rgba(255,92,92,0.7)' : 'rgba(68,232,130,0.6)')
+        : 'rgba(255,212,71,0.45)'
+    }`,
+    borderRadius: 12,
+    padding: 14,
+    boxShadow: '0 8px 32px rgba(0,0,0,0.7)',
+    animation: isTriggered ? 'live-pulse 1.2s ease-in-out infinite' : 'toastSlide 0.25s ease',
+  };
+
+  // ── WARNING toast (compact) ─────────────────────────────────────────────
+  if (!isTriggered) {
+    const buffer = showLossWarning
+      ? Math.abs(profit - stopLoss)
+      : Math.abs(stopWin - profit);
+    return (
+      <div style={shellStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 16, lineHeight: 1 }}>⚠️</span>
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: '#ffd447' }}>
+                {showLossWarning ? 'Approaching stop-loss' : 'Approaching stop-win'}
+              </div>
+              <div style={{ fontSize: 9, color: '#94a7c4', marginTop: 1 }}>
+                {sym}{buffer.toLocaleString()} remaining
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => dismiss(showLossWarning ? 'loss' : 'win')}
+            aria-label="Dismiss warning"
+            style={{
+              background: 'transparent', border: 'none', color: '#94a7c4',
+              cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 2,
+            }}
+          >✕</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── TRIGGERED banner (full) ─────────────────────────────────────────────
+  const lossFill = Math.min(1, Math.max(0, (profit - stopLoss) / lossRange));
+  const winFill  = Math.min(1, Math.max(0, profit / winRange));
 
   return (
-    <Widget title="Stop Alerts" badge={showLossAlert || showWinAlert ? '⚠ TRIGGERED' : 'ARMED'}>
+    <div style={shellStyle}>
 
-      {/* ── Session status: explicit Continue / Leave indicator ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '7px 10px', borderRadius: 6, marginBottom: 10,
-        background: (lossHit || winHit)
-          ? 'rgba(255,92,92,0.08)' : 'rgba(68,232,130,0.07)',
-        border: `1px solid ${(lossHit || winHit)
-          ? 'rgba(255,92,92,0.35)' : 'rgba(68,232,130,0.25)'}`,
-      }}>
-        <span style={{ fontSize: 18, lineHeight: 1 }}>
-          {lossHit ? '❌' : winHit ? '🏆' : '✅'}
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 20, lineHeight: 1 }}>
+          {showLossAlert ? '🛑' : '🏆'}
         </span>
-        <div>
+        <div style={{ flex: 1 }}>
           <div style={{
-            fontSize: 11, fontWeight: 800,
-            color: lossHit ? '#ff5c5c' : winHit ? '#ffd447' : '#44e882',
+            fontSize: 12, fontWeight: 800,
+            color: showLossAlert ? '#ff5c5c' : '#44e882',
           }}>
-            {lossHit ? 'LEAVE TABLE — Stop-Loss Hit'
-              : winHit ? 'LEAVE TABLE — Stop-Win Hit'
-              : 'Continue Playing'}
+            {showLossAlert ? 'STOP-LOSS HIT — Leave table' : 'STOP-WIN HIT — Lock profit'}
           </div>
           <div style={{ fontSize: 9, color: '#94a7c4', marginTop: 1 }}>
-            {lossHit
-              ? `Down ${sym}${Math.abs(profit).toLocaleString()} — limit: ${sym}${Math.abs(stopLoss).toLocaleString()}`
-              : winHit
-                ? `Up ${sym}${profit.toLocaleString()} — target: ${sym}${stopWin.toLocaleString()}`
-                : `${sym}${Math.abs(profit - stopLoss).toLocaleString()} buffer to stop-loss`}
+            {showLossAlert
+              ? `Down ${sym}${Math.abs(profit).toLocaleString()} · limit ${sym}${Math.abs(stopLoss).toLocaleString()}`
+              : `Up ${sym}${profit.toLocaleString()} · target ${sym}${stopWin.toLocaleString()}`}
           </div>
         </div>
       </div>
 
-      {/* Loss alert banner */}
-      {showLossAlert && (
-        <div style={{
-          padding: '10px 12px', borderRadius: 8, marginBottom: 8,
-          background: 'rgba(255,92,92,0.15)', border: '2px solid rgba(255,92,92,0.6)',
-          animation: 'live-pulse 1s ease-in-out infinite',
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 900, color: '#ff5c5c', marginBottom: 3 }}>
-            🛑 STOP-LOSS HIT
-          </div>
-          <div style={{ fontSize: 10, color: '#ffaaaa', marginBottom: 8 }}>
-            You're down {sym}{Math.abs(profit).toLocaleString()} — limit was {sym}{Math.abs(stopLoss).toLocaleString()}. Stop playing now.
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={snooze} aria-label="Snooze stop-loss alert for 10 hands" style={{
-              flex: 1, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
-              background: 'rgba(255,92,92,0.2)', border: '1px solid rgba(255,92,92,0.4)',
-              color: '#ff5c5c',
-            }}>Snooze 10 hands</button>
-            <button onClick={() => dismiss('loss')} aria-label="Dismiss stop-loss alert" style={{
-              flex: 1, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
-              background: 'transparent', border: '1px solid rgba(255,255,255,0.12)',
-              color: '#94a7c4',
-            }}>Dismiss</button>
-          </div>
-        </div>
-      )}
-
-      {/* Win alert banner */}
-      {showWinAlert && (
-        <div style={{
-          padding: '10px 12px', borderRadius: 8, marginBottom: 8,
-          background: 'rgba(68,232,130,0.12)', border: '2px solid rgba(68,232,130,0.5)',
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 900, color: '#44e882', marginBottom: 3 }}>
-            🏆 STOP-WIN HIT
-          </div>
-          <div style={{ fontSize: 10, color: '#a0eec0', marginBottom: 8 }}>
-            You're up {sym}{profit.toLocaleString()} — target was {sym}{stopWin.toLocaleString()}. Lock in your profit.
-          </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={snooze} aria-label="Continue playing for 10 more hands" style={{
-              flex: 1, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
-              background: 'rgba(68,232,130,0.15)', border: '1px solid rgba(68,232,130,0.4)',
-              color: '#44e882',
-            }}>Continue 10 more hands</button>
-            <button onClick={() => dismiss('win')} aria-label="Dismiss stop-win alert" style={{
-              flex: 1, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
-              background: 'transparent', border: '1px solid rgba(255,255,255,0.12)',
-              color: '#94a7c4',
-            }}>Dismiss</button>
-          </div>
-        </div>
-      )}
-
-      {/* P&L progress */}
+      {/* P&L progress bar */}
       <div style={{ marginBottom: 10 }}>
-        {/* Current P&L display */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-          <span style={{ fontSize: 9, color: '#94a7c4', textTransform: 'uppercase', letterSpacing: '0.07em' }}>
-            Session P&L
-          </span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#94a7c4', marginBottom: 3 }}>
+          <span>{showLossAlert ? 'Stop-Loss' : 'Stop-Win'}</span>
           <span style={{
-            fontSize: 16, fontWeight: 800, fontFamily: 'DM Mono,monospace',
+            fontFamily: 'monospace', fontWeight: 700,
             color: profit >= 0 ? '#44e882' : '#ff5c5c',
           }}>
             {profit >= 0 ? '+' : ''}{sym}{Math.abs(profit).toLocaleString()}
           </span>
         </div>
-
-        {/* Loss meter: left side */}
-        <div style={{ marginBottom: 6 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#94a7c4', marginBottom: 2 }}>
-            <span>Stop-Loss: {sym}{Math.abs(stopLoss).toLocaleString()}</span>
-            <span>{lossHit ? '❌ HIT' : `${sym}${Math.abs(profit - stopLoss).toLocaleString()} buffer`}</span>
-          </div>
-          <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)' }}>
-            <div style={{
-              height: '100%', borderRadius: 2,
-              width: `${lossFill * 100}%`,
-              background: profit < 0 ? '#ff5c5c' : '#44e882',
-              transition: 'width 0.4s ease',
-            }} />
-          </div>
-        </div>
-
-        {/* Win meter: right side */}
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 8, color: '#94a7c4', marginBottom: 2 }}>
-            <span>Stop-Win: {sym}{stopWin.toLocaleString()}</span>
-            <span>{winHit ? '✅ HIT' : `${sym}${Math.max(0, stopWin - profit).toLocaleString()} to target`}</span>
-          </div>
-          <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)' }}>
-            <div style={{
-              height: '100%', borderRadius: 2,
-              width: `${winFill * 100}%`,
-              background: 'linear-gradient(90deg, #44e882, #ffd447)',
-              transition: 'width 0.4s ease',
-            }} />
-          </div>
+        <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.07)' }}>
+          <div style={{
+            height: '100%', borderRadius: 2,
+            width: `${(showLossAlert ? lossFill : winFill) * 100}%`,
+            background: showLossAlert ? '#ff5c5c' : '#44e882',
+            transition: 'width 0.4s ease',
+          }} />
         </div>
       </div>
 
-      {/* Settings */}
+      {/* Actions */}
       {!editing ? (
-        <button onClick={() => { setTempLoss(stopLoss); setTempWin(stopWin); setEditing(true); }}
-          aria-label="Edit stop-loss and stop-win limits"
-          style={{
-            width: '100%', padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
-            background: 'transparent', border: '1px solid rgba(255,255,255,0.08)',
-            color: '#94a7c4',
-          }}>
-          ⚙ Set limits
-        </button>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button
+            onClick={snooze}
+            aria-label="Snooze for 10 hands"
+            style={{
+              flex: 1, padding: '5px 0', fontSize: 9, borderRadius: 6, cursor: 'pointer',
+              background: showLossAlert ? 'rgba(255,92,92,0.15)' : 'rgba(68,232,130,0.12)',
+              border: `1px solid ${showLossAlert ? 'rgba(255,92,92,0.35)' : 'rgba(68,232,130,0.3)'}`,
+              color: showLossAlert ? '#ff5c5c' : '#44e882',
+            }}
+          >Snooze 10 hands</button>
+          <button
+            onClick={() => dismiss(showLossAlert ? 'loss' : 'win')}
+            aria-label="Dismiss alert"
+            style={{
+              flex: 1, padding: '5px 0', fontSize: 9, borderRadius: 6, cursor: 'pointer',
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: '#94a7c4',
+            }}
+          >Dismiss</button>
+          <button
+            onClick={() => { setTempLoss(stopLoss); setTempWin(stopWin); setEditing(true); }}
+            aria-label="Edit limits"
+            style={{
+              padding: '5px 8px', fontSize: 9, borderRadius: 6, cursor: 'pointer',
+              background: 'transparent',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: '#94a7c4',
+            }}
+          >⚙</button>
+        </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {[
-            { label: 'Stop-Loss', val: tempLoss, set: setTempLoss, min: true },
-            { label: 'Stop-Win',  val: tempWin,  set: setTempWin,  min: false },
-          ].map(({ label: l, val, set, min: isNeg }) => (
+            { label: 'Stop-Loss', val: tempLoss, set: setTempLoss, neg: true },
+            { label: 'Stop-Win',  val: tempWin,  set: setTempWin,  neg: false },
+          ].map(({ label: l, val, set, neg }) => (
             <div key={l}>
               <div style={{ fontSize: 8, color: '#94a7c4', marginBottom: 2 }}>{l} ({sym})</div>
-              <input type="number"
+              <input
+                type="number"
                 aria-label={l}
-                value={isNeg ? Math.abs(val) : val}
-                onChange={e => set(isNeg ? -(parseFloat(e.target.value)||0) : (parseFloat(e.target.value)||0))}
+                value={neg ? Math.abs(val) : val}
+                onChange={e => set(neg
+                  ? -(parseFloat(e.target.value) || 0)
+                  :  (parseFloat(e.target.value) || 0)
+                )}
                 style={{
                   width: '100%', padding: '5px 8px', fontSize: 11, borderRadius: 5,
                   background: '#1a2236', border: '1px solid rgba(255,255,255,0.15)',
-                  color: '#f0f4ff', fontFamily: 'DM Mono,monospace',
+                  color: '#f0f4ff', fontFamily: 'monospace',
                 }}
               />
             </div>
           ))}
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => {
-                setStopLoss(tempLoss);
-                setStopWin(tempWin);
-                setEditing(false);
-                setDismissed({ loss: false, win: false });
-                // Persist new thresholds to server so backend state matches UI
-                if (socket) {
-                  socket.emit('set_stop_thresholds', {
-                    stop_loss: tempLoss,
-                    stop_win:  tempWin,
-                  });
-                }
+            <button
+              onClick={() => {
+                setStopLoss(tempLoss); setStopWin(tempWin);
+                setEditing(false); setDismissed({ loss: false, win: false });
+                if (socket) socket.emit('set_stop_thresholds', { stop_loss: tempLoss, stop_win: tempWin });
               }}
-              aria-label="Save limits"
-              style={{ flex: 2, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
-                background: 'rgba(68,232,130,0.12)', border: '1px solid rgba(68,232,130,0.3)', color: '#44e882' }}>
-              Save
-            </button>
-            <button onClick={() => setEditing(false)}
-              aria-label="Cancel"
-              style={{ flex: 1, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
-                background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', color: '#94a7c4' }}>
-              Cancel
-            </button>
+              style={{
+                flex: 2, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
+                background: 'rgba(68,232,130,0.12)', border: '1px solid rgba(68,232,130,0.3)', color: '#44e882',
+              }}
+            >Save</button>
+            <button
+              onClick={() => setEditing(false)}
+              style={{
+                flex: 1, padding: '5px', fontSize: 9, borderRadius: 5, cursor: 'pointer',
+                background: 'transparent', border: '1px solid rgba(255,255,255,0.08)', color: '#94a7c4',
+              }}
+            >Cancel</button>
           </div>
         </div>
       )}
-    </Widget>
+    </div>
   );
 }

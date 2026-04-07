@@ -42,7 +42,8 @@ build() {
               ShoePanel EdgeMeter SessionStats ShuffleTracker \
               CountHistory I18Panel AnalyticsPanel LiveOverlayPanel CenterToolBar \
               SplitHandPanel SideCountPanel CasinoRiskMeter StopAlerts \
-              SeenCardsPanel ZoneConfigPanel ConfirmationPanel WongPanel App; do
+              SeenCardsPanel ZoneConfigPanel ConfirmationPanel WongPanel \
+              AccordionPanel App; do
       echo "/* ── $f ── */"
       cat "$OUT_DIR/$f.js"
       echo ""
