@@ -27,6 +27,7 @@ for f in \
   I18Panel \
   LiveOverlayPanel \
   CenterToolBar \
+  DealOrderEngine \
   SplitHandPanel \
   SideCountPanel \
   CasinoRiskMeter \

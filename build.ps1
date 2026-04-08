@@ -66,6 +66,7 @@ $loadOrder = @(
     "SideBetPanel","HandDisplay","CardGrid","StrategyRefTable",
     "ShoePanel","EdgeMeter","SessionStats","ShuffleTracker",
     "CountHistory","I18Panel","AnalyticsPanel","LiveOverlayPanel","CenterToolBar",
+    "DealOrderEngine",
     "SplitHandPanel","SideCountPanel","CasinoRiskMeter","StopAlerts",
     "SeenCardsPanel","ZoneConfigPanel","ConfirmationPanel","WongPanel",
     "AccordionPanel","App"
@@ -126,6 +127,7 @@ $requiredGlobals = @(
     "function LiveOverlayPanel(",
     "function CompDepAlert(",
     "function AnalyticsPanel(",
+    "DealOrderEngine",
     "function SeenCardsPanel(",
     "function ZoneConfigPanel(",
     "function ConfirmationPanel(",

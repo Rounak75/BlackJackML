@@ -17,5 +17,5 @@
     "noImplicitAny": false,
     "lib": ["ES2018", "DOM"]
   },
-  "include": ["./src/**/*"]
+  "include": ["./src/**/*", "../app/static/global.d.ts"]
 }

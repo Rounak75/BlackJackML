@@ -59,6 +59,9 @@ function App() {
   const [tookInsurance, setTookInsurance] = useState(false)
   const [scanMode, setScanMode] = useState('manual')
 
+  // Deal-Order Engine state
+  const [dealOrderEnabled, setDealOrderEnabled] = useState(true)
+
   // Feature state
   const [zoneConfig, setZoneConfig] = useState({ player_end: 0.33, dealer_end: 0.66 })
   const [seenCards, setSeenCards] = useState([])
@@ -74,6 +77,7 @@ function App() {
   const undoStack = useRef([])
   const dealTargetRef = useRef('player')
   const gameStateRef = useRef(null)
+  const dealOrderRef = useRef(null)
 
   const setTarget = (t) => { dealTargetRef.current = t; setDealTarget(t); }
 
@@ -118,6 +122,14 @@ function App() {
     socketRef.current?.emit('deal_card', { rank, suit, target })
   }, [])
 
+  // Wrapped handler: also notifies DealOrderEngine when a card is dealt
+  const handleDealCardWrapped = useCallback((rank, suit, targetOverride) => {
+    handleDealCard(rank, suit, targetOverride)
+    if (dealOrderRef.current && dealOrderEnabled) {
+      dealOrderRef.current.recordCard(rank, suit, targetOverride || dealTargetRef.current)
+    }
+  }, [handleDealCard, dealOrderEnabled])
+
   const handleSplit = useCallback(() => {
     undoStack.current.push({ type: 'split' })
     socketRef.current?.emit('player_split')
@@ -133,12 +145,16 @@ function App() {
     setDealTarget('player')
     socketRef.current?.emit('new_hand')
     showToast('New hand — count continues', 'info')
+    // Notify deal-order engine
+    if (dealOrderRef.current) dealOrderRef.current.resetForNewHand()
   }, [])
 
   const handleShuffle = useCallback(() => {
     const shuffleType = document.getElementById('shuffle-type')?.value || 'machine'
     undoStack.current = []
     socketRef.current?.emit('shuffle', { type: shuffleType })
+    // Notify deal-order engine — full reset on shuffle
+    if (dealOrderRef.current) dealOrderRef.current.resetForShuffle()
   }, [])
 
   const handleChangeSystem = useCallback((system) => {
@@ -218,6 +234,7 @@ function App() {
       if (e.key === 's' || e.key === 'S') handleShuffle()
       if (e.key === 'p' || e.key === 'P') setTarget('player')
       if (e.key === 'd' || e.key === 'D') setTarget('dealer')
+      if (e.key === 'e' || e.key === 'E') setDealOrderEnabled(prev => !prev)
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault()
         handleUndo()
@@ -366,6 +383,15 @@ function App() {
           {/* CompDepAlert removed as standalone (Issue #8) —
               now inline badge in ActionPanel */}
 
+          {/* Deal-Order Engine — seat tracking + decision-aware counting */}
+          {dealOrderEnabled && (
+            <DealOrderEngine
+              ref={dealOrderRef}
+              count={count}
+              shoe={shoe}
+            />
+          )}
+
           {/* Hand display */}
           <HandDisplay
             playerHand={playerHand}
@@ -402,7 +428,7 @@ function App() {
             target={dealTarget}
             onTargetChange={setTarget}
             remainingByRank={shoe?.remaining_by_rank}
-            onDealCard={handleDealCard}
+            onDealCard={handleDealCardWrapped}
             onUndo={handleUndo}
             onSplit={handleSplit}
             canSplit={!!(playerHand?.can_split && splitHands.length === 0)}
@@ -557,6 +583,11 @@ function App() {
             borderRadius: 3, padding: '1px 4px', fontSize: '0.6rem',
             fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
           }}>D</kbd> Dealer
+          {' '}<kbd style={{
+            background: '#212d45', border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 3, padding: '1px 4px', fontSize: '0.6rem',
+            fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
+          }}>E</kbd> {dealOrderEnabled ? 'Engine ON' : 'Engine OFF'}
         </span>
       </div>
     </div>

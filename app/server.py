@@ -89,15 +89,20 @@ except ImportError as _ml_err:
           "Train the model first with: python main.py train")
     ML_AVAILABLE = False
     class BlackjackDecisionModel:
-        def __init__(self, *a, **kw): pass
+        def __init__(self, *a, **kw):
+            self.is_trained = False
         def load(self, *a, **kw): return False
         def predict(self, *a, **kw): return None
+        def extract_features(self, *a, **kw): return None
+        def get_attention_weights(self, *a, **kw): return {}
     class ShuffleTracker:
         def __init__(self, *a, **kw):
             self.bayesian_confidence = 0.0
+            self.bayesian = type('obj', (object,), {'confidence': 0.0})()
         def observe_card(self, *a, **kw): pass
         def get_enhanced_true_count(self, tc, *a, **kw): return tc
         def get_count_adjustment(self): return 0.0
+        def on_shuffle(self, *a, **kw): pass
         def get_state(self):
             return {'bayesian_confidence':0,'count_adjustment':0,
                     'ace_prediction':None,'shuffles_tracked':0}

@@ -32,6 +32,8 @@ declare var useCallback: any;
 declare var useMemo: any;
 declare var useContext: any;
 declare var useReducer: any;
+declare var useImperativeHandle: any;
+declare var useLayoutEffect: any;
 
 // ── Socket.IO (loaded from cdnjs CDN in index.html) ───────────────
 // io() opens a WebSocket connection to the Flask server
@@ -85,6 +87,7 @@ declare function CenterToolbar(props: any): any;
 declare function SplitHandPanel(props: any): any;
 declare function SideCountPanel(props: any): any;
 declare function CasinoRiskMeter(props: any): any;
+declare function DealOrderEngine(props: any): any;
 declare function StopAlerts(props: any): any;
 declare function MiniCard(props: any): any;
 declare function MiniCardBack(props: any): any;
