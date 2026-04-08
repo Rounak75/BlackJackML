@@ -59,7 +59,7 @@ class Simulator:
 
         # ── Counting system ────────────────────────────────────────────────
         # Defaults to whatever DEFAULT_SYSTEM is set to in config.py.
-        # Pass system="hi_lo" / "ko" / "omega_ii" / "zen" to override.
+        # Pass system="hi_lo" / "ko" / "omega_ii" / "zen" / "wong_halves" to override.
         system = system or CountingConfig.DEFAULT_SYSTEM
         if system not in CountingConfig.SYSTEMS:
             raise ValueError(

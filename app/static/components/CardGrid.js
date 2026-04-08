@@ -17,7 +17,7 @@
  *   • Split/Undo have descriptive aria-labels
  */
 
-function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands, scanMode }) {
+function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands, scanMode, countSystem }) {
   const { useState } = React;
   const [suitFilter, setSuitFilter] = useState('all');
   const [gridExpanded, setGridExpanded] = useState(false);
@@ -257,12 +257,16 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             const visible = suitFilter === 'all' || suitFilter === suit.name;
             if (!visible) return null;
 
-            const hv       = HILO_TAG[rank];
+            const activeTags = (typeof COUNT_TAGS !== 'undefined' && COUNT_TAGS[countSystem || 'hi_lo']) || HILO_TAG;
+            const hv       = activeTags[rank] || 0;
             const key      = rankToKey[rank];
             const rem      = remainingByRank ? (remainingByRank[key] || 0) : 0;
             const max      = maxByKey[key] || 24;
             const depleted = rem < max * 0.2;
-            const countHint = hv > 0 ? ', Hi-Lo +1' : hv < 0 ? ', Hi-Lo -1' : '';
+            const sysLabels = { hi_lo: 'Hi-Lo', ko: 'KO', omega_ii: 'Ω-II', zen: 'Zen', wong_halves: 'WH' };
+            const sysLabel = sysLabels[countSystem] || 'Hi-Lo';
+            const hvFmt    = hv > 0 ? `+${hv}` : `${hv}`;
+            const countHint = hv !== 0 ? `, ${sysLabel} ${hvFmt}` : '';
             const suitName  = suitFullName[suit.name] || suit.name;
 
             return (
@@ -281,7 +285,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
                     fontSize: '0.5rem', lineHeight: 1,
                     color: hv > 0 ? 'var(--jade)' : 'var(--ruby)',
                   }}>
-                    {hv > 0 ? '+' : '−'}
+                    {hv > 0 ? '+' : '−'}{Math.abs(hv) !== 1 ? Math.abs(hv) : ''}
                   </span>
                 )}
               </button>

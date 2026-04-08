@@ -27,7 +27,7 @@
 ║  [3]  pair_value / 11            (value of paired card if any)               ║
 ║  [4]  dealer_upcard / 11         (dealer's showing card)                     ║
 ║  [5]  true_count / tc_scale      (system-normalised true count)              ║
-║         Hi-Lo/KO: ÷10  |  Omega II/Zen: ÷20                                  ║
+║         Hi-Lo/KO: ÷10  |  Omega II/Zen: ÷20  |  Wong Halves: ÷15             ║
 ║  [6]  shuffle_adjustment / 5     (ML shuffle tracker bonus count)            ║
 ║  [7]  penetration                (how far through the shoe, 0-1)             ║
 ║  [8-17] remaining card probs     (P(2), P(3),..., P(10), P(Ace))             ║
@@ -39,7 +39,7 @@
 ║  [23] bankroll_ratio             (current bet / bankroll)                    ║
 ║  [24] advantage / adv_scale      (system-normalised player edge)             ║
 ║  [25] running_count / rc_scale   (system-normalised running count)           ║
-║         Hi-Lo/KO: ÷20  |  Omega II/Zen: ÷40                                  ║
+║         Hi-Lo/KO: ÷20  |  Omega II/Zen: ÷40  |  Wong Halves: ÷30             ║
 ║  [26] decks_remaining / 8        (normalised decks left)                     ║
 ║  [27] is_split (0 or 1)          (post-split hand?)                          ║
 ║                                                                              ║
@@ -430,6 +430,7 @@ class BlackjackDecisionModel:
 
         Hi-Lo / KO  : tc/10,  rc/20,  adv/0.10
         Omega II/Zen: tc/20,  rc/40,  adv/0.10  (+-2 tags produce larger raw counts)
+        Wong Halves : tc/15,  rc/30,  adv/0.10  (fractional tags, intermediate range)
 
         The scalars are read from CountingConfig.COUNT_NORM_SCALARS so they
         stay in sync with the training simulator automatically.

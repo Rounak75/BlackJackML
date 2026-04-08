@@ -38,6 +38,9 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
 
   var count = props.count;
   var shoe = props.shoe;
+  var onAppUndo = props.onAppUndo;
+  var onNewHand = props.onNewHand;
+  var onShuffle = props.onShuffle;
 
   // ══════════════════════════════════════════════════════════════
   // TABLE CONFIGURATION STATE
@@ -114,11 +117,14 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
     return Array.from({ length: numPlayers + 1 }, function () { return []; });
   }
 
-  /** Hi-Lo tag for a given rank string */
-  function hiloVal(rank) {
-    if (['2','3','4','5','6'].indexOf(rank) !== -1) return 1;
-    if (['7','8','9'].indexOf(rank) !== -1) return 0;
-    return -1; // 10, J, Q, K, A
+  /** Count tag for a given rank string — system-aware.
+   *  Falls back to HILO_TAG if system lookup not found. */
+  function countVal(rank) {
+    var sys = (count && count.system) || 'hi_lo';
+    var tags = (typeof COUNT_TAGS !== 'undefined' && COUNT_TAGS[sys]) || HILO_TAG;
+    var key = (['J','Q','K'].indexOf(rank) !== -1) ? '10' : rank;
+    var v = tags[key];
+    return v !== undefined ? v : 0;
   }
 
   /** Seat label for display */
@@ -200,7 +206,7 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
     if (dealRound >= 2) return; // round done, must end round first
 
     var seatIdx = dealPos;
-    var hilo = hiloVal(rank);
+    var hilo = countVal(rank);
     var serverRC = count ? count.running : 0;
 
     // Add card to seat
@@ -219,8 +225,10 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
     });
 
     // ── CRITICAL: Snapshot count when my seat gets its 2nd card ──
+    // serverRC is BEFORE this card (server hasn't processed it yet),
+    // so add this card's hilo to get the count AFTER this card.
     if (dealRound === 1 && seatIdx === mySeat - 1) {
-      setCountAtMyDecision(serverRC);
+      setCountAtMyDecision(serverRC + hilo);
     }
 
     // Advance deal position
@@ -352,6 +360,56 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
     }
   }, [cardLog, endRound, players]);
 
+  /** Soft reset — clears deal state without logging a round (used by App undo) */
+  var softReset = useCallback(function () {
+    setDealPos(0);
+    setDealRound(0);
+    setSeatCards(initSeatCards(players));
+    setCountAtMyDecision(null);
+    setCardLog([]);
+  }, [players]);
+
+  /** Replay an array of {rank, suit, target} cards into deal engine state (used by App undo) */
+  var replayCards = useCallback(function (cards) {
+    var pos = 0;
+    var round = 0;
+    var seats = initSeatCards(players);
+    var log = [];
+    var snapshot = null;
+
+    cards.forEach(function (card) {
+      if (round >= 2) return;
+      var seatIdx = pos;
+      var hilo = countVal(card.rank);
+
+      seats[seatIdx] = seats[seatIdx].concat([{ label: card.rank, hilo: hilo, suit: card.suit || null }]);
+      log.push({
+        seatIdx: seatIdx, label: card.rank, hilo: hilo, suit: card.suit || null,
+        dealRound: round, dealPos: pos, skipped: false
+      });
+
+      // Capture decision snapshot: sum hilo of all cards up to & including this one
+      if (round === 1 && seatIdx === mySeat - 1) {
+        var cumHilo = 0;
+        log.forEach(function (e) { cumHilo += e.hilo; });
+        // We don't know absolute serverRC here; store delta for now
+        snapshot = cumHilo;
+      }
+
+      pos++;
+      if (pos > players) { pos = 0; round++; }
+      if (round >= 2) round = 2;
+    });
+
+    setDealPos(pos);
+    setDealRound(round);
+    setSeatCards(seats);
+    setCardLog(log);
+    // Snapshot is relative; set null so fallback to serverRC is used
+    // until the next natural card tap captures it accurately
+    setCountAtMyDecision(null);
+  }, [players, mySeat]);
+
   // ── Player/seat adjustment ─────────────────────────────────
   var adjPlayers = useCallback(function (d) {
     setPlayers(function (prev) {
@@ -383,8 +441,10 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
       resetForShuffle: resetForShuffle,
       skipCard: skipCard,
       undoDealCard: undoDealCard,
+      softReset: softReset,
+      replayCards: replayCards,
     };
-  }, [recordCard, resetForNewHand, resetForShuffle, skipCard, undoDealCard]);
+  }, [recordCard, resetForNewHand, resetForShuffle, skipCard, undoDealCard, softReset, replayCards]);
 
   // ══════════════════════════════════════════════════════════════
   // DERIVED VALUES
@@ -513,12 +573,12 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
         React.createElement('div', { className: 'de-mini-actions' },
           React.createElement('button', {
             className: 'de-ma',
-            onClick: function (e) { e.stopPropagation(); undoDealCard(); },
+            onClick: function (e) { e.stopPropagation(); if (onAppUndo) onAppUndo(); else undoDealCard(); },
             title: 'Undo last deal card'
           }, '\u21A9'),
           React.createElement('button', {
             className: 'de-ma',
-            onClick: function (e) { e.stopPropagation(); endRound(); },
+            onClick: function (e) { e.stopPropagation(); if (onNewHand) onNewHand(); else endRound(); },
             title: 'End current round'
           }, '\u25CE'),
           React.createElement('button', {
@@ -528,7 +588,7 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
           }, '\u21E5'),
           React.createElement('button', {
             className: 'de-ma warn',
-            onClick: function (e) { e.stopPropagation(); resetForShuffle(); },
+            onClick: function (e) { e.stopPropagation(); if (onShuffle) onShuffle(); else resetForShuffle(); },
             title: 'New shoe (reset)'
           }, '\u27F3')
         )
@@ -674,17 +734,17 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
         React.createElement('div', { className: 'de-actions' },
           React.createElement('button', {
             className: 'de-act',
-            onClick: undoDealCard,
+            onClick: onAppUndo || undoDealCard,
             'aria-label': 'Undo last deal-order card'
           }, '\u21A9 Undo'),
           React.createElement('button', {
             className: 'de-act',
-            onClick: endRound,
+            onClick: onNewHand || endRound,
             'aria-label': 'End current round'
           }, '\u25CE End Round'),
           React.createElement('button', {
             className: 'de-act',
-            onClick: resetForShuffle,
+            onClick: onShuffle || resetForShuffle,
             'aria-label': 'Reset for new shoe'
           }, '\u27F3 New Shoe'),
           React.createElement('button', {

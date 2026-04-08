@@ -12,7 +12,7 @@ Coverage:
   • Hand value computation (including multi-ace soft hands)
   • Split mechanics and split_from_ace flag propagation
   • Bust logic and hand resolution
-  • Card counting accuracy across all four systems
+  • Card counting accuracy across all five systems
   • Basic strategy key decisions
   • Deviation engine (I18 + Fab 4)
   • Betting engine
@@ -479,10 +479,41 @@ class TestCounting:
         assert counter._total_per_rank[10] == 16 * 8   # 10/J/Q/K × 8 decks
         assert counter._total_per_rank[11] == 4 * 8    # Ace × 8 decks
 
-    def test_all_four_systems_available(self):
-        for system in ('hi_lo', 'ko', 'omega_ii', 'zen'):
+    def test_all_five_systems_available(self):
+        for system in ('hi_lo', 'ko', 'omega_ii', 'zen', 'wong_halves'):
             counter = CardCounter(system, 6)
             assert counter.system_name == system
+
+    def test_wong_halves_balanced_full_deck(self):
+        """Wong Halves is balanced: counting all 52 cards returns RC=0."""
+        counter = CardCounter('wong_halves', 1)
+        for card in Deck.create():
+            counter.count_card(card)
+        assert counter.running_count == 0
+
+    def test_wong_halves_fractional_values(self):
+        """Wong Halves uses fractional values: 2=+0.5, 5=+1.5, 9=-0.5."""
+        counter = CardCounter('wong_halves', 6)
+        counter.count_card(c(Rank.TWO))
+        assert counter.running_count == 0.5
+        counter.count_card(c(Rank.FIVE))
+        assert counter.running_count == 2.0
+        counter.count_card(c(Rank.NINE))
+        assert counter.running_count == 1.5
+
+    def test_wong_halves_ten_and_ace(self):
+        """Wong Halves: 10 = -1, Ace = -1 (same as Hi-Lo for high cards)."""
+        counter = CardCounter('wong_halves', 6)
+        counter.count_card(c(Rank.TEN))
+        assert counter.running_count == -1
+        counter.count_card(c(Rank.ACE))
+        assert counter.running_count == -2
+
+    def test_wong_halves_seven_half(self):
+        """Wong Halves: 7 = +0.5 (unlike Hi-Lo where 7 is neutral)."""
+        counter = CardCounter('wong_halves', 6)
+        counter.count_card(c(Rank.SEVEN))
+        assert counter.running_count == 0.5
 
     def test_invalid_system_raises(self):
         with pytest.raises(ValueError, match="Unknown system"):

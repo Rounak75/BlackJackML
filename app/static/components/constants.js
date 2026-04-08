@@ -41,6 +41,41 @@ const HILO_TAG = {
   '7': 0, '8': 0, '9': 0, '10': -1, J: -1, Q: -1, K: -1,
 };
 
+// ── Wong Halves count tag for each rank ───────────────────────────────
+// Level 3 fractional system. Most accurate balanced system.
+// Uses ±0.5, ±1, ±1.5 values. Extremely hard to use mentally.
+const WONG_HALVES_TAG = {
+  A: -1, '2': 0.5, '3': 1, '4': 1, '5': 1.5, '6': 1, '7': 0.5,
+  '8': 0, '9': -0.5, '10': -1, J: -1, Q: -1, K: -1,
+};
+
+// ── KO (Knock-Out) count tag — unbalanced (7 is +1) ──────────────────
+const KO_TAG = {
+  A: -1, '2': 1, '3': 1, '4': 1, '5': 1, '6': 1, '7': 1,
+  '8': 0, '9': 0, '10': -1, J: -1, Q: -1, K: -1,
+};
+
+// ── Omega II count tag — Level 2 (±2 tags for 4-6, 10s) ──────────────
+const OMEGA_II_TAG = {
+  A: 0, '2': 1, '3': 1, '4': 2, '5': 2, '6': 2, '7': 1,
+  '8': 0, '9': -1, '10': -2, J: -2, Q: -2, K: -2,
+};
+
+// ── Zen Count tag — Level 2 balanced ──────────────────────────────────
+const ZEN_TAG = {
+  A: -1, '2': 1, '3': 1, '4': 2, '5': 2, '6': 2, '7': 1,
+  '8': 0, '9': 0, '10': -2, J: -2, Q: -2, K: -2,
+};
+
+// ── All counting system tags (for system-aware components) ────────────
+const COUNT_TAGS = {
+  hi_lo: HILO_TAG,
+  ko: KO_TAG,
+  omega_ii: OMEGA_II_TAG,
+  zen: ZEN_TAG,
+  wong_halves: WONG_HALVES_TAG,
+};
+
 // ── Dealer upcards shown as column headers in the strategy tables ─────
 // These are the 10 possible dealer upcards: 2 through 10, then Ace
 const DEALER_COLS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 'A'];

@@ -69,7 +69,7 @@ $loadOrder = @(
     "DealOrderEngine",
     "SplitHandPanel","SideCountPanel","CasinoRiskMeter","StopAlerts",
     "SeenCardsPanel","ZoneConfigPanel","ConfirmationPanel","WongPanel",
-    "AccordionPanel","App"
+    "AccordionPanel","DebugLayer","App"
 )
 
 $timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -115,7 +115,7 @@ $sizeKB = [math]::Round((Get-Item $BundleMin).Length / 1024)
 Write-Host "Step 7: Smoke testing bundle..." -ForegroundColor Yellow
 $bundleContent = Get-Content $BundleMin -Raw -Encoding UTF8
 $requiredGlobals = @(
-    "class ErrorBoundary",
+    "DebugErrorBoundary",
     "function App(",
     "function mountApp(",
     "function Widget(",
@@ -132,7 +132,8 @@ $requiredGlobals = @(
     "function ZoneConfigPanel(",
     "function ConfirmationPanel(",
     "function WongPanel(",
-    "function AccordionPanel("
+    "function AccordionPanel(",
+    "function DebugPanel("
 )
 $missing = @()
 foreach ($g in $requiredGlobals) {

@@ -8,7 +8,8 @@
 ║                                                                              ║
 ║  HOW CARD COUNTING WORKS:                                                    ║
 ║  ─────────────────────────                                                   ║
-║  1. Every card you see gets a +1, 0, or -1 tag (per system in config.py)   ║
+║  1. Every card you see gets a tag (per system in config.py)              ║
+║     Hi-Lo: +1/0/-1 | Wong Halves: +0.5/+1/+1.5/0/-0.5/-1              ║
 ║  2. You add these tags to a Running Count (RC)                              ║
 ║  3. Divide RC by Decks Remaining → True Count (TC)                          ║
 ║  4. TC > 0: shoe is rich in high cards → good for player → BET MORE        ║
@@ -23,6 +24,7 @@
 ║                                                                              ║
 ║  HOW TO USE:                                                                 ║
 ║    counter = CardCounter(system="hi_lo", num_decks=8)                       ║
+║    counter = CardCounter(system="wong_halves", num_decks=6)  # fractional   ║
 ║    counter.count_card(card)           # process one dealt card              ║
 ║    print(counter.true_count)          # current TC                          ║
 ║    print(counter.advantage * 100)     # player edge as percentage           ║

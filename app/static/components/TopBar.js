@@ -12,10 +12,11 @@
 
 /* ── Data: counting systems ──────────────────────────────── */
 const COUNTING_SYSTEMS = {
-  hi_lo:    { label: 'Hi-Lo',      level: '★☆☆', desc: 'Most popular. Tags: low cards +1, high cards −1. Best for beginners.' },
-  ko:       { label: 'KO',         level: '★☆☆', desc: 'Knock-Out. Unbalanced — no true count needed. Simpler to use live.' },
-  omega_ii: { label: 'Omega II',   level: '★★★', desc: 'Level 2. More accurate than Hi-Lo, harder to maintain under pressure.' },
-  zen:      { label: 'Zen Count',  level: '★★☆', desc: 'Level 2 balanced. Good accuracy vs difficulty trade-off.' },
+  hi_lo:       { label: 'Hi-Lo',        level: '★☆☆', desc: 'Most popular. Tags: low cards +1, high cards −1. Best for beginners.' },
+  ko:          { label: 'KO',           level: '★☆☆', desc: 'Knock-Out. Unbalanced — no true count needed. Simpler to use live.' },
+  omega_ii:    { label: 'Omega II',     level: '★★★', desc: 'Level 2. More accurate than Hi-Lo, harder to maintain under pressure.' },
+  zen:         { label: 'Zen Count',    level: '★★☆', desc: 'Level 2 balanced. Good accuracy vs difficulty trade-off.' },
+  wong_halves: { label: 'Wong Halves',  level: '★★★', desc: 'Level 3. Fractional values (±0.5, ±1, ±1.5). Most accurate balanced system.' },
 };
 
 /* ── Data: shuffle types with their effect on the ML tracker ─ */

@@ -108,6 +108,25 @@ except ImportError as _ml_err:
                     'ace_prediction':None,'shuffles_tracked':0}
 from config import GameConfig, CountingConfig, BettingConfig, MLConfig
 
+# ── Debug layer (zero-cost when DEBUG_MODE=0) ──────────────────────────────────
+try:
+    from app.debug_layer import debug_logger, debug_timed, DEBUG_MODE as _DBG
+except ImportError:
+    try:
+        from debug_layer import debug_logger, debug_timed, DEBUG_MODE as _DBG
+    except ImportError:
+        _DBG = False
+        def debug_timed(name):
+            def _d(fn): return fn
+            return _d
+        class _NullLogger:
+            def log_request(self, *a, **kw): return 0
+            def log_response(self, *a, **kw): pass
+            def log_error(self, *a, **kw): pass
+            def log_ml_inference(self, *a, **kw): pass
+            def log_state_change(self, *a, **kw): pass
+            def get_status(self): return {'debug_mode': False}
+        debug_logger = _NullLogger()
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'blackjack-ml-counter-secret'
@@ -119,6 +138,10 @@ socketio = SocketIO(
     ping_interval=25,          # keep-alive ping every 25s (survives tab switch)
     max_http_buffer_size=10_000_000,
 )
+
+# Wire debug logger to SocketIO so it can emit debug_log events to frontend
+if _DBG:
+    debug_logger.socketio = socketio
 
 # ── JSON safety net ────────────────────────────────────────────────────────────
 # Converts numpy/torch scalar types to Python natives before JSON encoding.
@@ -1021,6 +1044,12 @@ def index():
 def api_state():
     return jsonify(get_full_state())
 
+@app.route('/debug/status')
+def debug_status():
+    """Debug dashboard status endpoint (dev-only, returns 403 when DEBUG_MODE=0)."""
+    if not _DBG:
+        return jsonify({'error': 'Debug mode not enabled. Set DEBUG_MODE=1'}), 403
+    return jsonify(debug_logger.get_status())
 
 @app.route('/api/detect_cards', methods=['POST'])
 def api_detect_cards():
@@ -1072,6 +1101,7 @@ def handle_disconnect():
 
 @socketio.on('deal_card')
 @with_session
+@debug_timed('deal_card')
 def handle_deal_card(data):
     """
     Handle a card being entered into the system.
@@ -1259,6 +1289,7 @@ def handle_undo_split_card(data=None):
 
 @socketio.on('new_hand')
 @with_session
+@debug_timed('new_hand')
 def handle_new_hand(data=None):
     """
     Clear current hand state to start a new hand.
@@ -1357,6 +1388,7 @@ def handle_undo_hand(data=None):
 
 @socketio.on('shuffle')
 @with_session
+@debug_timed('shuffle')
 def handle_shuffle(data=None):
     """
     Handle a real physical shoe shuffle by the casino dealer.
@@ -1387,6 +1419,7 @@ def handle_shuffle(data=None):
 
 @socketio.on('change_system')
 @with_session
+@debug_timed('change_system')
 def handle_change_system(data):
     """Switch counting system — replays card log through new system tags."""
     global counter

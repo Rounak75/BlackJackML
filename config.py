@@ -90,10 +90,11 @@ class CountingConfig:
     Each +1 TC = approximately +0.5% player advantage.
 
     SYSTEM DIFFICULTY GUIDE:
-      hi_lo    → Level 1. Best for beginners. ±1 values only.
-      ko       → Level 1. Unbalanced (no true count calculation needed).
-      omega_ii → Level 2. More accurate, harder under casino conditions.
-      zen      → Level 2. Good balance of accuracy vs. difficulty.
+      hi_lo        → Level 1. Best for beginners. ±1 values only.
+      ko           → Level 1. Unbalanced (no true count calculation needed).
+      omega_ii     → Level 2. More accurate, harder under casino conditions.
+      zen          → Level 2. Good balance of accuracy vs. difficulty.
+      wong_halves  → Level 3. Fractional values (±0.5, ±1, ±1.5). Most accurate balanced system.
 
     To switch systems in the running app, use the dropdown in the top bar.
     """
@@ -138,6 +139,17 @@ class CountingConfig:
             8:  0, 9:  0,
             10: -2, 11: -1
         },
+
+        # Wong Halves: level 3 balanced system. Uses fractional values
+        # (0.5, 1.0, 1.5). The most accurate balanced system for
+        # estimating player advantage, but extremely difficult to
+        # maintain under live casino conditions. Recommended only
+        # for experienced counters or app-assisted play.
+        "wong_halves": {
+            2: +0.5, 3: +1, 4: +1, 5: +1.5, 6: +1, 7: +0.5,
+            8:  0, 9: -0.5,
+            10: -1, 11: -1
+        },
     }
 
     # ── Normalisation scalars ───────────────────────────────────────────────
@@ -157,11 +169,12 @@ class CountingConfig:
     #                  similar per-TC advantage profile once TC is normalised, so
     #                  clipping to ±0.10 (10%) covers all systems safely.
     COUNT_NORM_SCALARS = {
-        #              true_count  running_count  advantage
-        "hi_lo":    (  10.0,        20.0,           0.10 ),
-        "ko":       (  10.0,        20.0,           0.10 ),
-        "omega_ii": (  20.0,        40.0,           0.10 ),
-        "zen":      (  20.0,        40.0,           0.10 ),
+        #                true_count  running_count  advantage
+        "hi_lo":       (  10.0,        20.0,           0.10 ),
+        "ko":          (  10.0,        20.0,           0.10 ),
+        "omega_ii":    (  20.0,        40.0,           0.10 ),
+        "zen":         (  20.0,        40.0,           0.10 ),
+        "wong_halves": (  15.0,        30.0,           0.10 ),
     }
 
     # Take insurance when True Count reaches this value.

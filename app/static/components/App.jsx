@@ -18,28 +18,8 @@
  */
 
 const { useState, useEffect, useRef, useCallback } = React;
-class ErrorBoundary extends React.Component {
-  constructor(props) {
-    super(props);
-    this.state = { error: null, stack: null };
-  }
-  componentDidCatch(err, info) {
-    this.setState({ error: err.toString(), stack: info.componentStack });
-  }
-  render() {
-    if (this.state.error) {
-      return (
-        <div style={{padding:30,fontFamily:'monospace',background:'#0a0e18',color:'#f0f4ff',minHeight:'100vh'}}>
-          <div style={{color:'#ff5c5c',fontSize:22,marginBottom:16,fontWeight:800}}>BlackjackML — Render Error</div>
-          <div style={{background:'#1c2540',padding:16,borderRadius:8,marginBottom:16,border:'1px solid rgba(255,92,92,0.4)',color:'#ff9a9a',fontSize:14,lineHeight:1.7}}>{this.state.error}</div>
-          <div style={{background:'#111827',padding:16,borderRadius:8,color:'#94a7c4',fontSize:11,whiteSpace:'pre-wrap',maxHeight:400,overflowY:'auto'}}>{this.state.stack}</div>
-          <p style={{color:'#ffd447',marginTop:16,fontSize:12}}>Screenshot this and share it.</p>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
+// ErrorBoundary is now DebugErrorBoundary — defined in DebugLayer.js
+// (includes safe mode, recovery button, copy-to-clipboard, and debug logging)
 
 // ══════════════════════════════════════════════════════════════════════════════
 // APP — the one and only root component
@@ -85,9 +65,20 @@ function App() {
   // ── WEBSOCKET SETUP ────────────────────────────────────────────────────────
   useEffect(() => {
     const socket = io()
+    // §3 Debug: wrap socket for network event logging
+    if (typeof DebugNet !== 'undefined') DebugNet.wrapEmit(socket)
     socketRef.current = socket
 
     socket.on('state_update', (data) => {
+      // §3 Debug: log incoming state update
+      if (typeof DebugNet !== 'undefined') DebugNet.logReceive('state_update', data)
+      // §4 Debug: track state diff
+      if (typeof DebugState !== 'undefined') DebugState.trackUpdate('state_update', data)
+      // §5 Debug: track ML decision
+      if (typeof DebugML !== 'undefined' && data.recommendation) {
+        DebugML.trackDecision(data.recommendation, data.count, data.player_hand, data.dealer_upcard)
+      }
+
       setGameState(data)
       gameStateRef.current = data
       setLastUpdateTime(Date.now())
@@ -107,9 +98,22 @@ function App() {
       if (data.wonging) setWongingData(data.wonging)
     })
 
-    socket.on('notification', (data) => showToast(data.message, data.type || 'info'))
-    socket.on('error', (data) => showToast(data.message, 'error'))
+    socket.on('notification', (data) => {
+      if (typeof DebugNet !== 'undefined') DebugNet.logReceive('notification', data)
+      showToast(data.message, data.type || 'info')
+    })
+    socket.on('error', (data) => {
+      if (typeof DebugNet !== 'undefined') DebugNet.logError('error', data)
+      showToast(data.message, 'error')
+    })
     socket.on('pending_cards_update', (data) => setPendingCards(data.pending || []))
+
+    // §3 Debug: listen for backend debug_log events
+    socket.on('debug_log', (data) => {
+      if (typeof DebugController !== 'undefined' && DebugController.isActive()) {
+        DebugController.log(data.cat || 'GENERAL', 3, '[SRV] ' + (data.msg || ''), data.data || null)
+      }
+    })
 
     return () => socket.disconnect()
   }, [])
@@ -119,6 +123,8 @@ function App() {
   const handleDealCard = useCallback((rank, suit, targetOverride) => {
     const target = targetOverride || dealTargetRef.current
     undoStack.current.push({ rank, suit, target })
+    // §2 Debug: track card deal action
+    if (typeof DebugUI !== 'undefined') DebugUI.trackClick('DEAL_CARD', { rank, suit, target })
     socketRef.current?.emit('deal_card', { rank, suit, target })
   }, [])
 
@@ -143,6 +149,8 @@ function App() {
     undoStack.current = []
     dealTargetRef.current = 'player'
     setDealTarget('player')
+    // §2 Debug: track new hand action
+    if (typeof DebugUI !== 'undefined') DebugUI.trackClick('NEW_HAND')
     socketRef.current?.emit('new_hand')
     showToast('New hand — count continues', 'info')
     // Notify deal-order engine
@@ -152,6 +160,8 @@ function App() {
   const handleShuffle = useCallback(() => {
     const shuffleType = document.getElementById('shuffle-type')?.value || 'machine'
     undoStack.current = []
+    // §2 Debug: track shuffle action
+    if (typeof DebugUI !== 'undefined') DebugUI.trackClick('SHUFFLE', { type: shuffleType })
     socketRef.current?.emit('shuffle', { type: shuffleType })
     // Notify deal-order engine — full reset on shuffle
     if (dealOrderRef.current) dealOrderRef.current.resetForShuffle()
@@ -179,6 +189,9 @@ function App() {
     setIsDoubled(false)
     setTookInsurance(false)
 
+    // ▶ SYNC: reset deal engine when hand result is recorded
+    if (dealOrderRef.current) dealOrderRef.current.resetForNewHand()
+
     showToast(
       `${result.toUpperCase()} — ${formatMoney(profit, currency.symbol)}`,
       result === 'win' ? 'success' : result === 'loss' ? 'error' : 'info'
@@ -186,6 +199,8 @@ function App() {
   }, [currency])
 
   const handleUndo = useCallback(() => {
+    // §2 Debug: track undo action
+    if (typeof DebugUI !== 'undefined') DebugUI.trackClick('UNDO', { depth: undoStack.current.length })
     if (undoStack.current.length === 0) {
       showToast('Nothing to undo', 'warning')
       return
@@ -201,6 +216,10 @@ function App() {
       const removed = top
       undoStack.current = undoStack.current.slice(0, -1)
       socketRef.current?.emit('undo_split_card')
+      // ▶ SYNC: also undo in deal engine
+      if (dealOrderRef.current && dealOrderEnabled) {
+        dealOrderRef.current.undoDealCard()
+      }
       showToast(`Undid ${removed?.rank ?? 'card'} from split hand`, 'info')
       return
     }
@@ -214,6 +233,15 @@ function App() {
 
     socketRef.current?.emit('undo_hand')
 
+    // ▶ SYNC: reset deal engine then replay N-1 cards into it
+    if (dealOrderRef.current && dealOrderEnabled) {
+      dealOrderRef.current.softReset()
+      if (replay.length > 0) {
+        dealOrderRef.current.replayCards(replay)
+      }
+    }
+
+    // Server replay (cards re-emitted so server hand rebuilds)
     replay.forEach((c, i) => {
       setTimeout(() => {
         undoStack.current.push(c)
@@ -222,7 +250,7 @@ function App() {
     })
 
     showToast(`Undid ${removed.rank} → ${removed.target}`, 'info')
-  }, [])
+  }, [dealOrderEnabled])
 
 
   // ── KEYBOARD SHORTCUTS ─────────────────────────────────────────────────────
@@ -389,6 +417,9 @@ function App() {
               ref={dealOrderRef}
               count={count}
               shoe={shoe}
+              onAppUndo={handleUndo}
+              onNewHand={handleNewHand}
+              onShuffle={handleShuffle}
             />
           )}
 
@@ -435,6 +466,7 @@ function App() {
             dealerMustDraw={dealerMustDraw}
             dealerStands={dealerStandsFlag}
             scanMode={scanMode}
+            countSystem={count?.system || 'hi_lo'}
           />
 
           {/* CenterToolbar — stripped to unique data only (Issue #4) */}
@@ -458,7 +490,7 @@ function App() {
             count={gameState?.count}
             scanMode={scanMode}
             onSetMode={setScanMode}
-            onDealCard={handleDealCard}
+            onDealCard={handleDealCardWrapped}
             dealTarget={dealTarget}
           />
 
@@ -598,8 +630,14 @@ function App() {
 function mountApp() {
   var container = document.getElementById('root');
   if (!container) { setTimeout(mountApp, 10); return; }
+  // Use DebugErrorBoundary from DebugLayer.js (enhanced with safe mode + recovery)
+  var Boundary = (typeof DebugErrorBoundary !== 'undefined') ? DebugErrorBoundary : React.Fragment;
   ReactDOM.createRoot(container).render(
-    <ErrorBoundary><App /></ErrorBoundary>
+    React.createElement(Boundary, null,
+      React.createElement(App),
+      // §7 Debug Panel — renders null when debug is OFF
+      (typeof DebugPanel !== 'undefined') ? React.createElement(DebugPanel) : null
+    )
   );
 }
 if (document.readyState === 'loading') {
