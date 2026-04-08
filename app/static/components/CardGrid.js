@@ -17,7 +17,7 @@
  *   • Split/Undo have descriptive aria-labels
  */
 
-function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands, scanMode, countSystem }) {
+function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands, scanMode, countSystem, dealEngineActive, inputMode }) {
   const { useState } = React;
   const [suitFilter, setSuitFilter] = useState('all');
   const [gridExpanded, setGridExpanded] = useState(false);
@@ -34,9 +34,9 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
   ];
 
   const targets = [
-    { t: 'player', label: '👤 Player', ariaLabel: 'Deal next card to player hand' },
-    { t: 'dealer', label: dealerMustDraw ? '🏦 Dealer ←' : '🏦 Dealer', ariaLabel: dealerMustDraw ? 'Deal next card to dealer (dealer must draw)' : 'Deal next card to dealer hand' },
-    { t: 'seen',   label: '👁 Seen',   ariaLabel: 'Mark card as seen (count only, no hand)' },
+    { t: 'player', label: '👤 Player', ariaLabel: 'Deal next card to player hand', lockedByEngine: dealEngineActive },
+    { t: 'dealer', label: dealerMustDraw ? '🏦 Dealer ←' : '🏦 Dealer', ariaLabel: dealerMustDraw ? 'Deal next card to dealer (dealer must draw)' : 'Deal next card to dealer hand', lockedByEngine: dealEngineActive },
+    { t: 'seen',   label: '👁 Seen',   ariaLabel: 'Mark card as seen (count only, no hand)', lockedByEngine: false },
   ];
 
   const suitFullName = { spades: 'Spades', hearts: 'Hearts', diamonds: 'Diamonds', clubs: 'Clubs' };
@@ -115,6 +115,34 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
         </button>
       )}
 
+      {/* ── Deal Engine Active indicator ─────────────────────────────── */}
+      {dealEngineActive && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            marginBottom: 8,
+            padding: '6px 10px',
+            borderRadius: 8,
+            background: 'rgba(255, 212, 71, 0.08)',
+            border: '1.5px solid rgba(255, 212, 71, 0.4)',
+          }}
+        >
+          <span style={{ fontSize: 13 }} aria-hidden="true">🎯</span>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#ffd447', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+              Deal Engine Active
+            </div>
+            <div style={{ fontSize: '0.6rem', color: '#b8ccdf', marginTop: 1 }}>
+              Cards → Seats only · Player &amp; Dealer hands isolated · Press <kbd style={{ background: '#212d45', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 3, padding: '0 3px', color: '#ffd447', fontFamily: 'monospace' }}>E</kbd> to switch to Manual
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Dealer must-draw banner */}
       {dealerMustDraw && showGrid && (
         <div
@@ -157,29 +185,39 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
       >
         <span className="text-[10px] font-semibold" style={{ color: '#b8ccdf', flexShrink: 0 }} aria-hidden="true">To:</span>
         <div className="flex gap-1 flex-1">
-          {targets.map(({ t, label, ariaLabel }) => {
+          {targets.map(({ t, label, ariaLabel, lockedByEngine }) => {
             const isDealer = t === 'dealer';
-            const mustDraw = isDealer && dealerMustDraw;
-            const isActive = target === t;
+            const mustDraw = isDealer && dealerMustDraw && !dealEngineActive;
+            const isActive = target === t && !lockedByEngine;
+            const isLocked = lockedByEngine;
             return (
               <button
                 key={t}
-                onClick={() => onTargetChange(t)}
+                onClick={() => !isLocked && onTargetChange(t)}
                 aria-pressed={isActive}
-                aria-label={ariaLabel}
+                aria-label={isLocked ? `${ariaLabel} (locked — Deal Engine active)` : ariaLabel}
+                aria-disabled={isLocked ? 'true' : undefined}
+                title={isLocked ? 'Locked — Deal Engine is routing cards to seats. Press E to switch to Manual mode.' : undefined}
                 className="flex-1 text-xs py-1.5 rounded-md font-semibold transition-all"
                 style={{
-                  background: isActive
-                    ? (mustDraw ? '#ff9a20' : '#ffd447')
-                    : (mustDraw ? 'rgba(255,154,32,0.12)' : 'transparent'),
-                  border: `1.5px solid ${
-                    isActive
+                  background: isLocked
+                    ? 'rgba(255,255,255,0.03)'
+                    : isActive
                       ? (mustDraw ? '#ff9a20' : '#ffd447')
-                      : (mustDraw ? 'rgba(255,154,32,0.5)' : 'rgba(255,255,255,0.15)')
+                      : (mustDraw ? 'rgba(255,154,32,0.12)' : 'transparent'),
+                  border: `1.5px solid ${
+                    isLocked
+                      ? 'rgba(255,255,255,0.07)'
+                      : isActive
+                        ? (mustDraw ? '#ff9a20' : '#ffd447')
+                        : (mustDraw ? 'rgba(255,154,32,0.5)' : 'rgba(255,255,255,0.15)')
                   }`,
-                  color: isActive ? '#0a0e18' : (mustDraw ? '#ffb347' : '#ccdaec'),
+                  color: isLocked ? 'rgba(255,255,255,0.2)' : isActive ? '#0a0e18' : (mustDraw ? '#ffb347' : '#ccdaec'),
                   fontWeight: mustDraw ? 700 : 600,
                   boxShadow: mustDraw && isActive ? '0 0 10px rgba(255,154,32,0.5)' : 'none',
+                  cursor: isLocked ? 'not-allowed' : 'pointer',
+                  textDecoration: isLocked ? 'line-through' : 'none',
+                  opacity: isLocked ? 0.45 : 1,
                 }}
               >
                 {label}

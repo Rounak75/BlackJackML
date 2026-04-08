@@ -1,49 +1,49 @@
 """
 ╔══════════════════════════════════════════════════════════════════════════════╗
-║  blackjack/counting.py — Card Counting Engine                               ║
+║  blackjack/counting.py — Card Counting Engine                                ║
 ║                                                                              ║
 ║  WHAT THIS FILE DOES:                                                        ║
-║  Implements card counting: tracking a running count, converting to          ║
-║  true count, estimating player advantage, and signalling when to bet up.   ║
+║  Implements card counting: tracking a running count, converting to           ║
+║  true count, estimating player advantage, and signalling when to bet up.     ║
 ║                                                                              ║
 ║  HOW CARD COUNTING WORKS:                                                    ║
 ║  ─────────────────────────                                                   ║
-║  1. Every card you see gets a tag (per system in config.py)              ║
-║     Hi-Lo: +1/0/-1 | Wong Halves: +0.5/+1/+1.5/0/-0.5/-1              ║
-║  2. You add these tags to a Running Count (RC)                              ║
-║  3. Divide RC by Decks Remaining → True Count (TC)                          ║
-║  4. TC > 0: shoe is rich in high cards → good for player → BET MORE        ║
-║  5. TC < 0: shoe is rich in low cards → bad for player → BET MINIMUM       ║
+║  1. Every card you see gets a tag (per system in config.py)                  ║
+║     Hi-Lo: +1/0/-1 | Wong Halves: +0.5/+1/+1.5/0/-0.5/-1                     ║
+║  2. You add these tags to a Running Count (RC)                               ║
+║  3. Divide RC by Decks Remaining → True Count (TC)                           ║
+║  4. TC > 0: shoe is rich in high cards → good for player → BET MORE          ║
+║  5. TC < 0: shoe is rich in low cards → bad for player → BET MINIMUM         ║
 ║                                                                              ║
-║  TRUE COUNT → PLAYER ADVANTAGE (approximate, Hi-Lo):                       ║
-║    TC = -2  →  house edge ~1.5%                                             ║
-║    TC =  0  →  house edge ~0.5% (basic strategy only)                       ║
+║  TRUE COUNT → PLAYER ADVANTAGE (approximate, Hi-Lo):                         ║
+║    TC = -2  →  house edge ~1.5%                                              ║
+║    TC =  0  →  house edge ~0.5% (basic strategy only)                        ║
 ║    TC = +1  →  roughly break even                                            ║
-║    TC = +2  →  player edge ~0.5%                                            ║
-║    TC = +4  →  player edge ~1.5% (bet 8 units!)                             ║
+║    TC = +2  →  player edge ~0.5%                                             ║
+║    TC = +4  →  player edge ~1.5% (bet 8 units!)                              ║
 ║                                                                              ║
 ║  HOW TO USE:                                                                 ║
-║    counter = CardCounter(system="hi_lo", num_decks=8)                       ║
-║    counter = CardCounter(system="wong_halves", num_decks=6)  # fractional   ║
-║    counter.count_card(card)           # process one dealt card              ║
-║    print(counter.true_count)          # current TC                          ║
-║    print(counter.advantage * 100)     # player edge as percentage           ║
-║    print(counter.should_take_insurance())  # True/False                    ║
+║    counter = CardCounter(system="hi_lo", num_decks=8)                        ║
+║    counter = CardCounter(system="wong_halves", num_decks=6)  # fractional    ║
+║    counter.count_card(card)           # process one dealt card               ║
+║    print(counter.true_count)          # current TC                           ║
+║    print(counter.advantage * 100)     # player edge as percentage            ║
+║    print(counter.should_take_insurance())  # True/False                      ║
 ║                                                                              ║
 ║  IMPROVEMENTS IN THIS VERSION:                                               ║
 ║  ────────────────────────────                                                ║
-║  PERF 1 — _total_per_rank pre-computed in __init__:                        ║
-║    Previously get_remaining_estimate() rebuilt the entire rank-total dict   ║
-║    on every call. Since num_decks never changes after construction, this    ║
-║    dict is now computed once in __init__ and reused. This matters because   ║
-║    get_remaining_estimate() is called once per get_full_state() call        ║
+║  PERF 1 — _total_per_rank pre-computed in __init__:                          ║
+║    Previously get_remaining_estimate() rebuilt the entire rank-total dict    ║
+║    on every call. Since num_decks never changes after construction, this     ║
+║    dict is now computed once in __init__ and reused. This matters because    ║
+║    get_remaining_estimate() is called once per get_full_state() call         ║
 ║    (i.e., every card dealt event).                                           ║
 ║                                                                              ║
-║  PERF 2 — count_history capped at _MAX_HISTORY (500 entries):              ║
-║    The history list was unbounded. In a long session (8+ hours, 300+        ║
-║    hands, 4+ cards/hand) it would grow to 3000+ entries. The frontend       ║
-║    only reads the last 60 entries (server.py: counter.count_history[-60:]). ║
-║    Capping at 500 wastes nothing visible while bounding memory use.         ║
+║  PERF 2 — count_history capped at _MAX_HISTORY (500 entries):                ║
+║    The history list was unbounded. In a long session (8+ hours, 300+         ║
+║    hands, 4+ cards/hand) it would grow to 3000+ entries. The frontend        ║
+║    only reads the last 60 entries (server.py: counter.count_history[-60:]).  ║
+║    Capping at 500 wastes nothing visible while bounding memory use.          ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 from typing import List, Dict, Optional

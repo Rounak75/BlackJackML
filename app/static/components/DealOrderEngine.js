@@ -41,6 +41,7 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
   var onAppUndo = props.onAppUndo;
   var onNewHand = props.onNewHand;
   var onShuffle = props.onShuffle;
+  var inputMode = props.inputMode || 'deal_engine'; // 'deal_engine' | 'manual'
 
   // ══════════════════════════════════════════════════════════════
   // TABLE CONFIGURATION STATE
@@ -512,7 +513,20 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
       },
         React.createElement('div', { className: 'de-header-left' },
           React.createElement('span', { className: 'de-htitle' }, 'Deal Engine'),
-          React.createElement('span', { className: 'de-badge' }, 'LIVE'),
+          React.createElement('span', { className: 'de-badge', style: { animation: 'none' } }, 'LIVE'),
+          // ── Mode isolation indicator ──────────────────────────────
+          React.createElement('span', {
+            className: 'de-badge',
+            title: 'Deal Engine mode: cards go to seats only. Player & Dealer hands are isolated.',
+            style: {
+              background: 'rgba(255,212,71,0.15)',
+              border: '1px solid rgba(255,212,71,0.5)',
+              color: '#ffd447',
+              fontSize: '0.55rem',
+              letterSpacing: '0.05em',
+              animation: 'none',
+            }
+          }, '🎯 SEATS ONLY'),
           totalCardsDealt > 0 && React.createElement('span', { className: 'de-card-count' },
             totalCardsDealt + ' card' + (totalCardsDealt !== 1 ? 's' : ''))
         ),
@@ -537,13 +551,15 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
             var cls = 'de-dot' + (isMe ? ' me' : '') + (isActive ? ' active' : '');
             return React.createElement('div', {
               key: 'md-' + i, className: cls,
+              style: { animation: 'none' },
               onClick: function (e) { e.stopPropagation(); setMySeat(i + 1); },
               title: isMe ? 'Your seat (S' + (i+1) + ')' : 'Click to set as your seat'
             }, isMe ? 'M' : (i + 1));
           }),
           React.createElement('div', {
             key: 'md-d',
-            className: 'de-dot dlr' + (dealPos === players && dealRound < 2 ? ' active' : '')
+            className: 'de-dot dlr' + (dealPos === players && dealRound < 2 ? ' active' : ''),
+            style: { animation: 'none' },
           }, 'D')
         ),
 
@@ -612,6 +628,7 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
                 return React.createElement('div', {
                   key: 'seat-' + i,
                   className: cls,
+                  style: { animation: 'none' },
                   'data-lbl': seatArcLabel(i, players),
                   onClick: function () { setMySeat(i + 1); },
                   title: isMe ? 'Your seat' : 'Click to set as your seat'
@@ -626,6 +643,7 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
             React.createElement('div', {
               key: 'dealer',
               className: 'de-seat occ' + (dealPos === players && dealRound < 2 ? ' active-deal' : ''),
+              style: { animation: 'none' },
               'data-lbl': 'DLR'
             }, 'D')
           )

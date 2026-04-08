@@ -42,6 +42,13 @@ function App() {
   // Deal-Order Engine state
   const [dealOrderEnabled, setDealOrderEnabled] = useState(true)
 
+  // ── INPUT MODE ─────────────────────────────────────────────────────────────
+  // 'deal_engine' → cards go ONLY to seats + count + shoe (not player/dealer hands)
+  // 'manual'      → cards go ONLY to player/dealer hands (deal engine bypassed)
+  // Derived: mode follows whether the Deal Engine is enabled.
+  // Use this everywhere a card decision needs to be routed.
+  const inputMode = dealOrderEnabled ? 'deal_engine' : 'manual'
+
   // Feature state
   const [zoneConfig, setZoneConfig] = useState({ player_end: 0.33, dealer_end: 0.66 })
   const [seenCards, setSeenCards] = useState([])
@@ -128,11 +135,24 @@ function App() {
     socketRef.current?.emit('deal_card', { rank, suit, target })
   }, [])
 
-  // Wrapped handler: also notifies DealOrderEngine when a card is dealt
+  // Wrapped handler: routes cards based on inputMode
+  // ─────────────────────────────────────────────────────────────────────────
+  // ISOLATION CONTRACT:
+  //   deal_engine mode → emit target='seen' (count + shoe only, NO hand update)
+  //                       then record into DealOrderEngine seat tracker
+  //   manual mode      → emit with real target (player/dealer/seen)
+  //                       DealOrderEngine is NOT notified (it is disabled)
+  // ─────────────────────────────────────────────────────────────────────────
   const handleDealCardWrapped = useCallback((rank, suit, targetOverride) => {
-    handleDealCard(rank, suit, targetOverride)
-    if (dealOrderRef.current && dealOrderEnabled) {
-      dealOrderRef.current.recordCard(rank, suit, targetOverride || dealTargetRef.current)
+    if (dealOrderEnabled) {
+      // DEAL ENGINE MODE: count the card but do NOT touch player/dealer hands
+      handleDealCard(rank, suit, 'seen')
+      if (dealOrderRef.current) {
+        dealOrderRef.current.recordCard(rank, suit, targetOverride || dealTargetRef.current)
+      }
+    } else {
+      // MANUAL MODE: normal routing to player/dealer/seen — no seat tracking
+      handleDealCard(rank, suit, targetOverride)
     }
   }, [handleDealCard, dealOrderEnabled])
 
@@ -242,10 +262,12 @@ function App() {
     }
 
     // Server replay (cards re-emitted so server hand rebuilds)
+    // In deal_engine mode, replay as 'seen' (count only) — not into hands
     replay.forEach((c, i) => {
       setTimeout(() => {
         undoStack.current.push(c)
-        socketRef.current?.emit('deal_card', { rank: c.rank, suit: c.suit, target: c.target })
+        const replayTarget = dealOrderEnabled ? 'seen' : c.target
+        socketRef.current?.emit('deal_card', { rank: c.rank, suit: c.suit, target: replayTarget })
       }, 80 * i + 120)
     })
 
@@ -420,6 +442,7 @@ function App() {
               onAppUndo={handleUndo}
               onNewHand={handleNewHand}
               onShuffle={handleShuffle}
+              inputMode={inputMode}
             />
           )}
 
@@ -436,6 +459,7 @@ function App() {
             onInsuranceChange={setTookInsurance}
             activeBet={customBet}
             currency={currency}
+            dealEngineActive={dealOrderEnabled}
           />
 
           {/* Split hand panel */}
@@ -467,6 +491,8 @@ function App() {
             dealerStands={dealerStandsFlag}
             scanMode={scanMode}
             countSystem={count?.system || 'hi_lo'}
+            dealEngineActive={dealOrderEnabled}
+            inputMode={inputMode}
           />
 
           {/* CenterToolbar — stripped to unique data only (Issue #4) */}
@@ -619,7 +645,7 @@ function App() {
             background: '#212d45', border: '1px solid rgba(255,255,255,0.15)',
             borderRadius: 3, padding: '1px 4px', fontSize: '0.6rem',
             fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
-          }}>E</kbd> {dealOrderEnabled ? 'Engine ON' : 'Engine OFF'}
+          }}>E</kbd> {dealOrderEnabled ? '🎯 Engine (seats only)' : '✋ Manual (hands)'}
         </span>
       </div>
     </div>

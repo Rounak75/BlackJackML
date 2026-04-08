@@ -31,6 +31,7 @@ function HandDisplay({
   playerHand, dealerUpcard, dealerHand, dealerMustDraw,
   sideBets, insurance,
   isDoubled, tookInsurance, onInsuranceChange, activeBet, currency,
+  dealEngineActive,
 }) {
   const bv   = playerHand?.cards?.length > 0 ? playerHand.value : null
   const bj   = playerHand?.is_blackjack
@@ -102,12 +103,50 @@ function HandDisplay({
       className="rounded-xl p-4"
       style={{
         background: '#1a2236',
-        border: '1.5px solid rgba(255,255,255,0.12)',
+        border: dealEngineActive
+          ? '1.5px solid rgba(255,212,71,0.2)'
+          : '1.5px solid rgba(255,255,255,0.12)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 0,
+        position: 'relative',
+        opacity: dealEngineActive ? 0.6 : 1,
+        transition: 'opacity 0.2s, border-color 0.2s',
+      }}
+    >
+      {/* ── Deal Engine isolation overlay ──────────────────────────── */}
+      {dealEngineActive && (
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 2,
+          borderRadius: 11,
+          background: 'rgba(10,14,24,0.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          backdropFilter: 'blur(1px)',
+          pointerEvents: 'none',
+        }}>
+          <div style={{
+            background: 'rgba(255,212,71,0.10)',
+            border: '1.5px solid rgba(255,212,71,0.45)',
+            borderRadius: 10,
+            padding: '8px 16px',
+            textAlign: 'center',
+          }}>
+            <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#ffd447', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
+              🎯 Deal Engine Active
+            </div>
+            <div style={{ fontSize: '0.58rem', color: '#b8ccdf', marginTop: 3 }}>
+              Hands isolated · Press <kbd style={{ background: '#212d45', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 3, padding: '0 3px', color: '#ffd447', fontFamily: 'monospace' }}>E</kbd> for Manual mode
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inner grid — dealer left, player right */}
+      <div style={{
         display: 'grid',
         gridTemplateColumns: '1fr 1fr',
         gap: 16,
-      }}
-    >
+      }}>
       {/* ══ LEFT — Dealer ════════════════════════════════════════════ */}
       <div style={{ borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: 14 }}>
 
@@ -516,6 +555,7 @@ function HandDisplay({
           )
         })()}
       </div>
+      </div>{/* end inner grid */}
     </div>
   )
 }
