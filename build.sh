@@ -37,7 +37,7 @@ build() {
   echo "📦  Bundling in load order..."
   {
     echo "/* BlackjackML bundle — compiled $(date -u '+%Y-%m-%dT%H:%M:%SZ') */"
-    for f in constants utils Widget TopBar ActionPanel CompDepAlert BettingPanel \
+    for f in DebugLayer constants utils Widget TopBar ActionPanel CompDepAlert BettingPanel \
               SideBetPanel HandDisplay CardGrid StrategyRefTable \
               ShoePanel EdgeMeter SessionStats ShuffleTracker \
               CountHistory I18Panel AnalyticsPanel LiveOverlayPanel CenterToolBar \
@@ -86,6 +86,11 @@ PYEOF
   SMOKE_FAIL=0
   for global in \
     'class ErrorBoundary' \
+    'class DebugErrorBoundary' \
+    'var DebugController' \
+    'var DebugUI' \
+    'var DebugNet' \
+    'var DebugState' \
     'function App(' \
     'function mountApp(' \
     'function Widget(' \

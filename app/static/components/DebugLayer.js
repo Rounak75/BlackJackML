@@ -119,7 +119,7 @@ var DebugController = {
       if (this.features[featureKey] === false) return;
     }
     var entry = {
-      id: _entryId++,
+      id: _bjd_entryId++,
       ts: Date.now(),
       cat: category,
       level: level,
@@ -198,7 +198,7 @@ window.__BJ_DEBUG_LEVEL = 0;
   } catch (e) { /* ignore */ }
 })();
 
-var _entryId = 0;
+var _bjd_entryId = 0;
 
 function _levelName(l) {
   for (var k in DEBUG_LEVELS) {
@@ -307,13 +307,15 @@ var DebugState = {
   _prevState: null,
   _frameId: 0,
   _updatesThisFrame: 0,
+  _lastDiff: 0,  // FIX: explicitly declared so it's not an implicit property assignment
 
   /** Track a state update — diffs against previous */
   trackUpdate: function (label, newState) {
     if (!DebugController.isActive() || !DebugController.features.state) return;
 
-    // Race condition detector: multiple updates in same rAF frame
-    var frame = typeof requestAnimationFrame !== 'undefined' ? _currentAnimFrame : 0;
+    // Race condition detector: multiple updates in same rAF frame.
+    // NOTE: runs BEFORE the throttle so rapid same-frame updates are never silently dropped.
+    var frame = typeof requestAnimationFrame !== 'undefined' ? _bjd_currentAnimFrame : 0;
     if (frame === this._frameId) {
       this._updatesThisFrame++;
       if (this._updatesThisFrame > 2) {
@@ -325,6 +327,12 @@ var DebugState = {
       this._frameId = frame;
       this._updatesThisFrame = 1;
     }
+
+    // Throttle: diff at most 10 times/sec to avoid GC pressure on rapid state_update events.
+    // Placed AFTER race detection so the race detector always fires reliably.
+    var _now = Date.now();
+    if (_now - this._lastDiff < 100) return;
+    this._lastDiff = _now;
 
     // Diff only top-level keys for performance
     if (this._prevState && typeof newState === 'object' && newState !== null) {
@@ -379,10 +387,10 @@ var DebugState = {
   },
 };
 
-var _currentAnimFrame = 0;
+var _bjd_currentAnimFrame = 0;
 if (typeof requestAnimationFrame !== 'undefined') {
   (function _trackFrame() {
-    _currentAnimFrame++;
+    _bjd_currentAnimFrame++;
     requestAnimationFrame(_trackFrame);
   })();
 }
@@ -439,28 +447,28 @@ var DebugML = {
 // §6 — PERFORMANCE MONITOR
 // ══════════════════════════════════════════════════════════════════════════════
 
-var _perfRafId = null;
-var _perfFrames = 0;
-var _perfLastFps = 0;
-var _perfInterval = null;
+var _bjd_perfRafId = null;
+var _bjd_perfFrames = 0;
+var _bjd_perfLastFps = 0;
+var _bjd_perfInterval = null;
 
 function _startPerfMonitor() {
-  if (_perfRafId !== null) return;
-  _perfFrames = 0;
-  _perfLastFps = performance.now();
+  if (_bjd_perfRafId !== null) return;
+  _bjd_perfFrames = 0;
+  _bjd_perfLastFps = performance.now();
 
   function _countFrame() {
-    _perfFrames++;
-    _perfRafId = requestAnimationFrame(_countFrame);
+    _bjd_perfFrames++;
+    _bjd_perfRafId = requestAnimationFrame(_countFrame);
   }
-  _perfRafId = requestAnimationFrame(_countFrame);
+  _bjd_perfRafId = requestAnimationFrame(_countFrame);
 
-  _perfInterval = setInterval(function () {
+  _bjd_perfInterval = setInterval(function () {
     var now = performance.now();
-    var elapsed = (now - _perfLastFps) / 1000;
-    var fps = elapsed > 0 ? Math.round(_perfFrames / elapsed) : 0;
-    _perfFrames = 0;
-    _perfLastFps = now;
+    var elapsed = (now - _bjd_perfLastFps) / 1000;
+    var fps = elapsed > 0 ? Math.round(_bjd_perfFrames / elapsed) : 0;
+    _bjd_perfFrames = 0;
+    _bjd_perfLastFps = now;
     DebugController._perfData.fps = fps;
 
     // Memory (Chrome only)
@@ -478,13 +486,13 @@ function _startPerfMonitor() {
 }
 
 function _stopPerfMonitor() {
-  if (_perfRafId !== null) {
-    cancelAnimationFrame(_perfRafId);
-    _perfRafId = null;
+  if (_bjd_perfRafId !== null) {
+    cancelAnimationFrame(_bjd_perfRafId);
+    _bjd_perfRafId = null;
   }
-  if (_perfInterval !== null) {
-    clearInterval(_perfInterval);
-    _perfInterval = null;
+  if (_bjd_perfInterval !== null) {
+    clearInterval(_bjd_perfInterval);
+    _bjd_perfInterval = null;
   }
 }
 
@@ -1003,14 +1011,14 @@ class DebugErrorBoundary extends React.Component {
 // ══════════════════════════════════════════════════════════════════════════════
 
 var debug = {
-  log:   function (msg, data) { DebugController.log('GENERAL', DEBUG_LEVELS.INFO, msg, data); },
-  state: function (msg, data) { DebugController.log('STATE',   DEBUG_LEVELS.INFO, msg, data); },
-  api:   function (msg, data) { DebugController.log('NET',     DEBUG_LEVELS.INFO, msg, data); },
-  ui:    function (msg, data) { DebugController.log('UI',      DEBUG_LEVELS.INFO, msg, data); },
-  perf:  function (msg, data) { DebugController.log('PERF',    DEBUG_LEVELS.INFO, msg, data); },
-  ml:    function (msg, data) { DebugController.log('ML',      DEBUG_LEVELS.INFO, msg, data); },
-  error: function (msg, data) { DebugController.log('ERROR',   DEBUG_LEVELS.ERROR, msg, data); },
-  warn:  function (msg, data) { DebugController.log('WARN',    DEBUG_LEVELS.WARN,  msg, data); },
+  log:     function (msg, data) { DebugController.log('GENERAL', DEBUG_LEVELS.INFO,    msg, data); },
+  state:   function (msg, data) { DebugController.log('STATE',   DEBUG_LEVELS.INFO,    msg, data); },
+  api:     function (msg, data) { DebugController.log('NET',     DEBUG_LEVELS.INFO,    msg, data); },
+  ui:      function (msg, data) { DebugController.log('UI',      DEBUG_LEVELS.INFO,    msg, data); },
+  perf:    function (msg, data) { DebugController.log('PERF',    DEBUG_LEVELS.INFO,    msg, data); },
+  ml:      function (msg, data) { DebugController.log('ML',      DEBUG_LEVELS.INFO,    msg, data); },
+  error:   function (msg, data) { DebugController.log('ERROR',   DEBUG_LEVELS.ERROR,   msg, data); },
+  warn:    function (msg, data) { DebugController.log('WARN',    DEBUG_LEVELS.WARN,    msg, data); },
   verbose: function (msg, data) { DebugController.log('GENERAL', DEBUG_LEVELS.VERBOSE, msg, data); },
 };
 
@@ -1026,18 +1034,20 @@ function _activateSafeMode(reason) {
   DebugController.log('SAFE', DEBUG_LEVELS.ERROR,
     'Safe Mode ACTIVATED: ' + reason, null);
 
-  // Inject warning banner at top of page
-  var banner = document.createElement('div');
-  banner.id = 'bjml-safe-mode-banner';
-  banner.style.cssText =
-    'position:fixed;top:0;left:0;right:0;z-index:100000;' +
-    'background:rgba(255,92,92,0.12);border-bottom:2px solid rgba(255,92,92,0.4);' +
-    'color:#ff9a9a;font-family:"DM Mono",monospace;font-size:11px;' +
-    'padding:6px 16px;text-align:center;backdrop-filter:blur(8px);';
-  banner.textContent = '🛡 SAFE MODE — ' + reason +
-    ' — Risky features disabled. Reload to restore.';
-  // Only add if not already present
+  // FIX: DOM banner is retained here to handle non-React error paths
+  // (window.onerror, unhandledrejection) where DebugErrorBoundary never fires.
+  // React render errors additionally show an inline banner via §8.
+  // The id-guard prevents duplication if both paths fire.
   if (!document.getElementById('bjml-safe-mode-banner')) {
+    var banner = document.createElement('div');
+    banner.id = 'bjml-safe-mode-banner';
+    banner.style.cssText =
+      'position:fixed;top:0;left:0;right:0;z-index:100000;' +
+      'background:rgba(255,92,92,0.12);border-bottom:2px solid rgba(255,92,92,0.4);' +
+      'color:#ff9a9a;font-family:"DM Mono",monospace;font-size:11px;' +
+      'padding:6px 16px;text-align:center;backdrop-filter:blur(8px);';
+    banner.textContent = '🛡 SAFE MODE — ' + reason +
+      ' — Risky features disabled. Reload to restore.';
     document.body.appendChild(banner);
   }
 }

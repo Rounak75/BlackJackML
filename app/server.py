@@ -631,7 +631,19 @@ def _get_ml_recommendation(player_hand, dealer_upcard_card):
             system            = counter.system_name,  # pass active system for correct normalisation
         )
 
+        _inf_start = time.time()
         prediction = ml_decision_model.predict(features, available_names)
+        _inf_ms = (time.time() - _inf_start) * 1000
+
+        if _DBG:
+            debug_logger.log_ml_inference(
+                system=counter.system_name,
+                hand_value=player_hand.best_value,
+                dealer_upcard=dealer_upcard_card.count_key,
+                true_count=counter.true_count,
+                result={'action': prediction['action'], 'confidence': prediction['confidence']},
+                elapsed_ms=_inf_ms,
+            )
 
         return {
             "action":       prediction["action"].upper(),
@@ -1143,6 +1155,7 @@ def handle_deal_card(data):
 
 @socketio.on('player_split')
 @with_session
+@debug_timed('player_split')
 def handle_player_split(data=None):
     """
     Handle the player choosing to split their pair.
@@ -1333,6 +1346,7 @@ def handle_new_hand(data=None):
 
 @socketio.on('undo_hand')
 @with_session
+@debug_timed('undo_hand')
 def handle_undo_hand(data=None):
     """
     Reset hand state AND counter state for undo replay.
@@ -1442,6 +1456,7 @@ def handle_change_system(data):
 
 @socketio.on('record_result')
 @with_session
+@debug_timed('record_result')
 def handle_record_result(data):
     """
     Record financial result of a completed hand.
@@ -1576,6 +1591,7 @@ def handle_set_confirmation_mode(data=None):
 
 @socketio.on('confirm_card')
 @with_session
+@debug_timed('confirm_card')
 def handle_confirm_card(data=None):
     """User approved a pending card — apply it to the game."""
     global _pending_cards
@@ -1631,6 +1647,7 @@ def api_pending_cards():
 
 @socketio.on('set_wonging_mode')
 @with_session
+@debug_timed('set_wonging_mode')
 def handle_set_wonging_mode(data=None):
     """Enable / disable wonging (back-counting) mode.
     Does NOT reset the running count — count state is preserved."""
