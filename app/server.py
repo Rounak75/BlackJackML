@@ -490,6 +490,14 @@ def _process_card_entry(card: Card, target: str, suit_str: str):
     if target == TARGET_PLAYER:
         if split_hands:
             # Post-split: add to the currently active split hand
+            if active_hand_index >= len(split_hands):
+                # All split hands are complete - refuse further player cards until player clicks "New Hand"
+                _safe_emit('notification', {
+                    'type': 'warning',
+                    'message': ( 
+                        f'All split hands are complete. Please click "New Hand" (N) to start the next round.'
+                    )
+                })
             split_hands[active_hand_index].add_card(card)
             # Mirror active hand into current_player_hand for display/compat
             current_player_hand = split_hands[active_hand_index]
@@ -1223,7 +1231,16 @@ def handle_next_split_hand(data=None):
 
     next_idx = active_hand_index + 1
     if next_idx >= len(split_hands):
-        emit('notification', {'type': 'info', 'message': 'All split hands complete.'})
+        # FIX : Advance index PAST all hands so no hands stays marked active.
+        # Previouly this returned early without updating state, leaving the
+        # last hand stuck as "active" with a non-functional Done button.
+        active_hand_index = len(split_hands)
+        _safe_emit('state_update', get_full_state())
+        emit('notification', {
+            'type': 'info',
+            'message': 'All split hands are complete - click N for new hand.'
+        })
+
         return
 
     active_hand_index   = next_idx
