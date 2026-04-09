@@ -45,7 +45,7 @@
 28. [Troubleshooting — Common Errors](#-troubleshooting--common-errors)
 29. [Model Performance & Accuracy](#-model-performance--accuracy)
 30. [Architecture Reference](#-architecture-reference)
-31. [Developer Diagnostics & Testing](#-developer-diagnostics--testing)
+31. [Developer Diagnostics & Debug Infrastructure](#-developer-diagnostics--debug-infrastructure)
 32. [Bug Fix Changelog](#-bug-fix-changelog)
 
 ---
@@ -57,7 +57,7 @@ BlackjackML is a complete blackjack AI system. It watches cards being dealt, cou
 | Component | What it does |
 |-----------|-------------|
 | **Perfect Basic Strategy** | Optimal play for every possible hand vs. dealer upcard |
-| **4 Card Counting Systems** | Hi-Lo, KO, Omega II, Zen Count — switch live mid-shoe |
+| **6 Card Counting Systems** | Hi-Lo, KO, Omega II, Zen, Wong Halves, Uston APC — switch live mid-shoe |
 | **Illustrious 18 + Fab 4** | 22 advanced play deviations based on the running count |
 | **Kelly Criterion Betting** | Mathematically optimal bet sizing with a 1–16 unit spread |
 | **Side Bet EV Analyser** | Real-time expected value for Perfect Pairs, 21+3, Lucky Ladies |
@@ -397,7 +397,7 @@ python main.py web --host 0.0.0.0
 | `python main.py train --hands 500000 --epochs 30` | ~10 min | ~90 sec | ~75% | Development and testing |
 | `python main.py train --hands 1000000` | ~25 min | ~5 min | **~82%** | **Recommended for real use** |
 | `python main.py train --hands 2000000 --epochs 60` | ~60 min | ~10 min | ~85%+ | Maximum accuracy |
-| `python main.py train --hands 1000000 --system all` | ~25 min | ~5 min | **~82%** | Universal model — works with all 4 counting systems (default) |
+| `python main.py train --hands 1000000 --system all` | ~25 min | ~5 min | **~82%** | Universal model — works with all 6 counting systems (default) |
 | `python main.py train --hands 1000000 --system hi_lo` | ~25 min | ~5 min | **~82%** | Single-system model tuned to Hi-Lo only |
 
 **Always run the quick test first:**
@@ -1090,12 +1090,20 @@ BlackJackML-main/
 ├── jsconfig.json           ← Tells VS Code that .js files here use React.
 │                             You don't need to touch this.
 │
+├── app/static/globals.d.ts ← TypeScript type declarations for VS Code.
+│                             Declares global variables injected by CDN
+│                             scripts (React, Socket.IO, constants) so
+│                             VS Code doesn't show red underlines.
+│                             Only needed for IDE support — not at runtime.
+│
 │
 ├── blackjack/              ← CORE GAME ENGINE. Pure Python, no ML.
 │   │                         These files define the rules of blackjack.
 │   ├── card.py             ← Card, Rank, Suit, Deck, Shoe classes
 │   ├── game.py             ← Hand, Round, BlackjackTable, Action classes
-│   ├── counting.py         ← CardCounter — Hi-Lo, KO, Omega II, Zen Count
+│   ├── counting.py         ← CardCounter — Hi-Lo, KO, Omega II, Zen,
+│   │                         Wong Halves, Uston APC. Performance-optimised
+│   │                         with pre-computed rank totals and capped history.
 │   ├── strategy.py         ← Basic strategy lookup tables (every hand combo)
 │   ├── deviations.py       ← Illustrious 18 + Fab 4 deviation rules
 │   ├── betting.py          ← Kelly Criterion bet sizing logic
@@ -1113,8 +1121,13 @@ BlackJackML-main/
 ├── app/                    ← WEB DASHBOARD. The Flask server + React UI.
 │   ├── server.py           ← Flask + Socket.IO backend. Handles all
 │   │                         real-time card events and game state.
+│   │                         Implements Features 1–5 (zones, seat presets,
+│   │                         seen cards, confirmation mode, wonging).
 │   ├── cv_detector.py      ← Card detection: tries YOLO first, then OCR
 │   ├── live_scanner.py     ← Background screen capture thread (Live mode)
+│   ├── debug_layer.py      ← Production-grade backend debug middleware.
+│   │                         No-op unless DEBUG_MODE=1 env var is set.
+│   │                         Exposes /debug/status endpoint when active.
 │   ├── overlay.py          ← Desktop overlay window (python main.py overlay)
 │   ├── templates/
 │   │   └── index.html      ← HTML page that loads the app in the browser
@@ -1125,6 +1138,9 @@ BlackJackML-main/
 │       ├── style.css       ← Dashboard styles (safe to edit directly)
 │       └── components/     ← REACT SOURCE FILES. Edit these to change the UI.
 │           ├── App.jsx           Main app — layout and state management
+│           ├── AccordionPanel.js Collapsible wrapper for Tier 2 reference
+│           │                     panels. Smooth height animation, collapsed
+│           │                     by default to reduce scroll noise.
 │           ├── ActionPanel.js    HIT / STAND / DOUBLE / SPLIT buttons
 │           ├── AnalyticsPanel.js Detailed session analytics
 │           ├── BettingPanel.js   Bet sizing recommendations + bankroll
@@ -1132,11 +1148,24 @@ BlackJackML-main/
 │           ├── CasinoRiskMeter.js Casino detection risk indicator
 │           ├── CenterToolBar.js  Centre control bar
 │           ├── CompDepAlert.js   Composition-dependent strategy alerts
+│           ├── ConfirmationPanel.js Human-in-the-loop card confirmation
+│           │                     (Feature 4). Shows pending card queue
+│           │                     with per-card ✓/✗ and bulk confirm/reject.
 │           ├── CountHistory.js   Count history chart
+│           ├── DealOrderEngine.js Seat-aware deal-order tracking engine.
+│           │                     Compact/expanded UI. Snapshots count at
+│           │                     the exact moment your seat receives its
+│           │                     2nd card. Round log + trend chart.
+│           ├── DebugLayer.js     Production debug infrastructure. Zero cost
+│           │                     when off. Activate: __BJDebug.enable(4)
+│           │                     or Ctrl+Shift+D. Floating draggable panel
+│           │                     with timeline, state, network, perf, ML tabs.
 │           ├── EdgeMeter.js      Player edge visual indicator
 │           ├── HandDisplay.js    Current hand display
 │           ├── I18Panel.js       Illustrious 18 deviation display
 │           ├── LiveOverlayPanel.jsx  Live scan overlay panel
+│           ├── SeenCardsPanel.js Other players' seen cards display
+│           │                     (Feature 2). Hidden when empty.
 │           ├── SessionStats.js   Session win/loss stats
 │           ├── ShoePanel.js      Remaining shoe information
 │           ├── ShuffleTracker.js Shuffle tracking display
@@ -1147,6 +1176,12 @@ BlackJackML-main/
 │           ├── StrategyRefTable.js  Strategy reference table
 │           ├── TopBar.js         Top navigation bar
 │           ├── Widget.js         Reusable widget wrapper
+│           ├── WongPanel.js      Wonging / back-counting mode panel
+│           │                     (Feature 5). Real-time TC bar, SIT/LEAVE
+│           │                     signals, delta-to-threshold display.
+│           ├── ZoneConfigPanel.js Screen zone config + seat presets
+│           │                     (Features 1 & 3). Visual zone bar, 7 seat
+│           │                     preset buttons, manual sliders.
 │           ├── constants.js      Shared constants
 │           └── utils.js          Shared utility functions
 │
@@ -1164,7 +1199,11 @@ BlackJackML-main/
 │
 │
 ├── tests/
-│   └── test_blackjack.py   ← Automated tests. Run with: pytest
+│   ├── test_blackjack.py          ← Automated tests. Run with: pytest
+│   └── audit_counting_systems.py  ← Mathematical verification of all 6
+│                                     counting systems against official
+│                                     published BC/PE/IC values.
+│                                     Run: python tests/audit_counting_systems.py
 │
 │
 └── build-src/              ← Build pipeline internals. Do not edit.
@@ -1201,11 +1240,37 @@ BLACKJACK_PAYS = 3 / 2
 # Whether you can double down after splitting a pair
 ALLOW_DOUBLE_AFTER_SPLIT = False
 
-# Whether you can surrender (lose half your bet)
+# Whether you can re-split if you receive another pair after splitting
+ALLOW_RESPLIT = False
+
+# Maximum number of hands you can create by splitting (includes the original)
+MAX_SPLITS = 2
+
+# Whether you can split Aces again if you receive another Ace after splitting
+# Most casinos do NOT allow this
+ALLOW_RESPLIT_ACES = False
+
+# Whether you can surrender (lose half your bet) after dealer checks for BJ
 ALLOW_LATE_SURRENDER = True
+
+# Whether you can surrender BEFORE the dealer checks for BJ
+# Extremely rare — worth ~0.6% if available
+ALLOW_EARLY_SURRENDER = False
+
+# Whether the insurance bet is offered when dealer shows an Ace
+ALLOW_INSURANCE = True
+
+# Insurance payout ratio (standard is 2:1)
+INSURANCE_PAYS = 2
 
 # How much of the shoe is dealt before reshuffling (0.75 = 75%)
 PENETRATION = 0.75
+
+# Cards discarded face-down at the start of a new shoe (standard = 1)
+BURN_CARDS = 1
+
+# Cut card position as a fraction (should match PENETRATION)
+CUT_CARD_POSITION = 0.75
 ```
 
 ### Bankroll and bet sizing — `BettingConfig`
@@ -1235,7 +1300,7 @@ KELLY_FRACTION = 0.75
 
 ```python
 # Default counting system when the app starts
-# Options: "hi_lo", "ko", "omega_ii", "zen"
+# Options: "hi_lo", "ko", "omega_ii", "zen", "wong_halves", "uston_apc"
 DEFAULT_SYSTEM = "hi_lo"
 
 # Take insurance when True Count reaches this value
@@ -1316,41 +1381,54 @@ LUCKY_LADIES_PAYOUT = {
 | What you changed | What to do next |
 |-----------------|----------------|
 | Game rules (`GameConfig`) | Retrain: `python main.py train --hands 1000000` |
-| Counting system (`DEFAULT_SYSTEM`) | Retrain with the `simulate.py` fix (see Counting Systems section) + restart app |
+| `BURN_CARDS` or `CUT_CARD_POSITION` | Restart the app — these affect count accuracy; no retraining needed but a new session is recommended |
+| Counting system (`DEFAULT_SYSTEM`) | Retrain with `--system all` (see Counting Systems section) + restart app |
 | Bet limits / bankroll / Kelly | Just restart the app — no retraining needed |
 | `CONFIDENCE_THRESHOLD` | Just restart the app — no retraining needed |
 | Side bet payouts | Just restart the app — no retraining needed |
 | ML architecture (`TRUNK_DIM`, `BATCH_SIZE`) | Retrain from scratch |
+| Added a custom counting system | Add scalars to `COUNT_NORM_SCALARS`, run `python tests/audit_counting_systems.py`, then retrain |
 
 ---
 
 ## 🔢 Counting Systems — Switching, Customising, and Training
 
-### The 4 built-in systems
+### The 6 built-in systems
 
-All four systems are defined in `config.py` under `CountingConfig.SYSTEMS`. Here is what each one is and who should use it:
+All six systems are defined in `config.py` under `CountingConfig.SYSTEMS`. Here is what each one is and who should use it:
 
 | System key | Name | Level | Best for |
 |-----------|------|-------|---------|
-| `hi_lo` | Hi-Lo | Beginner | Most players. ±1 values only, easy to keep track of |
-| `ko` | Knock-Out | Beginner | Players who want to skip the true count conversion step |
-| `omega_ii` | Omega II | Advanced | Higher accuracy — requires tracking ±2 values |
-| `zen` | Zen Count | Advanced | Good middle ground between Hi-Lo and Omega II |
+| `hi_lo` | Hi-Lo | 1 — Beginner | Most players. ±1 values only, easy to keep track of |
+| `ko` | Knock-Out | 1 — Beginner | Players who want to skip the true count conversion step (unbalanced) |
+| `omega_ii` | Omega II | 2 — Advanced | Higher accuracy — requires tracking ±2 values. Ace side count recommended |
+| `zen` | Zen Count | 2 — Advanced | Good middle ground between Hi-Lo and Omega II |
+| `wong_halves` | Wong Halves | 3 — Expert | Most accurate balanced system. Uses fractional values (±0.5, ±1, ±1.5) |
+| `uston_apc` | Uston APC | 3 — Expert | Highest betting correlation (.91) and insurance correlation (.90) of any practical system. Ace side count. Best for 6/8-deck shoes |
+
+**Choosing your level:**
+- **Level 1** — ideal if you are new to counting or playing live without software assistance. Manageable under casino conditions.
+- **Level 2** — meaningful accuracy improvement but requires practice to maintain ±2 tags at casino pace.
+- **Level 3** — recommended only for experienced counters or when using the app in screenshot/live-scan mode, since fractional or high-magnitude tags are difficult to track mentally.
 
 ### How each system assigns values to cards
 
-| Card | Hi-Lo | KO | Omega II | Zen |
-|------|-------|----|---------|-----|
-| 2 | +1 | +1 | +1 | +1 |
-| 3 | +1 | +1 | +1 | +1 |
-| 4 | +1 | +1 | **+2** | **+2** |
-| 5 | +1 | +1 | **+2** | **+2** |
-| 6 | +1 | +1 | **+2** | **+2** |
-| 7 | 0 | **+1** | +1 | +1 |
-| 8 | 0 | 0 | 0 | 0 |
-| 9 | 0 | 0 | **-1** | 0 |
-| 10/Face | -1 | -1 | **-2** | **-2** |
-| Ace | -1 | -1 | 0 | **-1** |
+| Card | Hi-Lo | KO | Omega II | Zen | Wong Halves | Uston APC |
+|------|-------|----|---------|-----|------------|-----------|
+| 2 | +1 | +1 | +1 | +1 | **+0.5** | +1 |
+| 3 | +1 | +1 | +1 | +1 | +1 | **+2** |
+| 4 | +1 | +1 | **+2** | **+2** | +1 | **+2** |
+| 5 | +1 | +1 | **+2** | **+2** | **+1.5** | **+3** |
+| 6 | +1 | +1 | **+2** | **+2** | +1 | **+2** |
+| 7 | 0 | **+1** | +1 | +1 | **+0.5** | **+2** |
+| 8 | 0 | 0 | 0 | 0 | 0 | **+1** |
+| 9 | 0 | 0 | **-1** | 0 | **-0.5** | **-1** |
+| 10/Face | -1 | -1 | **-2** | **-2** | -1 | **-3** |
+| Ace | -1 | -1 | 0 | **-1** | -1 | 0 (side count) |
+
+**Notes on Level 3 systems:**
+- **Wong Halves**: Multiply all values by 2 to avoid fractions if preferred (then divide true count by 2 when interpreting). The app handles fractional tags natively — no mental conversion needed.
+- **Uston APC**: Aces are counted as 0 in the main count. The app's built-in ace side count (`aces_seen`) tracks them separately for insurance and bet-size adjustments. This is the standard way to use Uston APC.
 
 ### Switching systems while the app is running
 
@@ -1364,11 +1442,11 @@ Open `config.py` and change `DEFAULT_SYSTEM` inside `CountingConfig`:
 
 ```python
 class CountingConfig:
-    # Options: "hi_lo", "ko", "omega_ii", "zen"
+    # Options: "hi_lo", "ko", "omega_ii", "zen", "wong_halves", "uston_apc"
     DEFAULT_SYSTEM = "hi_lo"   # ← change this
 ```
 
-Valid values are exactly: `"hi_lo"`, `"ko"`, `"omega_ii"`, `"zen"`
+Valid values are exactly: `"hi_lo"`, `"ko"`, `"omega_ii"`, `"zen"`, `"wong_halves"`, `"uston_apc"`
 
 Restart the app after saving. No retraining needed.
 
@@ -1378,16 +1456,18 @@ The training pipeline now supports two modes controlled by the `--system` flag:
 
 | Command | What it trains on | Best for |
 |---------|-------------------|----------|
-| `python main.py train --hands 1000000` | All 4 systems equally (default) | General use — model works correctly regardless of which system you switch to in the app |
+| `python main.py train --hands 1000000` | All 6 systems equally (default) | General use — model works correctly regardless of which system you switch to in the app |
 | `python main.py train --hands 1000000 --system hi_lo` | Hi-Lo only | Dedicated Hi-Lo players who never switch systems |
 | `python main.py train --hands 1000000 --system omega_ii` | Omega II only | Advanced players locked to Omega II |
 | `python main.py train --hands 1000000 --system zen` | Zen Count only | Dedicated Zen players |
+| `python main.py train --hands 1000000 --system wong_halves` | Wong Halves only | Expert players using the fractional system |
+| `python main.py train --hands 1000000 --system uston_apc` | Uston APC only | Expert players using Uston APC with ace side count |
 
-**Recommendation:** Use `--system all` (the default) unless you are certain you will only ever use one counting system. The universal model handles all four correctly at inference time.
+**Recommendation:** Use `--system all` (the default) unless you are certain you will only ever use one counting system. The universal model handles all six correctly at inference time.
 
 #### Why `--system all` works correctly
 
-Omega II and Zen use ±2 card tags, so their raw running counts and true counts are roughly twice as large as Hi-Lo's. Without correction, feeding an Omega II true count of +8 into a model trained only on Hi-Lo (which rarely exceeds +5) would produce garbage.
+Omega II, Zen, and Uston APC use ±2 or ±3 card tags, so their raw running counts and true counts are significantly larger than Hi-Lo's. Wong Halves uses fractional tags (±0.5, ±1.5). Without correction, feeding an Omega II true count of +8 into a model trained only on Hi-Lo (which rarely exceeds +5) would produce garbage.
 
 The fix is normalisation. Each system's counts are divided by system-specific scalars before entering the network:
 
@@ -1397,8 +1477,10 @@ The fix is normalisation. Each system's counts are divided by system-specific sc
 | KO | 10 | 20 |
 | Omega II | 20 | 40 |
 | Zen | 20 | 40 |
+| Wong Halves | 15 | 30 |
+| Uston APC | 20 | 40 |
 
-These scalars map all four systems to the same `[-1, +1]` range. Training on the mixed dataset teaches the model one universal decision surface. At inference time, `server.py` automatically passes the active system name to `model.py`, which applies the correct scalars.
+These scalars map all six systems to the same `[-1, +1]` range. Training on the mixed dataset teaches the model one universal decision surface. At inference time, `server.py` automatically passes the active system name to `model.py`, which applies the correct scalars.
 
 > **Note:** If you train `--system hi_lo` and then switch the app dropdown to Omega II mid-session, the model's count-based decisions will be degraded because the model was trained only on Hi-Lo-range inputs. Train with `--system all` to avoid this.
 
@@ -1428,7 +1510,7 @@ rm -f models/training_summary.json
 
 **Step 2 — Retrain from scratch:**
 ```bash
-# Recommended — trains on all 4 counting systems (universal model)
+# Recommended — trains on all 6 counting systems (universal model)
 python main.py train --hands 1000000
 
 # Or for maximum accuracy
@@ -1455,10 +1537,12 @@ If you want to use a system not built in (e.g. Uston SS, Halves, Red Seven), add
 
 ```python
 SYSTEMS = {
-    "hi_lo": { ... },
-    "ko":    { ... },
-    "omega_ii": { ... },
-    "zen":   { ... },
+    "hi_lo":       { ... },
+    "ko":          { ... },
+    "omega_ii":    { ... },
+    "zen":         { ... },
+    "wong_halves": { ... },
+    "uston_apc":   { ... },
 
     # Add your custom system here:
     "my_system": {
@@ -1475,10 +1559,12 @@ After adding it, also add an entry to `COUNT_NORM_SCALARS` in `CountingConfig` s
 
 ```python
 COUNT_NORM_SCALARS = {
-    "hi_lo":    ( 10.0,  20.0,  0.10 ),
-    "ko":       ( 10.0,  20.0,  0.10 ),
-    "omega_ii": ( 20.0,  40.0,  0.10 ),
-    "zen":      ( 20.0,  40.0,  0.10 ),
+    "hi_lo":       ( 10.0,  20.0,  0.10 ),
+    "ko":          ( 10.0,  20.0,  0.10 ),
+    "omega_ii":    ( 20.0,  40.0,  0.10 ),
+    "zen":         ( 20.0,  40.0,  0.10 ),
+    "wong_halves": ( 15.0,  30.0,  0.10 ),
+    "uston_apc":   ( 20.0,  40.0,  0.10 ),
     # Add your system — set tc_scale to the max |TC| you expect,
     # rc_scale to tc_scale × max_decks_remaining (~7 for 8-deck shoe)
     "my_system": ( 15.0,  30.0,  0.10 ),
@@ -1490,7 +1576,19 @@ Then retrain:
 python main.py train --hands 1000000 --system my_system
 ```
 
+### Verifying system mathematical correctness
 
+The project ships with a standalone audit script that verifies every counting system against official published values (betting correlation, playing efficiency, insurance correlation):
+
+```bash
+python tests/audit_counting_systems.py
+```
+
+This prints a full verification table showing each system's BC, PE, IC, and whether the card tags sum to zero (balanced) for a full deck. Run this if you add a custom system to confirm it is implemented correctly before training.
+
+---
+
+## 🎮 How to Use the Dashboard
 
 ### Entering cards for a hand
 
@@ -1628,7 +1726,7 @@ Supported currencies include USD, EUR, GBP, JPY, AUD, CAD, CHF, SGD, AED, and 10
 
 ## 🔨 Editing the Frontend (JS/React files)
 
-The browser loads `app/static/bundle.min.js` — a single pre-compiled file automatically generated from all 22 source files in `app/static/components/`.
+The browser loads `app/static/bundle.min.js` — a single pre-compiled file automatically generated from all 32 source files in `app/static/components/`.
 
 **If you edit any `.js` or `.jsx` file in `app/static/components/`, you MUST rebuild the bundle before the browser will reflect your changes.**
 
@@ -1734,7 +1832,7 @@ pytest --cov --cov-report=term-missing
 | `TestHandValues` | Hard totals, soft totals, multi-ace hands, blackjack detection, bust |
 | `TestSplitMechanics` | Pair splitting, `split_from_ace` flag, re-split logic |
 | `TestBustAndResolution` | Bust detection, hand result outcomes |
-| `TestCounting` | Running count accuracy across all 4 systems, true count, ace tracking |
+| `TestCounting` | Running count accuracy across all 6 systems, true count, ace tracking |
 | `TestBasicStrategy` | Key strategy decisions for hard, soft, and pair hands |
 | `TestDeviations` | Illustrious 18 + Fab 4 play deviations at specific true counts |
 | `TestBettingEngine` | Kelly criterion, bet spread, session stats consistency |
@@ -1749,6 +1847,25 @@ Run the tests after any of these:
 - Applying patches or making bug fixes to the core engine
 
 The tests do not test the web server, React UI, or ML model — only the pure Python game engine.
+
+### Counting system mathematical audit
+
+Separate from `pytest`, the project includes a standalone audit script that verifies all six counting systems against official published values from Stanford Wong, Bryce Carlson, Arnold Snyder, and Ken Uston:
+
+```bash
+python tests/audit_counting_systems.py
+```
+
+This prints a verification table for each system showing:
+- Card tag values vs. official reference
+- Whether the deck sum is 0 (balanced systems only — KO is intentionally unbalanced)
+- Betting Correlation (BC), Playing Efficiency (PE), and Insurance Correlation (IC) vs. published figures
+- Initial Running Count (IRC) per deck for KO
+
+Run this script when:
+- You add a custom counting system to `config.py`
+- You modify tag values for an existing system
+- You want to confirm the implementation matches the source literature before training
 
 ---
 
@@ -1784,7 +1901,7 @@ python main.py overlay --decks 8 --system omega_ii --interval 2000
 | Flag | Default | What it does |
 |------|---------|-------------|
 | `--decks 6` | 6 | Number of decks in the shoe |
-| `--system hi_lo` | `hi_lo` | Counting system: `hi_lo`, `ko`, `omega_ii`, `zen` |
+| `--system hi_lo` | `hi_lo` | Counting system: `hi_lo`, `ko`, `omega_ii`, `zen`, `wong_halves`, `uston_apc` |
 | `--interval 1500` | 1500 | How often to scan the screen, in milliseconds (1500 = every 1.5 seconds) |
 
 ### First launch — selecting the scan region
@@ -2473,21 +2590,24 @@ cv_detector.py
 [{rank, suit, confidence, bbox}, ...]
       ↓
 live_scanner.py  OR  server.py /api/detect_cards
-  → route by position: player / dealer / seen
+  → If confirmation_mode: add to pending queue → emit pending_cards_update
+  → If wonging_mode:      force target = 'seen' (never player/dealer)
+  → Else:                 route by zone position: player / dealer / seen
       ↓
 socket.emit('deal_card', {rank, suit, target})
       ↓
-server.py handles 'deal_card':
+server.py handles 'deal_card':           [debug_layer.py times this handler]
   1. counter.count_card(card)             ← ALL targets, always
   2. shuffle_tracker.observe_card(...)    ← ALL targets, always
   3. shoe.cards.remove(card)             ← ALL targets, always
   4. hand.add_card(card)                 ← ONLY player / dealer
-  5. deviation_engine.get_action(...)    ← ONLY after hand is updated
-  6. betting_engine.get_bet_rec(...)
-  7. side_bet_analyzer.analyze_all(...)
+  5. if target == 'seen': _seen_cards_this_hand.append(str(card))
+  6. deviation_engine.get_action(...)    ← ONLY after hand is updated
+  7. betting_engine.get_bet_rec(...)
+  8. side_bet_analyzer.analyze_all(...)
       ↓
-emit('state_update', full_state)
-      ↓
+emit('state_update', full_state)         [includes zone_config, wonging,
+      ↓                                   confirmation_mode, seen_cards]
 React re-renders all panels
 ```
 
@@ -2496,66 +2616,308 @@ React re-renders all panels
 ```
 1.  User clicks a card in CardGrid (or YOLO auto-detects it)
 2.  handleDealCard(rank, suit, target) called in App.jsx
-3.  socket.emit('deal_card', {rank, suit, target})
-4.  Flask receives event in @socketio.on('deal_card')
-5.  counter.count_card(card)          → running count updates
-6.  true_count = running / decks_left → true count updates
-7.  shoe.cards.remove(card)           → remaining probabilities update
-8.  hand.add_card(card)               → hand total updates
-9.  deviation_engine checks I18 + Fab 4 → best action selected
-10. betting_engine.kelly(true_count)  → optimal bet calculated
-11. side_bet_analyzer.compute_ev()   → side bet EVs updated
-12. emit('state_update', {...})        → full state sent to browser
-13. React: setGameState(data)          → all panels re-render
+3.  DealOrderEngine.recordCard() called (client-side observer — no server call)
+4.  socket.emit('deal_card', {rank, suit, target})
+5.  Flask receives event in @socketio.on('deal_card')
+6.  counter.count_card(card)          → running count updates
+7.  true_count = running / decks_left → true count updates
+8.  shoe.cards.remove(card)           → remaining probabilities update
+9.  hand.add_card(card)               → hand total updates
+10. deviation_engine checks I18 + Fab 4 → best action selected
+11. betting_engine.kelly(true_count)  → optimal bet calculated
+12. side_bet_analyzer.compute_ev()   → side bet EVs updated
+13. emit('state_update', {...})        → full state sent to browser
+14. React: setGameState(data)          → all panels re-render
 ```
 
 ---
 
 ## 🚀 Advanced Tracking Features
 
-This system includes 5 advanced production-grade features built directly into the Live Scan and Screenshot architecture:
-
-### 1. Configurable Screen Zones
-The Live Scanner divides the screen horizontally to route cards to the correct hand (Player, Dealer, Others). 
-- **How to Use:** In Live Mode, open the **Zone & Seat Config** panel. Use the sliders to manually drag the boundaries that dictate the Player and Dealer regions.
-- **Why it matters:** Ensures accurate routing of cards without hardcoding fixed pixel sizes, allowing it to adapt to any casino UI.
-
-### 2. Table Position Intelligence (Seat Presets)
-Your seating position at the table changes where your cards appear on the screen.
-- **How to Use:** In the Zone Config panel, click a preset from 1 (far left) to 7 (far right).
-- **Why it matters:** Instead of manually sliding zones, it maps your physical seat to screen zones automatically. This ensures your hand always correctly receives your cards.
-
-### 3. Seen Cards Display (Multi-Player)
-Other players' cards are essential for the counting system but shouldn't interfere with your own hand.
-- **How to Use:** When cards fall into the "Other Players" zone, they are routed to the **Seen Cards Panel**. This panel dynamically appears only when these cards are detected.
-- **Why it matters:** You can visually confirm that the system correctly counted other players' hands without adding them to your total or the dealer's total. It correctly adjusts the running count.
-
-### 4. Card Confirmation Mode (Human-in-the-Loop)
-Live scanning can sometimes misidentify cards. This mode forces a manual confirmation before cards are injected into the count.
-- **How to Use:** Enable **Confirmation Mode** from the Live Overlay Panel. Detected cards will pile up in a queue where you can click "✓ Confirm" or "✕ Reject".
-- **Why it matters:** Prevents bad OCR reads from polluting your carefully maintained count during critical hands.
-
-### 5. Wonging Mode (Back-Counting)
-Wonging involves watching a table and only sitting down when the True Count (TC) is favorable.
-- **How to Use:** Enable through the **Wonging Panel**. All detected cards will be forced to the `seen` pile regardless of their zone. Watch for the signal to turn jade green (`SIT DOWN NOW`).
-- **Signal Logic:** TC ≥ +2 (Sit Down), TC < -1 (Leave Table), otherwise (Keep Watching).
-- **Why it matters:** Allows you to preserve your bankroll by entering the game exactly when the mathematical edge shifts in your favor.
-
-### Advanced Feature Integration (API & WebSockets)
-All 5 advanced tracking features natively synchronize with the UI in real-time. For developers building custom headless clients, the backend exposes the following new control paths:
-*   **Zone Configuration**: `POST /api/zones` payload `{'player_end': 0.35, 'dealer_end': 0.65}` or `socket.emit('set_zones', ...)`
-*   **Seat Presets**: `POST /api/seat_preset` payload `{'seat': 4}` or `socket.emit('set_seat_preset', ...)`
-*   **Card Confirmation**: `POST /api/confirmation_mode` payload `{'enabled': true}` or `socket.emit('set_confirmation_mode', ...)` -> Handle queue with `confirm_card` and `reject_card`.
-*   **Wonging Mode**: `POST /api/wonging_mode` payload `{'enabled': true}` or `socket.emit('set_wonging_mode', ...)`
+This system includes 6 advanced production-grade features built into the Live Scan, Screenshot, and Manual architectures:
 
 ---
 
-## 🛠️ Developer Diagnostics & Testing
+### Feature 1 — Configurable Screen Zones
 
-The server ships with two built-in health diagnostic layers designed to smoke-test environments, especially after adding new frontend components or changing state payloads.
+The Live Scanner divides the capture area into horizontal zones to route detected cards to the correct hand:
 
-*   **Syntax & Compilation Check (`http://localhost:5000/diag`)**: Provides a localized Babel compilation loop that compiles every raw React `.js` and `.jsx` component in isolation. It outputs `✅` or `❌ JS ERROR` directly mapping to the file if you introduce a syntax error before running `build.ps1`.
-*   **Environment & Payload Test (`http://localhost:5000/test`)**: A visual checklist validating that `bundle.min.js` successfully built, the WebSocket server is accepting connections, and that the `/api/state` endpoint is correctly resolving all Advanced Tracking state variables (like Wonging flags or Zone configurations) without returning a truncated payload.
+```
+┌─────────────────────────────────────────────────┐
+│  YOUR HAND  │     DEALER     │  OTHER PLAYERS   │
+│  (player)   │    (dealer)    │     (seen)       │
+└─────────────────────────────────────────────────┘
+0%        player_end%       dealer_end%          100%
+```
+
+By default: player_end=33%, dealer_end=66% (equal thirds).
+
+**How to use:** In Live Mode, open the **Zone & Seat Config** panel. Use the sliders to drag the boundaries to match your casino layout. The zone bar updates in real time as you drag.
+
+**Why it matters:** Ensures accurate card routing without hardcoding pixel values — adapts to any casino UI or window size.
+
+---
+
+### Feature 2 — Seen Cards Display (Multi-Player Tracking)
+
+Other players' cards must be counted but should not appear in your hand total.
+
+**How it works:** Cards detected in the "Other Players" zone (right of `dealer_end`) are routed to the **Other Players' Cards** panel. This panel is hidden when empty and automatically appears when seen cards are detected. It shows each card as a mini badge and displays the Hi-Lo contribution of all seen cards for a quick sanity check.
+
+Seen cards are counted in the running count but not added to either hand display. They reset on New Hand.
+
+---
+
+### Feature 3 — Table Position Intelligence (Seat Presets)
+
+Your seat at the table determines where your cards appear on screen. Seven presets cover every position on a standard 7-seat table.
+
+**How to use:** In the Zone & Seat Config panel, click a seat button from **1** (far left) to **7** (far right). The zone boundaries update immediately — no manual slider adjustment needed.
+
+| Seat | Position | Player zone | Dealer zone |
+|------|----------|-------------|-------------|
+| 1 | Far left | 0–20% | 20–55% |
+| 2 | Left | 0–24% | 24–58% |
+| 3 | Centre-left | 0–28% | 28–61% |
+| 4 | Centre | 0–33% | 33–66% |
+| 5 | Centre-right | 0–40% | 40–72% |
+| 6 | Right | 0–48% | 48–78% |
+| 7 | Far right | 0–56% | 56–84% |
+
+Seat presets apply instantly via `socket.emit('set_seat_preset', {seat: N})` — no Apply button needed. Manual slider adjustments after a preset selection clear the active preset.
+
+---
+
+### Feature 4 — Card Confirmation Mode (Human-in-the-Loop)
+
+When enabled, the live scanner does **not** automatically apply detected cards. Each detection enters a pending queue where you review it before it is counted.
+
+**How to use:** Click **▶ Enable Confirmation Mode** in the **Card Confirmation** panel. Detected cards queue up showing rank, suit, and routing target (Your hand / Dealer / Seen). Click **✓** to apply or **✗** to discard each card. When multiple cards queue up, bulk **✓ All** and **✗ Reject All** buttons appear.
+
+**Why it matters:** Prevents false OCR detections from corrupting your carefully maintained count during high-stakes hands. The queue uses unique IDs so rapid detections never cause duplicate processing.
+
+**Race condition safety:** Cards are identified by ID, not position. Confirming or rejecting uses the ID so simultaneous detections cannot cause double-counting even if the network is slow.
+
+---
+
+### Feature 5 — Wonging Mode (Back-Counting)
+
+Named after Stanford Wong (*Professional Blackjack*, 1975). You watch a table without playing, counting cards until the shoe becomes favourable, then sit down.
+
+**How to use:** Click **▶ Enable Wonging** in the **Wonging / Back-Count** panel. The panel shows:
+- A TC progress bar with entry (+2) and exit (−1) threshold markers
+- A large signal banner: **SIT DOWN NOW** (jade green, TC ≥ +2) / **LEAVE TABLE** (ruby red, TC < −1) / **KEEP WATCHING** (gold)
+- Δ to sit and Δ to leave counters showing exactly how many TC points remain to each threshold
+
+While wonging is active, **all detected cards are routed to `seen`** regardless of their screen zone — they are counted but not added to any hand. The running count is never reset when toggling wonging on or off.
+
+**Signal logic:**
+
+| Condition | Signal | Colour |
+|-----------|--------|--------|
+| TC ≥ +2 | SIT DOWN NOW | Jade green |
+| TC < −1 | LEAVE TABLE | Ruby red |
+| −1 ≤ TC < +2 | KEEP WATCHING | Gold |
+
+---
+
+### 6. Deal-Order Engine (Seat-Aware Count Tracking)
+
+The Deal-Order Engine (`DealOrderEngine.js`) is a client-side component that tracks the real blackjack deal sequence across all seats at the table. Its primary purpose is to snapshot the running count at the **exact moment your seat receives its 2nd card** — the count you actually have available when you make your betting and playing decisions.
+
+This matters because in a multi-player game, several cards are dealt between the start of a round and when you act. The count at the start of the round is not the count you have when you need it.
+
+#### How to use it
+
+The Deal-Order Engine appears as a compact bar in the dashboard. Click the header to expand it.
+
+**Compact mode** (default) shows: seat dots, deal position indicator, decision count, bet signal chip, and action buttons — all in a single dense row.
+
+**Expanded mode** shows the full feature set:
+
+| Element | What it shows |
+|---------|--------------|
+| Table arc | Visual 7-seat arc with active seat highlighted. Click any seat dot to set it as yours. |
+| Setup controls | Steppers to set number of players (1–7) and your seat number (1–N) |
+| Deal status bar | Current round, deal phase (1st/2nd card), and who the next card goes to |
+| Per-seat card display | All dealt cards by seat, colour-coded by count tag (green = low card counted, red = high card) |
+| My Seat Analysis | Count when you act, true count, info visibility %, position edge label |
+| Bet recommendation | Full text recommendation (MAX BET / BET BIG / Slight edge / Neutral / SIT OUT) with your hand labels |
+| Shoe count trend | Bar chart of running count round-by-round over the last 20 rounds |
+| Round log | Collapsible history of count-at-decision and action taken per round |
+
+#### Setup
+
+1. Expand the panel and set **Players** to the total number of seats occupied (including you) at the table
+2. Set **My Seat** to your position (seat 1 = first base / leftmost, seat N = third base / rightmost)
+3. Cards are now automatically routed to the correct seat in deal order as you tap them
+
+#### Action buttons
+
+| Button | Action |
+|--------|--------|
+| ↩ Undo | Removes last deal-order entry and restores the previous deal position |
+| ◎ End Round | Logs the round and resets for the next deal |
+| ⇥ Skip/Hidden | Advances deal position without recording a card (for hole card or unseen card) |
+| ↻ New Shoe | Full reset — clears round log and count trend |
+| ▤ Round Log | Toggles the collapsible round history table |
+
+#### Position edge labels
+
+| Your seat | Label | Why |
+|-----------|-------|-----|
+| Seat 1 (first base) | Min (1st Base) | You see fewest cards before acting — lowest info advantage |
+| Middle seats | Moderate / Strong | Proportional to position |
+| Last seat (third base) | Max (3rd Base) | You see the most cards before acting — highest info advantage |
+
+#### Important: isolation mode
+
+When the Deal-Order Engine is active, cards you tap are routed to **seats only**. The main Player and Dealer hands are isolated — they continue to track their own cards independently via the normal card routing (P/D/Seen toggles). The engine is a passive observer layered on top of the standard game flow; it does not replace it.
+
+#### API (for developers)
+
+The engine exposes an imperative ref API used by `App.jsx`:
+
+| Method | What it does |
+|--------|-------------|
+| `recordCard(rank, suit, target)` | Called by App when a card is tapped |
+| `resetForNewHand()` | Called by App on new hand — logs the round and resets |
+| `resetForShuffle()` | Called by App on shuffle — full reset including round log |
+| `skipCard()` | Advances deal position for a hidden or unseen card |
+| `undoDealCard()` | Removes last entry and restores previous deal position |
+| `softReset()` | Clears deal state without logging a round (used after App undo) |
+| `replayCards(cards)` | Replays an array of `{rank, suit, target}` into deal engine state |
+
+---
+
+### API & WebSocket Reference for All Advanced Features
+
+All backend features expose both WebSocket events and REST fallbacks for headless clients:
+
+| Feature | WebSocket event | REST endpoint |
+|---------|----------------|--------------|
+| Set zone boundaries | `socket.emit('set_zones', {player_end: 0.35, dealer_end: 0.65})` | `POST /api/zones` — same JSON body |
+| Get zone config | — | `GET /api/zones` |
+| Apply seat preset | `socket.emit('set_seat_preset', {seat: 4})` | `POST /api/seat_preset` — same JSON body |
+| Enable confirmation mode | `socket.emit('set_confirmation_mode', {enabled: true})` | `POST /api/confirmation_mode` |
+| Get pending card queue | — | `GET /api/pending_cards` |
+| Confirm a pending card | `socket.emit('confirm_card', {id: '...'})` | — |
+| Reject a pending card | `socket.emit('reject_card', {id: '...'})` | — |
+| Enable wonging mode | `socket.emit('set_wonging_mode', {enabled: true})` | `POST /api/wonging` |
+| Get wonging state | — | `GET /api/wonging` |
+
+The server pushes `pending_cards_update` events to the frontend whenever the pending queue changes (card detected, confirmed, or rejected), so the UI always reflects the current queue without polling.
+
+---
+
+## 🛠️ Developer Diagnostics & Debug Infrastructure
+
+### Built-in health check endpoints
+
+The server ships with two diagnostic routes accessible in any browser:
+
+**`http://localhost:5000/diag`** — Syntax & compilation check. Runs a Babel compilation loop on every React `.js` and `.jsx` component in `app/static/components/` in isolation. Outputs `✅` or `❌ JS ERROR` mapped to the specific file. Run this after editing component files to catch syntax errors before rebuilding.
+
+**`http://localhost:5000/test`** — Environment & payload test. Verifies that `bundle.min.js` was built, the WebSocket server is accepting connections, and the `/api/state` endpoint is resolving all advanced tracking state variables (zone config, wonging flags, confirmation mode) without returning a truncated payload.
+
+**`http://localhost:5000/api/state`** — Returns the full current game state as JSON. Useful for verifying what the server holds after a card sequence or for debugging frontend/backend state mismatches.
+
+---
+
+### Backend debug middleware (`app/debug_layer.py`)
+
+The backend ships with a production-grade debug middleware that is a **complete no-op by default**. Every debug function has zero cost unless activated — no allocations, no logging, no slowdown.
+
+**Activation:**
+```bash
+# Set the environment variable before starting the server:
+DEBUG_MODE=1 python main.py web
+
+# Windows PowerShell:
+$env:DEBUG_MODE=1; python main.py web
+```
+
+**What it does when active:**
+- Logs every incoming socket event with payload size
+- Times every handler and logs elapsed milliseconds on response
+- Categorises and logs all errors by type (`DATA_ACCESS`, `TYPE_ERROR`, `VALIDATION`, `NETWORK`, `ML_ENGINE`)
+- Traces every ML model inference with full inputs (hand value, dealer upcard, true count) and outputs (action, confidence)
+- Logs game state mutations (`key: old_val → new_val`)
+- Emits `debug_log` events to the frontend so the browser's debug panel can display backend events in real time
+- Exposes a `/debug/status` endpoint with uptime, request count, error count, average response time, and the last 10 errors and 5 ML calls
+
+**`/debug/status` response format:**
+```json
+{
+  "debug_mode": true,
+  "uptime_seconds": 142.3,
+  "total_requests": 87,
+  "total_errors": 0,
+  "total_ml_calls": 22,
+  "avg_response_ms": 4.1,
+  "recent_errors": [],
+  "recent_ml": [...]
+}
+```
+
+> The `/debug/status` endpoint returns `{"debug_mode": false}` with no other data when `DEBUG_MODE` is not set. It is safe to leave accessible in production.
+
+---
+
+### Frontend debug panel (`DebugLayer.js`)
+
+The frontend has a matching debug infrastructure built into `bundle.min.js`. It is also a complete no-op by default — zero allocations when off.
+
+**Activation:**
+
+| Method | How |
+|--------|-----|
+| Browser console | `__BJDebug.enable(4)` — enable at VERBOSE level |
+| Keyboard shortcut | `Ctrl+Shift+D` — toggle the floating debug panel (auto-enables at VERBOSE) |
+| URL parameter | `http://localhost:5000/?debug=4` — auto-enables on page load |
+
+**Debug levels:**
+
+| Level | Value | What gets logged |
+|-------|-------|-----------------|
+| OFF | 0 | Nothing (default) |
+| ERROR | 1 | Unhandled errors and React boundary catches only |
+| WARN | 2 | Errors + warnings (race conditions, low FPS) |
+| INFO | 3 | Normal event flow — socket events, state changes, ML decisions |
+| VERBOSE | 4 | Everything including per-render timings and individual socket payloads |
+
+**The floating panel** (triggered by `Ctrl+Shift+D`) is draggable, collapsible, and has five tabs:
+
+| Tab | What it shows |
+|-----|--------------|
+| Timeline | All log entries, filterable by category (UI, STATE, NET, ML, PERF, ERROR, WARN) |
+| State | Last 10 state snapshots with count, shoe, and recommendation diffs |
+| Network | Filtered socket event log with roundtrip timings |
+| Perf | FPS, memory usage (Chrome), render count, slow renders (>16ms) |
+| ML | Filtered ML inference log with action, confidence, and input values |
+
+**Additional controls in the panel header:**
+- `💾` — Export full log buffer to a JSON file for offline analysis
+- `🗑` — Clear the in-memory log ring buffer (1,500 entries max)
+- `▼/▲` — Collapse / expand the panel
+
+**Console API (`__BJDebug`):**
+
+```javascript
+__BJDebug.enable(4)         // Enable at VERBOSE level
+__BJDebug.enable(3)         // Enable at INFO level (less noise)
+__BJDebug.disable()         // Turn off all debug logging
+__BJDebug.toggle('ml')      // Toggle a specific feature category
+__BJDebug.exportLogs()      // Download log buffer as JSON
+__BJDebug.getTimeline('ML') // Get all ML events as an array
+__BJDebug.getPerfData()     // Get current FPS, memory, render counts
+```
+
+**Error boundary and safe mode:**
+
+`DebugLayer.js` includes an enhanced React error boundary (`DebugErrorBoundary`) that wraps the entire app. When a render error is caught it shows a recovery screen with the error message, component stack trace, and three action buttons: Try Recovery, Copy Error, and Full Reload. It also auto-activates **Safe Mode**, which disables risky features and displays a persistent red banner at the top of the page. Safe mode also activates for unhandled JavaScript errors and unhandled promise rejections caught by `window.addEventListener('error', ...)`.
+
+**Ring buffer:** The log buffer is a fixed-size circular array capped at 1,500 entries. When full, the oldest entry is dropped on each new write — O(1) push with bounded memory regardless of session length.
 
 ---
 
@@ -2581,6 +2943,27 @@ The server ships with two built-in health diagnostic layers designed to smoke-te
 **Game engine (`blackjack/betting.py`, `blackjack/game.py`)**
 - **`get_session_stats()` returned inconsistent key names** — Empty state returned `hands` while full state returned `hands_played`. Frontend always sees the full consistent keys now.
 - **`is_split_ace_hand` used unreliable card inference** — Replaced with an explicit `split_from_ace` flag set when the split is created.
+
+**Counting engine (`blackjack/counting.py`)**
+- **`get_remaining_estimate()` rebuilt rank totals on every call** — The `_total_per_rank` dict is now pre-computed once in `__init__` since `num_decks` never changes. Eliminates a redundant dict rebuild on every card dealt event.
+- **`count_history` grew unbounded in long sessions** — History is now capped at 500 entries. The frontend reads at most the last 60 entries; 500 provides an 8× safety margin while bounding memory use in 8-hour sessions.
+- **Burn cards not subtracted from total card count** — `_total_cards` now subtracts `burn_cards` on construction so `decks_remaining` and `true_count` are accurate from the first card. Previously the counter assumed `num_decks × 52` cards existed, causing a small but systematic true count error throughout the entire session.
+
+**ML normalisation (`ml_model/model.py`, `app/server.py`)**
+- **Wong Halves and Uston APC used wrong normalisation scalars** — Both systems were missing entries in `COUNT_NORM_SCALARS`. Added `wong_halves: (15.0, 30.0, 0.10)` and `uston_apc: (20.0, 40.0, 0.10)`. Without these, training or inferencing with either system would map their counts to out-of-range values, producing garbage decisions.
+
+**Debug infrastructure (new)**
+- **`debug_layer.py` added** — Backend debug middleware with zero production cost. Decorator `@debug_timed` on socket handlers logs request+response+timing. `DebugLogger` class handles structured logging, ML inference tracing, and error categorisation. Wired to SocketIO to emit `debug_log` events to the frontend panel.
+- **`DebugLayer.js` added** — Frontend debug panel with ring-buffer log, five tabs (Timeline, State, Network, Perf, ML), safe mode, and enhanced React error boundary. `Ctrl+Shift+D` toggles the floating panel. `__BJDebug.enable(4)` activates from console.
+- **`DebugState` race condition detector** — Warns when more than 2 state updates occur in the same animation frame, which indicates a render race. Fires before throttling so no races are silently dropped.
+
+**New components (no prior version — additions)**
+- **`AccordionPanel.js`** — Smooth-height accordion wrapper for Tier 2 reference panels. Animates to measured `scrollHeight` on open rather than using a `max-height` guess, eliminating jarring jumps.
+- **`DealOrderEngine.js`** — Compact/expanded deal-order tracker with seat-aware count snapshot, skip-card support, round log, trend chart, and full imperative ref API for `App.jsx`.
+- **`SeenCardsPanel.js`** — Shows other players' cards with Hi-Lo contribution badge. Auto-hides when empty.
+- **`WongPanel.js`** — Back-counting panel with animated pulsing signal, TC bar with threshold markers, delta-to-entry/leave display.
+- **`ZoneConfigPanel.js`** — Zone visualiser bar, 7 seat preset buttons, and manual player/dealer-end sliders with unsaved-change indicator.
+- **`ConfirmationPanel.js`** — Pending card queue with per-card confirm/reject and bulk actions. Subscribes to `pending_cards_update` events directly for low-latency queue updates.
 
 ---
 
