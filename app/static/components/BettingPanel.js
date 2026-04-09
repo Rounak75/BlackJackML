@@ -95,8 +95,13 @@ function BettingPanel({
   const phase = pCards === 0 ? 'pre' : 'mid';
 
   // Reset split resolution state when leaving split mode
+  // FIX: Add a small delay to prevent premature reset while record_result
+  // calls are still being processed by the server.
   useEffect(() => {
-    if (!isSplitActive) setSplitResolved({});
+    if (!isSplitActive) {
+      const timer = setTimeout(() => setSplitResolved({}), 300);
+      return () => clearTimeout(timer);
+    }
   }, [isSplitActive]);
 
   // ── AUTO-RESOLVE ───────────────────────────────────────
@@ -145,27 +150,31 @@ function BettingPanel({
       autoFiredRef.current = true;
       autoResolveTimer.current = setTimeout(() => {
         autoResolveTimer.current = null;
+        // FIX: Stagger split hand result emissions so server processes
+        // each record_result before the final new_hand is sent.
         splitHands.forEach((h, idx) => {
-          const handBet = activeBet;
-          let result, profit;
+          setTimeout(() => {
+            const handBet = activeBet;
+            let result, profit;
 
-          if (h.is_bust) {
-            result = 'loss'; profit = -handBet;
-          } else if (dealerBj) {
-            result = 'loss'; profit = -handBet;
-          } else if (dealerBust) {
-            result = 'win'; profit = handBet;
-          } else if (h.value > dealerVal) {
-            result = 'win'; profit = handBet;
-          } else if (h.value < dealerVal) {
-            result = 'loss'; profit = -handBet;
-          } else {
-            result = 'push'; profit = 0;
-          }
+            if (h.is_bust) {
+              result = 'loss'; profit = -handBet;
+            } else if (dealerBj) {
+              result = 'loss'; profit = -handBet;
+            } else if (dealerBust) {
+              result = 'win'; profit = handBet;
+            } else if (h.value > dealerVal) {
+              result = 'win'; profit = handBet;
+            } else if (h.value < dealerVal) {
+              result = 'loss'; profit = -handBet;
+            } else {
+              result = 'push'; profit = 0;
+            }
 
-          if (idx === 0) profit += insuranceAdj;
-          const isLast = idx === splitHands.length - 1;
-          onRecordResult(result, handBet, profit, !isLast);
+            if (idx === 0) profit += insuranceAdj;
+            const isLast = idx === splitHands.length - 1;
+            onRecordResult(result, handBet, profit, !isLast);
+          }, idx * 120);
         });
       }, 900);
       return;

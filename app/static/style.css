@@ -1971,3 +1971,26 @@ body {
 .de-le-action.big   { color: var(--jade); }
 .de-le-action.small { color: var(--ruby); }
 .de-le-action.wait  { color: var(--text-2); }
+
+/* ══════════════════════════════════════════════════════════
+   CENTER COLUMN — CardGrid Layout
+   ══════════════════════════════════════════════════════════
+   The center column flows naturally with the page.
+   The CardGrid sits inline at the buttom, collapsible via G key.
+*/
+
+.center-column {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Collapsed bar hover glow */
+.card-grid-collapsed-bar:hover {
+  box-shadow: 0 0 16px rgba(255,212,71,0.15);
+}
+
+/* fadeIn for result banners */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

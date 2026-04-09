@@ -15,6 +15,11 @@
  *   Issue #12 — TopBar receives currentAction for action stripe
  *   NEW       — Status bar at bottom (trading-style)
  *   NEW       — Grid narrowed: 260px | 1fr | 260px
+ *   FIX       — Split hand P&L batching: all record_result calls complete
+ *               before new_hand is emitted so session stats update correctly
+ *   FIX       — CardGrid is now sticky at the bottom of the center column,
+ *               always visible without scrolling, and collapsible
+ *   NEW       — Keyboard shortcut K for skip/hidden card in Deal Engine
  */
 
 const { useState, useEffect, useRef, useCallback } = React;
@@ -41,6 +46,9 @@ function App() {
 
   // Deal-Order Engine state
   const [dealOrderEnabled, setDealOrderEnabled] = useState(true)
+
+  // CardGrid collapse state — separate from scanMode collapse
+  const [cardGridCollapsed, setCardGridCollapsed] = useState(false)
 
   // ── INPUT MODE ─────────────────────────────────────────────────────────────
   // 'deal_engine' → cards go ONLY to seats + count + shoe (not player/dealer hands)
@@ -192,6 +200,14 @@ function App() {
     showToast(`Switched to ${system.replace('_', '-').toUpperCase()}`, 'info')
   }, [])
 
+  // ── RECORD RESULT ─────────────────────────────────────────────────────────
+  // FIX: Split P&L batching.
+  // When recording split hand results, each hand calls record_result to the
+  // server separately. The final hand (skipNewHand=false) also triggers
+  // new_hand + state reset. The problem was that the new_hand could arrive
+  // before all record_result emissions were processed, causing stale session
+  // stats. Now: we add a small delay before emitting new_hand on the final
+  // split hand so all record_result calls settle first.
   const handleRecordResult = useCallback((result, bet, precalcProfit, skipNewHand) => {
     const profit = precalcProfit !== undefined
       ? precalcProfit
@@ -204,13 +220,17 @@ function App() {
     // skipNewHand = true when recording intermediate split hand results.
     // Only emit new_hand + reset after the FINAL split hand is recorded.
     if (!skipNewHand) {
-      socketRef.current?.emit('new_hand')
-      undoStack.current = []
-      dealTargetRef.current = 'player'
-      setDealTarget('player')
-      setIsDoubled(false)
-      setTookInsurance(false)
-      if (dealOrderRef.current) dealOrderRef.current.resetForNewHand()
+      // Delay new_hand slightly to ensure all record_result calls are processed
+      // by the server before the hand state is reset.
+      setTimeout(() => {
+        socketRef.current?.emit('new_hand')
+        undoStack.current = []
+        dealTargetRef.current = 'player'
+        setDealTarget('player')
+        setIsDoubled(false)
+        setTookInsurance(false)
+        if (dealOrderRef.current) dealOrderRef.current.resetForNewHand()
+      }, 150)
     }
 
     showToast(
@@ -286,6 +306,17 @@ function App() {
       if (e.key === 'p' || e.key === 'P') setTarget('player')
       if (e.key === 'd' || e.key === 'D') setTarget('dealer')
       if (e.key === 'e' || e.key === 'E') setDealOrderEnabled(prev => !prev)
+      // NEW: K for skip/hidden card in Deal Engine
+      if ((e.key === 'k' || e.key === 'K') && dealOrderEnabled) {
+        if (dealOrderRef.current) {
+          dealOrderRef.current.skipCard()
+          showToast('Skipped hidden card', 'info')
+        }
+      }
+      // NEW: G for toggle card grid collapse
+      if (e.key === 'g' || e.key === 'G') {
+        setCardGridCollapsed(prev => !prev)
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
         e.preventDefault()
         handleUndo()
@@ -293,7 +324,7 @@ function App() {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [lastBet, handleNewHand, handleShuffle, handleUndo])
+  }, [lastBet, handleNewHand, handleShuffle, handleUndo, dealOrderEnabled])
 
 
   // ── DERIVED STATE ──────────────────────────────────────────────────────────
@@ -422,82 +453,187 @@ function App() {
 
 
         {/* ── CENTER COLUMN ─────────────────────────────────────────── */}
-        <div className="flex flex-col gap-2.5">
+        {/* Restructured: scrollable top + sticky bottom CardGrid */}
+        <div className="center-column" style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+        }}>
 
-          {/* ── Action recommendation banner (Issue #1: center, 4rem) ── */}
-          <ActionPanel
-            recommendation={rec}
-            count={count}
-            mlModelInfo={gameState?.ml_model_info}
-            compDep16={rec?.comp_dep_16}
-          />
+          {/* ── Content area: Action, DealEngine, Hands, etc ── */}
+          <div style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+          }}>
 
-          {/* CompDepAlert removed as standalone (Issue #8) —
-              now inline badge in ActionPanel */}
-
-          {/* Deal-Order Engine — seat tracking + decision-aware counting */}
-          {dealOrderEnabled && (
-            <DealOrderEngine
-              ref={dealOrderRef}
+            {/* ── Action recommendation banner (Issue #1: center, 4rem) ── */}
+            <ActionPanel
+              recommendation={rec}
               count={count}
-              shoe={shoe}
-              onAppUndo={handleUndo}
-              onNewHand={handleNewHand}
-              onShuffle={handleShuffle}
-              inputMode={inputMode}
+              mlModelInfo={gameState?.ml_model_info}
+              compDep16={rec?.comp_dep_16}
             />
-          )}
 
-          {/* Hand display */}
-          <HandDisplay
-            playerHand={playerHand}
-            dealerUpcard={dealerUp}
-            dealerHand={dealerHand}
-            dealerMustDraw={dealerMustDraw}
-            sideBets={sideBets}
-            insurance={insurance}
-            isDoubled={isDoubled}
-            tookInsurance={tookInsurance}
-            onInsuranceChange={setTookInsurance}
-            activeBet={customBet}
-            currency={currency}
-            dealEngineActive={dealOrderEnabled}
-          />
+            {/* CompDepAlert removed as standalone (Issue #8) —
+                now inline badge in ActionPanel */}
 
-          {/* Split hand panel */}
-          {splitHands && splitHands.length > 0 && (
-            <SplitHandPanel
-              splitHands={splitHands}
-              activeHandIndex={activeHandIdx}
+            {/* Deal-Order Engine — seat tracking + decision-aware counting */}
+            {dealOrderEnabled && (
+              <DealOrderEngine
+                ref={dealOrderRef}
+                count={count}
+                shoe={shoe}
+                onAppUndo={handleUndo}
+                onNewHand={handleNewHand}
+                onShuffle={handleShuffle}
+                inputMode={inputMode}
+              />
+            )}
+
+            {/* Hand display */}
+            <HandDisplay
+              playerHand={playerHand}
               dealerUpcard={dealerUp}
-              socket={socketRef.current}
-              onNextHand={() => {}}
-              baseBet={customBet}
+              dealerHand={dealerHand}
+              dealerMustDraw={dealerMustDraw}
+              sideBets={sideBets}
+              insurance={insurance}
+              isDoubled={isDoubled}
+              tookInsurance={tookInsurance}
+              onInsuranceChange={setTookInsurance}
+              activeBet={customBet}
               currency={currency}
+              dealEngineActive={dealOrderEnabled}
             />
-          )}
 
-          {/* Seen cards */}
-          {seenCards && seenCards.length > 0 && (
-            <SeenCardsPanel seenCards={seenCards} />
-          )}
+            {/* Split hand panel */}
+            {splitHands && splitHands.length > 0 && (
+              <SplitHandPanel
+                splitHands={splitHands}
+                activeHandIndex={activeHandIdx}
+                dealerUpcard={dealerUp}
+                socket={socketRef.current}
+                onNextHand={() => {}}
+                baseBet={customBet}
+                currency={currency}
+              />
+            )}
 
-          {/* Card entry grid (Issue #5: collapses in live/screenshot) */}
-          <CardGrid
-            target={dealTarget}
-            onTargetChange={setTarget}
-            remainingByRank={shoe?.remaining_by_rank}
-            onDealCard={handleDealCardWrapped}
-            onUndo={handleUndo}
-            onSplit={handleSplit}
-            canSplit={!!(playerHand?.can_split && splitHands.length === 0)}
-            dealerMustDraw={dealerMustDraw}
-            dealerStands={dealerStandsFlag}
-            scanMode={scanMode}
-            countSystem={count?.system || 'hi_lo'}
-            dealEngineActive={dealOrderEnabled}
-            inputMode={inputMode}
-          />
+            {/* Seen cards */}
+            {seenCards && seenCards.length > 0 && (
+              <SeenCardsPanel seenCards={seenCards} />
+            )}
+          </div>
+
+          {/* ── CardGrid: inline at bottom, collapsible ── */}
+          <div style={{
+            borderTop: '1px solid rgba(255,255,255,0.08)',
+            paddingTop: 6,
+          }}>
+            {/* Collapse / expand toggle */}
+            {cardGridCollapsed ? (
+              <button
+                onClick={() => setCardGridCollapsed(false)}
+                className="card-grid-collapsed-bar"
+                style={{
+                  width: '100%',
+                  padding: '8px 14px',
+                  borderRadius: 10,
+                  background: '#1c2540',
+                  border: '1.5px solid rgba(255,212,71,0.3)',
+                  color: '#ffd447',
+                  fontSize: '0.72rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  transition: 'all 0.2s',
+                  fontFamily: 'DM Sans, sans-serif',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = '#212d45';
+                  e.currentTarget.style.borderColor = 'rgba(255,212,71,0.6)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = '#1c2540';
+                  e.currentTarget.style.borderColor = 'rgba(255,212,71,0.3)';
+                }}
+              >
+                <span>🃏</span>
+                <span>Show Card Grid</span>
+                <span style={{ fontSize: '0.6rem', opacity: 0.7 }}>▲</span>
+                <kbd style={{
+                  background: '#212d45', border: '1px solid rgba(255,255,255,0.15)',
+                  borderRadius: 3, padding: '1px 4px', fontSize: '0.6rem',
+                  fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
+                  marginLeft: 4,
+                }}>G</kbd>
+              </button>
+            ) : (
+              <>
+                {/* Collapse button above the grid */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  marginBottom: 4,
+                }}>
+                  <button
+                    onClick={() => setCardGridCollapsed(true)}
+                    style={{
+                      padding: '3px 10px',
+                      borderRadius: 6,
+                      background: 'transparent',
+                      border: '1px solid rgba(255,255,255,0.12)',
+                      color: '#94a7c4',
+                      fontSize: '0.6rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      transition: 'all 0.15s',
+                      fontFamily: 'DM Sans, sans-serif',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.borderColor = 'rgba(255,212,71,0.4)';
+                      e.currentTarget.style.color = '#ffd447';
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)';
+                      e.currentTarget.style.color = '#94a7c4';
+                    }}
+                  >
+                    <span>▼ Collapse Grid</span>
+                    <kbd style={{
+                      background: '#212d45', border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: 3, padding: '0px 3px', fontSize: '0.5rem',
+                      fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
+                    }}>G</kbd>
+                  </button>
+                </div>
+
+                {/* Card entry grid */}
+                <CardGrid
+                  target={dealTarget}
+                  onTargetChange={setTarget}
+                  remainingByRank={shoe?.remaining_by_rank}
+                  onDealCard={handleDealCardWrapped}
+                  onUndo={handleUndo}
+                  onSplit={handleSplit}
+                  canSplit={!!(playerHand?.can_split && splitHands.length === 0)}
+                  dealerMustDraw={dealerMustDraw}
+                  dealerStands={dealerStandsFlag}
+                  scanMode={scanMode}
+                  countSystem={count?.system || 'hi_lo'}
+                  dealEngineActive={dealOrderEnabled}
+                  inputMode={inputMode}
+                />
+              </>
+            )}
+          </div>
 
           {/* CenterToolbar — stripped to unique data only (Issue #4) */}
           <CenterToolbar
@@ -509,7 +645,6 @@ function App() {
             analytics={gameState?.analytics}
           />
         </div>
-
 
         {/* ── RIGHT COLUMN ──────────────────────────────────────────── */}
         <div className="panel-right flex flex-col gap-2.5">
@@ -649,7 +784,17 @@ function App() {
             background: '#212d45', border: '1px solid rgba(255,255,255,0.15)',
             borderRadius: 3, padding: '1px 4px', fontSize: '0.6rem',
             fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
-          }}>E</kbd> {dealOrderEnabled ? '🎯 Engine (seats only)' : '✋ Manual (hands)'}
+          }}>K</kbd> Skip
+          {' '}<kbd style={{
+            background: '#212d45', border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 3, padding: '1px 4px', fontSize: '0.6rem',
+            fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
+          }}>G</kbd> Grid
+          {' '}<kbd style={{
+            background: '#212d45', border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: 3, padding: '1px 4px', fontSize: '0.6rem',
+            fontFamily: 'DM Mono, monospace', fontWeight: 700, color: '#ffd447',
+          }}>E</kbd> {dealOrderEnabled ? '🎯 Engine' : '✋ Manual'}
         </span>
       </div>
     </div>
