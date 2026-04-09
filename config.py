@@ -95,6 +95,7 @@ class CountingConfig:
       omega_ii     → Level 2. More accurate, harder under casino conditions.
       zen          → Level 2. Good balance of accuracy vs. difficulty.
       wong_halves  → Level 3. Fractional values (±0.5, ±1, ±1.5). Most accurate balanced system.
+      uston_apc    → Level 3. Highest BC (.91) & IC (.90). Ace side count. Best for shoe games.
 
     To switch systems in the running app, use the dropdown in the top bar.
     """
@@ -150,6 +151,20 @@ class CountingConfig:
             8:  0, 9: -0.5,
             10: -1, 11: -1
         },
+
+        # Uston APC (Advanced Point Count): level 3 balanced system.
+        # Created by Ken Uston (Million Dollar Blackjack, 1981).
+        # Highest betting correlation (.91) and insurance correlation (.90)
+        # of any practical balanced system — best for 6/8-deck shoe games.
+        # Ace = 0 in the main count; use the ace side count (aces_seen)
+        # for insurance and bet-sizing adjustments.
+        # Full deck verification: (+1+2+2+3+2+2+1-1)×4 + (-3×16) + (0×4)
+        #                       = (12×4) + (-48) + 0 = 48 - 48 = 0 ✓
+        "uston_apc": {
+            2: +1, 3: +2, 4: +2, 5: +3, 6: +2, 7: +2,
+            8: +1, 9: -1,
+            10: -3, 11:  0
+        },
     }
 
     # ── Normalisation scalars ───────────────────────────────────────────────
@@ -175,6 +190,7 @@ class CountingConfig:
         "omega_ii":    (  20.0,        40.0,           0.10 ),
         "zen":         (  20.0,        40.0,           0.10 ),
         "wong_halves": (  15.0,        30.0,           0.10 ),
+        "uston_apc":   (  20.0,        40.0,           0.10 ),
     }
 
     # Take insurance when True Count reaches this value.

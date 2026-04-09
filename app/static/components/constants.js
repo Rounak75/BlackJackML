@@ -49,6 +49,15 @@ const WONG_HALVES_TAG = {
   '8': 0, '9': -0.5, '10': -1, J: -1, Q: -1, K: -1,
 };
 
+// ── Uston APC (Advanced Point Count) tag for each rank ────────────────
+// Level 3 balanced system. Highest BC (.91) & IC (.90).
+// Created by Ken Uston (Million Dollar Blackjack, 1981).
+// Ace = 0 in main count; tracked via ace side count.
+const USTON_APC_TAG = {
+  A: 0, '2': 1, '3': 2, '4': 2, '5': 3, '6': 2, '7': 2,
+  '8': 1, '9': -1, '10': -3, J: -3, Q: -3, K: -3,
+};
+
 // ── KO (Knock-Out) count tag — unbalanced (7 is +1) ──────────────────
 const KO_TAG = {
   A: -1, '2': 1, '3': 1, '4': 1, '5': 1, '6': 1, '7': 1,
@@ -74,6 +83,7 @@ const COUNT_TAGS = {
   omega_ii: OMEGA_II_TAG,
   zen: ZEN_TAG,
   wong_halves: WONG_HALVES_TAG,
+  uston_apc: USTON_APC_TAG,
 };
 
 // ── Dealer upcards shown as column headers in the strategy tables ─────

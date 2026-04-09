@@ -60,6 +60,7 @@ function BettingPanel({
   playerHand, dealerHand, insurance,
   isDoubled, onIsDoubledChange,
   tookInsurance, onTookInsuranceChange,
+  splitHands,
 }) {
   const { useState, useRef, useEffect } = React;
   const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
@@ -67,12 +68,14 @@ function BettingPanel({
   const autoFiredRef = useRef(false);
   const autoResolveTimer = useRef(null);
   const inputRef = useRef(null);
+  const [splitResolved, setSplitResolved] = useState({});
 
   const cur = currency || CURRENCIES[0];
   const adv = betting ? (betting.player_advantage || 0) : 0;
   const activeBet = customBet || (betting ? betting.recommended_bet : 10);
   const dec = cur.decimals || 2;
   const effectiveBet = isDoubled ? activeBet * 2 : activeBet;
+  const isSplitActive = splitHands && splitHands.length > 0;
 
   const fmtBet = (n) => cur.isCrypto
     ? Number(n).toFixed(dec)
@@ -89,7 +92,12 @@ function BettingPanel({
 
   // ── PHASE DETECTION ────────────────────────────────────
   const pCards = playerHand?.cards?.length ?? 0;
-  const phase = pCards === 0 ? 'pre' : 'mid'; // post is handled by auto-resolve clearing
+  const phase = pCards === 0 ? 'pre' : 'mid';
+
+  // Reset split resolution state when leaving split mode
+  useEffect(() => {
+    if (!isSplitActive) setSplitResolved({});
+  }, [isSplitActive]);
 
   // ── AUTO-RESOLVE ───────────────────────────────────────
   useEffect(() => {
@@ -101,6 +109,7 @@ function BettingPanel({
     if (pCards < 2 || dCards < 2) {
       if (pCards === 0) {
         autoFiredRef.current = false;
+        setSplitResolved({});
         if (autoResolveTimer.current) {
           clearTimeout(autoResolveTimer.current);
           autoResolveTimer.current = null;
@@ -111,6 +120,58 @@ function BettingPanel({
 
     if (autoFiredRef.current) return;
 
+    // ── SPLIT PATH: resolve each hand independently ──────
+    if (isSplitActive) {
+      const allHandsDone = splitHands.every(h =>
+        h.is_bust || h.is_blackjack ||
+        (h.is_split_ace && h.cards.length >= 2) ||
+        (!h.is_active && h.cards.length >= 2)
+      );
+      if (!allHandsDone) return;
+
+      const dealerBj = dealerHand.is_blackjack;
+      const dealerBust = dealerHand.is_bust;
+      const dealerStands = dealerHand.dealer_stands;
+      if (!dealerBj && !dealerBust && !dealerStands) return;
+
+      const dealerVal = dealerHand.value;
+
+      const insuranceAdj = (() => {
+        if (!tookInsurance) return 0;
+        const halfBet = activeBet * 0.5;
+        return dealerBj ? halfBet * 2 : -halfBet;
+      })();
+
+      autoFiredRef.current = true;
+      autoResolveTimer.current = setTimeout(() => {
+        autoResolveTimer.current = null;
+        splitHands.forEach((h, idx) => {
+          const handBet = activeBet;
+          let result, profit;
+
+          if (h.is_bust) {
+            result = 'loss'; profit = -handBet;
+          } else if (dealerBj) {
+            result = 'loss'; profit = -handBet;
+          } else if (dealerBust) {
+            result = 'win'; profit = handBet;
+          } else if (h.value > dealerVal) {
+            result = 'win'; profit = handBet;
+          } else if (h.value < dealerVal) {
+            result = 'loss'; profit = -handBet;
+          } else {
+            result = 'push'; profit = 0;
+          }
+
+          if (idx === 0) profit += insuranceAdj;
+          const isLast = idx === splitHands.length - 1;
+          onRecordResult(result, handBet, profit, !isLast);
+        });
+      }, 900);
+      return;
+    }
+
+    // ── NORMAL (non-split) PATH ──────────────────────────
     const playerBj = playerHand.is_blackjack;
     const playerBust = playerHand.is_bust;
     const playerVal = playerHand.value;
@@ -168,7 +229,7 @@ function BettingPanel({
       onRecordResult(result, effectiveBet, profit);
     }, 900);
 
-  }, [playerHand, dealerHand]);
+  }, [playerHand, dealerHand, splitHands]);
 
   // ── CASHOUT SUGGESTION ─────────────────────────────────
   const tc = count?.true ?? 0;
@@ -360,7 +421,7 @@ function BettingPanel({
       {/* ═══════════════════════════════════════════════════
           MID-HAND PHASE — doubled/insurance toggles prominent
           ═══════════════════════════════════════════════════ */}
-      {phase === 'mid' && (
+      {phase === 'mid' && !isSplitActive && (
         <div className="flex gap-2 mb-3">
           {/* Doubled toggle */}
           <button
@@ -409,7 +470,7 @@ function BettingPanel({
       )}
 
       {/* Effective bet display when doubled */}
-      {isDoubled && (
+      {isDoubled && !isSplitActive && (
         <div
           className="mb-3 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold text-center"
           style={{
@@ -459,9 +520,134 @@ function BettingPanel({
       )}
 
       {/* ═══════════════════════════════════════════════════
-          MANUAL RESULT BUTTONS — always available as override
-          Prominent in mid-hand, secondary in pre-hand
+          SPLIT RESULT BUTTONS — per-hand independent resolution
           ═══════════════════════════════════════════════════ */}
+      {isSplitActive && (
+        <div style={{
+          borderTop: '1px solid rgba(255,212,71,0.25)',
+          paddingTop: 10,
+        }}>
+          <div className="text-[10px] uppercase tracking-widest font-bold mb-2"
+            style={{ color: '#ffd447' }}>
+            ✂ Split Results — Resolve Each Hand:
+          </div>
+
+          {/* Total risk banner */}
+          <div className="mb-3 px-3 py-1.5 rounded-lg text-xs font-mono text-center"
+            style={{
+              background: 'rgba(255,212,71,0.06)',
+              border: '1px solid rgba(255,212,71,0.2)',
+              color: '#ffd447',
+            }}>
+            Total Risk: {cur.symbol}{fmtBet(activeBet * splitHands.length)}
+            <span style={{ color: '#94a7c4' }}>
+              {' '}· {cur.symbol}{fmtBet(activeBet)} × {splitHands.length} hands
+            </span>
+          </div>
+
+          {splitHands.map((hand, idx) => {
+            const resolved = splitResolved[idx];
+            const handVal = hand.value;
+            const isBust = hand.is_bust;
+
+            return (
+              <div key={idx} style={{
+                marginBottom: 8, padding: '8px 10px', borderRadius: 8,
+                background: resolved ? 'rgba(255,255,255,0.03)' : 'rgba(255,255,255,0.05)',
+                border: `1px solid ${resolved ? 'rgba(255,255,255,0.08)' : 'rgba(255,212,71,0.2)'}`,
+              }}>
+                {/* Hand header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#ccdaec' }}>
+                    Hand {idx + 1}
+                    <span style={{
+                      marginLeft: 6, fontFamily: 'DM Mono, monospace', fontWeight: 900,
+                      color: isBust ? '#ff5c5c' : '#ffffff',
+                    }}>
+                      {isBust ? 'BUST' : handVal}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: 10, color: '#94a7c4', fontFamily: 'DM Mono, monospace' }}>
+                    Bet {cur.symbol}{fmtBet(activeBet)}
+                  </div>
+                </div>
+
+                {/* Per-hand result buttons OR resolved state */}
+                {resolved ? (
+                  <div style={{
+                    fontSize: 11, fontWeight: 700, textAlign: 'center', padding: '4px',
+                    borderRadius: 5,
+                    color: resolved.result === 'win' ? '#44e882' : resolved.result === 'loss' ? '#ff5c5c' : '#6aafff',
+                    background: resolved.result === 'win' ? 'rgba(68,232,130,0.08)'
+                      : resolved.result === 'loss' ? 'rgba(255,92,92,0.08)' : 'rgba(106,175,255,0.08)',
+                  }}>
+                    {resolved.result === 'win' ? '🏆' : resolved.result === 'loss' ? '💀' : '🤝'}
+                    {' '}{resolved.result.toUpperCase()} {resolved.profit >= 0 ? '+' : ''}{cur.symbol}{fmtBet(resolved.profit)}
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    {[
+                      { label: '🏆 WIN', result: 'win', color: '#44e882', bg: 'rgba(68,232,130,0.1)', border: 'rgba(68,232,130,0.4)' },
+                      { label: '🤝 PUSH', result: 'push', color: '#6aafff', bg: 'rgba(106,175,255,0.1)', border: 'rgba(106,175,255,0.4)' },
+                      { label: '💀 LOSS', result: 'loss', color: '#ff5c5c', bg: 'rgba(255,92,92,0.1)', border: 'rgba(255,92,92,0.4)' },
+                    ].map(({ label, result, color, bg, border }) => (
+                      <button
+                        key={result}
+                        onClick={() => {
+                          if (autoResolveTimer.current) {
+                            clearTimeout(autoResolveTimer.current);
+                            autoResolveTimer.current = null;
+                          }
+                          autoFiredRef.current = true;
+
+                          let profit = result === 'win' ? activeBet : result === 'loss' ? -activeBet : 0;
+                          if (idx === 0 && tookInsurance && insurance?.available) {
+                            const halfBet = activeBet * 0.5;
+                            profit += dealerHand?.is_blackjack ? halfBet * 2 : -halfBet;
+                          }
+
+                          const newResolved = { ...splitResolved, [idx]: { result, profit } };
+                          setSplitResolved(newResolved);
+
+                          const allDone = splitHands.every((_, i) => newResolved[i]);
+                          onRecordResult(result, activeBet, profit, !allDone);
+                        }}
+                        style={{
+                          flex: 1, padding: '6px 2px', borderRadius: 5, fontSize: 10,
+                          fontWeight: 700, cursor: 'pointer',
+                          color, background: bg, border: `1px solid ${border}`,
+                        }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          {/* Net result summary when all hands resolved */}
+          {Object.keys(splitResolved).length === splitHands.length && splitHands.length > 0 && (
+            <div style={{
+              marginTop: 4, padding: '6px 10px', borderRadius: 6, textAlign: 'center',
+              background: 'rgba(68,232,130,0.06)', border: '1px solid rgba(68,232,130,0.25)',
+              fontSize: 11, color: '#44e882', fontWeight: 700,
+            }}>
+              ✓ All split hands resolved — Net:{' '}
+              {(() => {
+                const total = Object.values(splitResolved).reduce((sum, r) => sum + r.profit, 0);
+                return `${total >= 0 ? '+' : ''}${cur.symbol}${fmtBet(total)}`;
+              })()}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════
+          MANUAL RESULT BUTTONS — normal (non-split) hands
+          ═══════════════════════════════════════════════════ */}
+      {!isSplitActive && (
       <div style={{
         borderTop: '1px solid rgba(255,255,255,0.1)',
         paddingTop: phase === 'mid' ? 10 : 8,
@@ -522,6 +708,7 @@ function BettingPanel({
           </div>
         </div>
       </div>
+      )}
     </Widget>
   );
 }

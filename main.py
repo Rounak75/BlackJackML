@@ -23,8 +23,8 @@
 ║                                                                      ║
 ║  4. python main.py train --hands 500000 --epochs 50                  ║
 ║     → Trains the neural network and saves to models/best_model.pt   ║
-║     → --system all (default): trains on all 4 counting systems      ║
-║     → --system hi_lo|ko|omega_ii|zen: single-system model           ║
+║     → --system all (default): trains on all 6 counting systems      ║
+║     → --system hi_lo|ko|omega_ii|zen|wong_halves|uston_apc          ║
 ║                                                                      ║
 ║  QUICK START:                                                         ║
 ║  ─────────────────────────                                           ║
@@ -120,7 +120,7 @@ YOLO CARD DETECTION SETUP (run these before starting the dashboard):
     )
     overlay_parser.add_argument(
         "--system", default="hi_lo",
-        choices=["hi_lo", "ko", "omega_ii", "zen"],
+        choices=["hi_lo", "ko", "omega_ii", "zen", "wong_halves", "uston_apc"],
         help="Card counting system (default: hi_lo)."
     )
     overlay_parser.add_argument(
@@ -161,10 +161,10 @@ YOLO CARD DETECTION SETUP (run these before starting the dashboard):
     )
     train_parser.add_argument(
         "--system", default="all",
-        choices=["all", "hi_lo", "ko", "omega_ii", "zen"],
+        choices=["all", "hi_lo", "ko", "omega_ii", "zen", "wong_halves", "uston_apc"],
         help=(
             "Counting system(s) to train on. "
-            "'all' (default) mixes data from all four systems so the model "
+            "'all' (default) mixes data from all six systems so the model "
             "works regardless of which system you use at the table. "
             "Pass a single system name to train a system-specific model."
         )

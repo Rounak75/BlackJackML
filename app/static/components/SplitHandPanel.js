@@ -49,8 +49,10 @@ function SplitHandCard({ cardStr }) {
   );
 }
 
-function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, onComplete }) {
+function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, onComplete, baseBet, currency }) {
   const { useState } = React;
+  const cur = currency || { symbol: '₹', isCrypto: false, decimals: 2 };
+  const fmtBet = (n) => cur.isCrypto ? Number(n).toFixed(cur.decimals || 2) : Number(n).toFixed(2);
 
   if (!hand) return null;
 
@@ -83,6 +85,12 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
             <span style={{ fontSize: 8, fontWeight: 700, color: '#ffd447',
               background: 'rgba(255,212,71,0.15)', border: '1px solid rgba(255,212,71,0.4)',
               borderRadius: 3, padding: '1px 5px' }}>ACTIVE</span>
+          )}
+          {baseBet > 0 && (
+            <span style={{ fontSize: 9, fontWeight: 600, color: '#94a7c4',
+              fontFamily: 'DM Mono, monospace' }}>
+              Bet {cur.symbol}{fmtBet(baseBet)}
+            </span>
           )}
           {isSplitAce && (
             <span style={{ fontSize: 8, color: '#b99bff',
@@ -159,7 +167,7 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
   );
 }
 
-function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, socket, onNextHand }) {
+function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, socket, onNextHand, baseBet, currency }) {
   if (!splitHands || splitHands.length === 0) return null;
 
   const handleComplete = () => {
@@ -220,6 +228,8 @@ function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, socket, onN
             isLastHand={i === splitHands.length - 1}
             dealerUpcard={dealerUpcard}
             onComplete={i === activeHandIndex ? handleComplete : null}
+            baseBet={baseBet || 0}
+            currency={currency}
           />
         ))}
       </div>

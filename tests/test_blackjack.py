@@ -479,8 +479,9 @@ class TestCounting:
         assert counter._total_per_rank[10] == 16 * 8   # 10/J/Q/K × 8 decks
         assert counter._total_per_rank[11] == 4 * 8    # Ace × 8 decks
 
-    def test_all_five_systems_available(self):
-        for system in ('hi_lo', 'ko', 'omega_ii', 'zen', 'wong_halves'):
+    def test_all_six_systems_available(self):
+        """All 6 counting systems must be usable."""
+        for system in ('hi_lo', 'ko', 'omega_ii', 'zen', 'wong_halves', 'uston_apc'):
             counter = CardCounter(system, 6)
             assert counter.system_name == system
 
@@ -514,6 +515,74 @@ class TestCounting:
         counter = CardCounter('wong_halves', 6)
         counter.count_card(c(Rank.SEVEN))
         assert counter.running_count == 0.5
+
+    # ── Uston APC tests ──────────────────────────────────────────────────
+
+    def test_uston_apc_balanced_full_deck(self):
+        """Uston APC is balanced: counting all 52 cards returns RC=0."""
+        counter = CardCounter('uston_apc', 1)
+        for card in Deck.create():
+            counter.count_card(card)
+        assert counter.running_count == 0
+
+    def test_uston_apc_balanced_six_deck_shoe(self):
+        """Uston APC: counting all 312 cards (6 decks) returns RC=0."""
+        counter = CardCounter('uston_apc', 6)
+        for _ in range(6):
+            for card in Deck.create():
+                counter.count_card(card)
+        assert counter.running_count == 0
+
+    def test_uston_apc_low_cards(self):
+        """Uston APC: 2=+1, 3=+2, 4=+2, 5=+3, 6=+2."""
+        counter = CardCounter('uston_apc', 6)
+        counter.count_card(c(Rank.TWO))
+        assert counter.running_count == 1
+        counter.count_card(c(Rank.THREE))
+        assert counter.running_count == 3   # 1+2
+        counter.count_card(c(Rank.FOUR))
+        assert counter.running_count == 5   # 3+2
+        counter.count_card(c(Rank.FIVE))
+        assert counter.running_count == 8   # 5+3
+        counter.count_card(c(Rank.SIX))
+        assert counter.running_count == 10  # 8+2
+
+    def test_uston_apc_mid_cards(self):
+        """Uston APC: 7=+2, 8=+1, 9=-1."""
+        counter = CardCounter('uston_apc', 6)
+        counter.count_card(c(Rank.SEVEN))
+        assert counter.running_count == 2
+        counter.count_card(c(Rank.EIGHT))
+        assert counter.running_count == 3   # 2+1
+        counter.count_card(c(Rank.NINE))
+        assert counter.running_count == 2   # 3-1
+
+    def test_uston_apc_high_cards(self):
+        """Uston APC: 10/J/Q/K = -3, Ace = 0."""
+        counter = CardCounter('uston_apc', 6)
+        counter.count_card(c(Rank.TEN))
+        assert counter.running_count == -3
+        counter.count_card(c(Rank.JACK))
+        assert counter.running_count == -6
+        counter.count_card(c(Rank.QUEEN))
+        assert counter.running_count == -9
+        counter.count_card(c(Rank.KING))
+        assert counter.running_count == -12
+
+    def test_uston_apc_ace_is_neutral(self):
+        """Uston APC: Ace = 0 (tracked via ace side count instead)."""
+        counter = CardCounter('uston_apc', 6)
+        counter.count_card(c(Rank.ACE))
+        assert counter.running_count == 0
+        # But aces_seen should still be tracked
+        assert counter.aces_seen == 1
+
+    def test_uston_apc_true_count_formula(self):
+        """Uston APC: TC = RC / decks_remaining."""
+        counter = CardCounter('uston_apc', 6)
+        counter.running_count = 12
+        counter.cards_seen = 156  # 3 decks remaining
+        assert abs(counter.true_count - 4.0) < 0.1
 
     def test_invalid_system_raises(self):
         with pytest.raises(ValueError, match="Unknown system"):

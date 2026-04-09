@@ -301,7 +301,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             const rem      = remainingByRank ? (remainingByRank[key] || 0) : 0;
             const max      = maxByKey[key] || 24;
             const depleted = rem < max * 0.2;
-            const sysLabels = { hi_lo: 'Hi-Lo', ko: 'KO', omega_ii: 'Ω-II', zen: 'Zen', wong_halves: 'WH' };
+            const sysLabels = { hi_lo: 'Hi-Lo', ko: 'KO', omega_ii: 'Ω-II', zen: 'Zen', wong_halves: 'WH', uston_apc: 'APC' };
             const sysLabel = sysLabels[countSystem] || 'Hi-Lo';
             const hvFmt    = hv > 0 ? `+${hv}` : `${hv}`;
             const countHint = hv !== 0 ? `, ${sysLabel} ${hvFmt}` : '';

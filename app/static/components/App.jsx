@@ -192,7 +192,7 @@ function App() {
     showToast(`Switched to ${system.replace('_', '-').toUpperCase()}`, 'info')
   }, [])
 
-  const handleRecordResult = useCallback((result, bet, precalcProfit) => {
+  const handleRecordResult = useCallback((result, bet, precalcProfit, skipNewHand) => {
     const profit = precalcProfit !== undefined
       ? precalcProfit
       : result === 'win'  ?  bet
@@ -200,17 +200,18 @@ function App() {
       : 0
 
     socketRef.current?.emit('record_result', { bet, profit })
-    socketRef.current?.emit('new_hand')
 
-    undoStack.current = []
-    dealTargetRef.current = 'player'
-    setDealTarget('player')
-
-    setIsDoubled(false)
-    setTookInsurance(false)
-
-    // ▶ SYNC: reset deal engine when hand result is recorded
-    if (dealOrderRef.current) dealOrderRef.current.resetForNewHand()
+    // skipNewHand = true when recording intermediate split hand results.
+    // Only emit new_hand + reset after the FINAL split hand is recorded.
+    if (!skipNewHand) {
+      socketRef.current?.emit('new_hand')
+      undoStack.current = []
+      dealTargetRef.current = 'player'
+      setDealTarget('player')
+      setIsDoubled(false)
+      setTookInsurance(false)
+      if (dealOrderRef.current) dealOrderRef.current.resetForNewHand()
+    }
 
     showToast(
       `${result.toUpperCase()} — ${formatMoney(profit, currency.symbol)}`,
@@ -408,6 +409,7 @@ function App() {
             onIsDoubledChange={setIsDoubled}
             tookInsurance={tookInsurance}
             onTookInsuranceChange={setTookInsurance}
+            splitHands={splitHands}
           />
 
           {/* Basic Strategy Grid — moved here from right column for easier access */}
@@ -470,6 +472,8 @@ function App() {
               dealerUpcard={dealerUp}
               socket={socketRef.current}
               onNextHand={() => {}}
+              baseBet={customBet}
+              currency={currency}
             />
           )}
 
