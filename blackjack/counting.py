@@ -47,6 +47,7 @@
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
 from typing import List, Dict, Optional
+from collections import deque
 from .card import Card
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -80,9 +81,24 @@ class CardCounter:
         # causing decks_remaining to be inflated by burn_cards/52 for the
         # entire session — a small but systematic true count error.
         self._total_cards = num_decks * 52 - burn_cards
-        self.running_count = 0      # The live count you keep in your head
+
+        # FIX C3 — KO Initial Running Count (IRC).
+        # KO is an UNBALANCED system: a full N-deck shoe sums to +4*(N-1),
+        # not 0.  Players start at IRC = -4*(N-1) so that the Running Count
+        # crosses 0 ("the pivot") at roughly the same EV advantage as Hi-Lo
+        # TC = +1.  Starting at 0 makes the RC 28 units high in an 8-deck
+        # shoe — every bet signal is completely wrong.
+        # Reference: Olaf Vancura & Ken Fuchs, "Knock-Out Blackjack" (1998).
+        KO_IRC = {1: 0, 2: -4, 4: -12, 6: -20, 8: -28}
+        if system == 'ko':
+            self.running_count = KO_IRC.get(num_decks, -(4 * (num_decks - 1)))
+        else:
+            self.running_count = 0      # Balanced systems start at 0
+        self._ko_irc = self.running_count  # Store for reset()
+
         self.cards_seen = 0         # Total cards counted (for true count calc)
-        self.count_history: List[Dict] = []
+        # FIX M10: deque(maxlen) drops oldest entry O(1) vs list slice O(N)
+        self.count_history: deque = deque(maxlen=_MAX_HISTORY)
         self._card_log: List[int] = []  # Rank keys of every card seen
 
         # ── Side counts ────────────────────────────────────────────────────
@@ -127,11 +143,7 @@ class CardCounter:
             "true_count": self.true_count,
             "cards_seen": self.cards_seen,
         })
-        # PERF: Cap history to prevent unbounded memory growth.
-        # _MAX_HISTORY (500) is 8× the 60 entries the frontend reads,
-        # so no displayed information is ever lost.
-        if len(self.count_history) > _MAX_HISTORY:
-            self.count_history = self.count_history[-_MAX_HISTORY:]
+        # deque(maxlen=_MAX_HISTORY) auto-drops the oldest entry — no manual slice needed.
 
     def count_cards(self, cards: List[Card]):
         """Process multiple cards at once."""
@@ -155,6 +167,33 @@ class CardCounter:
     def true_count_int(self) -> int:
         """Floored true count for strategy lookups."""
         return int(self.true_count)
+
+    @property
+    def effective_tc(self) -> float:
+        """
+        Effective True Count — the count value used for all EV-dependent
+        decisions: advantage, insurance, wonging, bet sizing.
+
+        For BALANCED systems (Hi-Lo, Omega II, Zen, Wong Halves, Uston APC):
+            effective_tc == true_count  (no adjustment needed)
+
+        For KO (UNBALANCED):
+            KO's running count starts at IRC = -4*(N-1) not 0.
+            Using raw TC distorts all EV calculations at the start of the shoe.
+            Example: 8-deck KO, 0 cards dealt:
+              raw TC = -28 / 7.98 = -3.51  → shows -2.2% player edge (wrong!)
+              effective TC = (-28 - (-28)) / 7.98 = 0  → correct: neutral shoe
+
+            Formula: (running_count - _ko_irc) / decks_remaining
+            This measures how far RC has moved from the IRC baseline,
+            equivalent to a balanced system's TC from 0.
+
+        Use effective_tc for: advantage, insurance, wonging, bet ramp.
+        Use raw true_count for: display purposes, TC history chart.
+        """
+        if self.system_name == 'ko':
+            return (self.running_count - self._ko_irc) / self.decks_remaining
+        return self.true_count
 
     @property
     def penetration(self) -> float:
@@ -220,7 +259,8 @@ class CardCounter:
         Use THIS for bet sizing decisions (not for strategy plays).
         For strategy plays, always use plain true_count.
         """
-        return round(self.true_count + self.ace_adjustment + self.ten_adjustment, 2)
+        # Base on effective_tc so KO Ace-adjusted count is also IRC-corrected
+        return round(self.effective_tc + self.ace_adjustment + self.ten_adjustment, 2)
 
     @property
     def shoe_quality_score(self) -> int:
@@ -234,7 +274,8 @@ class CardCounter:
 
         Thresholds:  0-40 Bad (Red)  |  40-70 Neutral (Yellow)  |  70-100 Strong (Green)
         """
-        tc_clamped = max(-5.0, min(5.0, self.true_count))
+        # Use effective_tc so KO shoe quality reflects real count strength
+        tc_clamped = max(-5.0, min(5.0, self.effective_tc))
         tc_score   = (tc_clamped + 5.0) / 10.0 * 100.0   # -5..+5  -> 0..100
         pen_score  = self.penetration * 100.0              # 0..1    -> 0..100
         # ace_adjustment typically -0.5..+0.5; normalise to 0..1 then scale
@@ -243,14 +284,9 @@ class CardCounter:
 
         raw   = 0.60 * tc_score + 0.25 * pen_score + 0.15 * ace_score
         score = max(0, min(100, int(raw)))
-
-        import logging as _log
-        _log.getLogger(__name__).debug(
-            "[SHOE-QUALITY] tc=%.2f(score=%.1f) pen=%.2f(score=%.1f) "
-            "ace_adj=%.2f(score=%.1f) -> raw=%.1f final=%d",
-            self.true_count, tc_score, self.penetration, pen_score,
-            self.ace_adjustment, ace_score, raw, score,
-        )
+        # FIX M7: removed per-card debug log — this property is called once per
+        # card dealt (via get_full_state), generating 1200+ log entries per session.
+        # Use the dedicated log_shoe_quality() method below for explicit logging.
         return score
 
     def get_side_count_state(self) -> dict:
@@ -273,12 +309,33 @@ class CardCounter:
     def advantage(self) -> float:
         """
         Estimated player advantage based on true count.
-        Each +1 TC ≈ +0.5% player advantage (Hi-Lo).
-        Base house edge = -0.50% with perfect basic strategy (8-deck S17).
-        Break-even at TC = +1.
+
+        FIX C5: The previous formula used TC * 0.005 directly, which is only
+        calibrated for Hi-Lo (max TC ≈ ±10 per deck).  Level-2 systems
+        (Omega II, Zen) produce TCs ~2× larger for the same shoe composition
+        because their tags are ±2 vs ±1.  Applying the same multiplier doubled
+        the displayed edge for those systems.
+
+        Fix: normalize the TC into "Hi-Lo equivalent" units using the per-system
+        max-TC scalar from CountingConfig.COUNT_NORM_SCALARS before computing
+        advantage.  Hi-Lo scalar = 10.0 (baseline), so Hi-Lo is unchanged.
+        Omega II scalar = 20.0, so its TC is halved before the formula.
+
+        Base house edge = 0.43% for 8-deck S17 perfect basic strategy.
+        Each +1 Hi-Lo-equivalent TC ≈ +0.5% player advantage.
         """
-        base_edge = -0.0043          # House edge 8-deck S17: 0.43% (Griffin/WoO reference)
-        tc_advantage = self.true_count * 0.005  # Each +1 TC ≈ +0.5% to player (Hi-Lo system)
+        # For KO: use effective_tc (IRC-adjusted) so advantage starts at
+        # -0.43% (neutral shoe) not -2.2% (distorted by IRC offset).
+        # For balanced systems: effective_tc == true_count (no change).
+        tc = self.effective_tc
+
+        # Normalize to Hi-Lo-equivalent units (C5 fix for Level-2/3 systems)
+        scalars = CountingConfig.COUNT_NORM_SCALARS.get(self.system_name, (10.0, 20.0, 0.10))
+        tc_scalar = scalars[0]                          # 10.0 Hi-Lo, 20.0 Omega II/Zen, etc.
+        normalized_tc = tc / (tc_scalar / 10.0)
+
+        base_edge    = -0.0043                          # House edge 8-deck S17
+        tc_advantage = normalized_tc * 0.005            # Each +1 normalized TC ≈ +0.5%
         return base_edge + tc_advantage
 
     @property
@@ -287,20 +344,25 @@ class CardCounter:
         return self.advantage > 0
 
     def should_take_insurance(self) -> bool:
-        """Insurance is +EV at true count >= +3."""
-        return self.true_count >= CountingConfig.INSURANCE_THRESHOLD
+        """Insurance is +EV at effective true count >= +3.
+        Uses effective_tc so KO gives correct results (IRC-adjusted)."""
+        return self.effective_tc >= CountingConfig.INSURANCE_THRESHOLD
 
     def should_wong_in(self) -> bool:
-        return self.true_count >= CountingConfig.WONGING_ENTER_TC
+        """Uses effective_tc so KO wonging thresholds work correctly."""
+        return self.effective_tc >= CountingConfig.WONGING_ENTER_TC
 
     def should_wong_out(self) -> bool:
-        return self.true_count < CountingConfig.WONGING_EXIT_TC
+        """Uses effective_tc so KO wonging thresholds work correctly."""
+        return self.effective_tc < CountingConfig.WONGING_EXIT_TC
 
     def reset(self):
-        """Reset for a new shoe."""
-        self.running_count = 0
+        """Reset for a new shoe.
+        FIX C3: KO resets to IRC (Initial Running Count), not 0.
+        Balanced systems reset to 0 as before."""
+        self.running_count = self._ko_irc  # 0 for balanced systems, IRC for KO
         self.cards_seen = 0
-        self.count_history = []
+        self.count_history = deque(maxlen=_MAX_HISTORY)
         self._card_log = []
         self.aces_seen = 0
         self.tens_seen = 0

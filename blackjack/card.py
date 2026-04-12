@@ -249,7 +249,10 @@ class Shoe:
 
     @property
     def decks_remaining(self) -> float:
-        return self.cards_remaining / 52.0
+        """FIX M8: Floor at 0.25 to match CardCounter.decks_remaining.
+        Without this, the UI shows a different value than what TC is computed with
+        when the shoe is nearly empty, causing a visible display mismatch."""
+        return max(self.cards_remaining / 52.0, 0.25)
 
     @property
     def penetration_pct(self) -> float:

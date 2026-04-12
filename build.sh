@@ -41,9 +41,10 @@ build() {
               SideBetPanel HandDisplay CardGrid StrategyRefTable \
               ShoePanel EdgeMeter SessionStats ShuffleTracker \
               CountHistory I18Panel AnalyticsPanel LiveOverlayPanel CenterToolBar \
+              DealOrderEngine \
               SplitHandPanel SideCountPanel CasinoRiskMeter StopAlerts \
               SeenCardsPanel ZoneConfigPanel ConfirmationPanel WongPanel \
-              AccordionPanel App; do
+              AccordionPanel BettingRampPanel App; do
       echo "/* ── $f ── */"
       cat "$OUT_DIR/$f.js"
       echo ""
@@ -101,7 +102,8 @@ PYEOF
     'function CardGrid(' \
     'function LiveOverlayPanel(' \
     'function CompDepAlert(' \
-    'function AnalyticsPanel('; do
+    'function AnalyticsPanel(' \
+    'var BettingRampPanel'; do
     if ! grep -q "$global" "$BUNDLE_MIN"; then
       echo "  MISSING: $global"
       SMOKE_FAIL=1

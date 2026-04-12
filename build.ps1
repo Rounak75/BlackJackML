@@ -69,7 +69,7 @@ $loadOrder = @(
     "DealOrderEngine",
     "SplitHandPanel","SideCountPanel","CasinoRiskMeter","StopAlerts",
     "SeenCardsPanel","ZoneConfigPanel","ConfirmationPanel","WongPanel",
-    "AccordionPanel","DebugLayer","App"
+    "AccordionPanel","BettingRampPanel","DebugLayer","App"
 )
 
 $timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
@@ -127,6 +127,7 @@ $requiredGlobals = @(
     "function LiveOverlayPanel(",
     "function CompDepAlert(",
     "function AnalyticsPanel(",
+    "BettingRampPanel",
     "DealOrderEngine",
     "function SeenCardsPanel(",
     "function ZoneConfigPanel(",

@@ -1994,3 +1994,256 @@ body {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+
+/* ══════════════════════════════════════════════════════════
+   BETTING RAMP PANEL  (BettingRampPanel.js)
+   ══════════════════════════════════════════════════════════ */
+
+.brp-wrap {
+  padding: 0;
+  overflow: hidden;
+}
+
+.brp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 10px;
+  cursor: pointer;
+  user-select: none;
+  border-radius: var(--radius);
+}
+.brp-header:hover { background: rgba(255,255,255,0.02); }
+
+.brp-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.brp-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.63rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-1);
+}
+.brp-sys {
+  font-size: 0.55rem;
+  background: rgba(255,212,71,0.12);
+  border: 1px solid rgba(255,212,71,0.3);
+  color: #ffd447;
+  border-radius: 4px;
+  padding: 1px 5px;
+  letter-spacing: 0.05em;
+}
+.brp-ko-warn {
+  font-size: 0.55rem;
+  color: var(--amber);
+  font-weight: 700;
+}
+.brp-toggle {
+  font-size: 0.6rem;
+  color: var(--text-3);
+  transition: transform 0.15s;
+}
+
+/* Compact signal row */
+.brp-compact-signal {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.brp-sig-tc {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.63rem;
+  color: var(--text-2);
+}
+.brp-sig-chip {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  font-weight: 700;
+  border-radius: 4px;
+  padding: 2px 7px;
+  letter-spacing: 0.05em;
+}
+
+/* Body */
+.brp-body {
+  padding: 4px 10px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.brp-ko-note {
+  font-size: 0.58rem;
+  color: var(--amber);
+  background: rgba(255,170,0,0.07);
+  border: 1px solid rgba(255,170,0,0.25);
+  border-radius: 4px;
+  padding: 5px 8px;
+  margin-bottom: 7px;
+  line-height: 1.4;
+}
+
+/* Controls bar */
+.brp-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.brp-ctrl-label {
+  font-size: 0.55rem;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-right: 2px;
+}
+.brp-preset {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.55rem;
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.brp-preset:hover { border-color: var(--amber); color: var(--amber); }
+.brp-preset.active {
+  background: rgba(255,212,71,0.12);
+  border-color: rgba(255,212,71,0.5);
+  color: #ffd447;
+}
+.brp-unit-input {
+  width: 64px;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.6rem;
+  padding: 2px 5px;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-1);
+  text-align: right;
+}
+.brp-unit-input:focus {
+  outline: none;
+  border-color: rgba(255,212,71,0.4);
+}
+
+/* Table */
+.brp-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.62rem;
+}
+.brp-th {
+  color: var(--text-3);
+  font-size: 0.53rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 3px 4px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+}
+.brp-row {
+  transition: background 0.1s;
+}
+.brp-row:hover { background: rgba(255,255,255,0.02); }
+.brp-row.brp-active {
+  background: rgba(255,212,71,0.07);
+  border-left: 3px solid #ffd447;
+}
+.brp-td {
+  padding: 4px 4px;
+  vertical-align: middle;
+}
+.brp-tc   { color: var(--text-2); font-weight: 600; }
+.brp-units { font-weight: 700; }
+.brp-dollars { font-weight: 600; }
+
+/* Signal colour classes (shared with DealOrderEngine) */
+.rp-neg  { color: var(--ruby);  }
+.rp-min  { color: var(--text-2); }
+.rp-lo   { color: var(--sapph); }
+.rp-mid  { color: #ffd447; }
+.rp-hi   { color: #ff9d00; }
+.rp-hot  { color: var(--jade);  }
+.rp-max  { color: var(--jade);  font-weight: 800; }
+
+.brp-tag {
+  font-size: 0.52rem;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.04);
+}
+
+/* Live footer */
+.brp-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 5px 8px;
+  background: rgba(255,212,71,0.05);
+  border: 1px solid rgba(255,212,71,0.15);
+  border-radius: 5px;
+}
+.brp-live-label {
+  font-size: 0.52rem;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.brp-live-tc {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--text-2);
+}
+.brp-live-bet {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  margin-left: auto;
+}
+
+
+/* ══════════════════════════════════════════════════════════
+   U1 — Deal Engine Active Banner  (HandDisplay.js)
+   ══════════════════════════════════════════════════════════ */
+
+.hd-engine-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  background: rgba(255,212,71,0.06);
+  border: 1px solid rgba(255,212,71,0.25);
+  border-radius: 6px;
+}
+.hd-engine-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #ffd447;
+  background: rgba(255,212,71,0.12);
+  border: 1px solid rgba(255,212,71,0.4);
+  border-radius: 4px;
+  padding: 2px 6px;
+  flex-shrink: 0;
+}
+.hd-engine-text {
+  font-size: 0.6rem;
+  color: var(--text-2);
+  line-height: 1.35;
+}
+.hd-engine-text strong {
+  color: var(--text-1);
+}

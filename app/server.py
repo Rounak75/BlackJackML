@@ -79,7 +79,7 @@ from blackjack.strategy import BasicStrategy
 from blackjack.deviations import DeviationEngine
 from blackjack.betting import BettingEngine
 from blackjack.side_bets import SideBetAnalyzer
-from blackjack.game import Hand, Action
+from blackjack.game import Hand, Action, HandResult
 try:
     from ml_model.shuffle_tracker import ShuffleTracker
     from ml_model.model import BlackjackDecisionModel
@@ -204,16 +204,23 @@ class _CountKey:
     Used by handle_change_system to re-run every seen card through a new system's
     tag values without needing real Card objects.
 
-    Previously defined as an inner class '_FakeCard' inside handle_change_system,
-    which re-created the class object on every call to that handler. Moved to
-    module level with __slots__ for clarity, correct naming, and minor efficiency.
+    FIX M14: The comment on is_ten was misleading — it said "10, J, Q, K all have
+    count_key=10" which is correct, but this was easy to confuse with (key == 10)
+    being wrong for J/Q/K.  It is NOT wrong: Card.count_key returns Rank.count_value
+    which already maps J=10, Q=10, K=10.  The _card_log stores count_key values,
+    so replays via _CountKey see key=10 for all ten-value cards.  The side count
+    (tens_seen) is therefore correctly replayed.
+
+    The genuine bug was that count_history[:hist_len] slicing on a deque works
+    differently — see reset() fix in counting.py.
     """
     __slots__ = ('count_key', 'is_ace', 'is_ten')
 
     def __init__(self, key: int):
         self.count_key = key
         self.is_ace    = (key == 11)
-        self.is_ten    = (key == 10)   # 10-value cards: 10, J, Q, K all have count_key=10
+        # key==10 correctly covers 10, J, Q, K — all stored as count_key=10 in _card_log
+        self.is_ten    = (key == 10)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -334,10 +341,14 @@ class GameSession:
         # Restored by handle_undo_hand so replay cards count from the
         # correct baseline instead of stacking on the already-counted hand.
         'hand_start_counter_snapshot',
+        # FIX M3: per-session lock — replaces the single global _session_lock
+        # that serialized ALL sessions through one mutex.  Now each tab only
+        # blocks itself, allowing N concurrent players with no contention.
+        'lock',
     )
     def __init__(self):
         self.shoe                        = Shoe(game_config.NUM_DECKS, game_config.PENETRATION)
-        self.counter                     = CardCounter(CountingConfig.DEFAULT_SYSTEM, game_config.NUM_DECKS)
+        self.counter                     = CardCounter(CountingConfig.DEFAULT_SYSTEM, game_config.NUM_DECKS, game_config.BURN_CARDS)
         self.betting_engine              = BettingEngine()
         self.shuffle_tracker             = ShuffleTracker(game_config.NUM_DECKS)
         self.player_hand                 = Hand()
@@ -348,8 +359,10 @@ class GameSession:
         self.session_history             = []
         self.seen_cards_this_hand        = []
         self.hand_start_counter_snapshot = None   # set by handle_new_hand
+        self.lock                        = _threading.Lock()  # FIX M3
+
 sessions = {}   # sid -> GameSession
-_session_lock = _threading.Lock()
+_session_lock = _threading.Lock()  # kept as fallback for sessions not yet in dict
 def _load_session_globals():
     """Copy session state into module globals so helper functions work unchanged."""
     global shoe, counter, betting_engine, shuffle_tracker
@@ -390,11 +403,20 @@ def _save_session_globals():
     s.hand_start_counter_snapshot    = _hand_start_counter_snapshot
 def with_session(fn):
     """Decorator: load session state before handler, save after.
-    Uses a lock so concurrent handlers from different sessions
-    don't clobber each other's module globals."""
+
+    FIX M3: Uses a per-session lock (s.lock) instead of the single global
+    _session_lock.  This allows concurrent WebSocket handlers from different
+    browser tabs to run in parallel — previously every tab blocked every other
+    tab through the one shared mutex, serializing all sessions.
+
+    Falls back to the global _session_lock if the session hasn't been created
+    yet (connect handler window) so there's no race on sessions dict access.
+    """
     @_functools.wraps(fn)
     def _wrapper(*args, **kwargs):
-        with _session_lock:
+        s = sessions.get(request.sid)
+        lock = s.lock if s is not None else _session_lock
+        with lock:
             _load_session_globals()
             try:
                 return fn(*args, **kwargs)
@@ -476,6 +498,11 @@ def _process_card_entry(card: Card, target: str, suit_str: str):
     # Always count every card that comes out of the shoe
     counter.count_card(card)
 
+    # D2: Cross-validate running_count against _card_log sum after every card.
+    # Any mismatch = double-count or missed-count bug — shows in debug panel.
+    if _DBG:
+        debug_logger.validate_count(counter)
+
     # Update ML shuffle tracker
     shuffle_tracker.observe_card(card.count_key, card.is_ace, SUIT_IDX.get(suit_str, 0))
 
@@ -494,13 +521,20 @@ def _process_card_entry(card: Card, target: str, suit_str: str):
                 # All split hands are complete - refuse further player cards until player clicks "New Hand"
                 _safe_emit('notification', {
                     'type': 'warning',
-                    'message': ( 
+                    'message': (
                         f'All split hands are complete. Please click "New Hand" (N) to start the next round.'
                     )
                 })
+                return  # FIX C2: guard was missing — previously fell through to index crash
             split_hands[active_hand_index].add_card(card)
             # Mirror active hand into current_player_hand for display/compat
             current_player_hand = split_hands[active_hand_index]
+            # D1: log card dealt to specific split hand
+            if _DBG:
+                debug_logger.log_split_event('card_dealt',
+                    hand_idx=active_hand_index,
+                    card=str(card),
+                    total=current_player_hand.best_value)
 
             # FIX: Auto-advance when active split hand busts.
             # Previously the "Done" button in SplitHandPanel.js was hidden on bust
@@ -509,13 +543,21 @@ def _process_card_entry(card: Card, target: str, suit_str: str):
             if current_player_hand.is_bust:
                 next_idx = active_hand_index + 1
                 if next_idx < len(split_hands):
+                    busted_idx = active_hand_index
                     active_hand_index = next_idx
                     current_player_hand = split_hands[active_hand_index]
-                    # Notify client of the auto-advance
+                    # D1: log bust auto-advance — this is the event most likely
+                    # to be missed in manual play and hardest to debug visually
+                    if _DBG:
+                        debug_logger.log_split_event('bust_advance',
+                            busted_idx=busted_idx,
+                            next_idx=active_hand_index,
+                            total=len(split_hands))
+                    # Notify client of the auto-advance (1-indexed for display)
                     _safe_emit('notification', {
                         'type': 'warning',
                         'message': (
-                            f'Hand {active_hand_index} busted — '
+                            f'Hand {busted_idx + 1} busted — '
                             f'auto-advancing to Hand {active_hand_index + 1}'
                         )
                     })
@@ -715,7 +757,7 @@ def _get_casino_risk() -> dict:
         signals.append(f'Spread {spread:.0f}:1 — mild')
 
     # ── Signal 2: Bet-TC correlation (last 20 hands) ─────────────────────
-    tc_history   = counter.count_history[-20:]
+    tc_history   = list(counter.count_history)[-20:]
     recent_bets  = bets[-len(tc_history):]
     if len(tc_history) >= 10:
         high_tc_big_bet = sum(
@@ -989,9 +1031,13 @@ def get_full_state():
         "count": {
             "running":            counter.running_count,
             "true":               round(tc, 2),
+            # effective_true: IRC-adjusted for KO (equals true for balanced systems).
+            # Use this for all EV decisions: EdgeMeter, BettingRamp, insurance, wonging.
+            "effective_true":     round(counter.effective_tc, 2),
             "enhanced_true":      round(enhanced_tc, 2),
             "shuffle_adjustment": round(shuffle_tracker.get_count_adjustment(), 2),
             "system":             counter.system_name,
+            "is_ko":              counter.system_name == "ko",
             "advantage":          round(counter.advantage * 100, 2),
             "is_favorable":       counter.is_favorable,
             "penetration":        round(counter.penetration * 100, 1),
@@ -1016,7 +1062,7 @@ def get_full_state():
         "dealer_upcard":     str(current_dealer_hand.cards[0]) if current_dealer_hand.cards else None,
         # dealer_hand: full dealer hand including all hit cards
         "dealer_hand":       _build_dealer_data(),
-        "count_history":     counter.count_history[-60:],
+        "count_history":     list(counter.count_history)[-60:],
         "side_counts":       counter.get_side_count_state(),
         "casino_risk":       _get_casino_risk(),
         "split_hands":       _build_split_data(dealer_upcard_card, tc),
@@ -1145,6 +1191,15 @@ def handle_deal_card(data):
         # Delegate to shared helper — identical logic to _apply_card path
         _process_card_entry(card, target, suit_str)
 
+        # D3: Trace deal order so out-of-sequence cards are immediately visible.
+        if _DBG:
+            debug_logger.log_deal_order(
+                target     = target,
+                deal_round = len(current_player_hand.cards) - 1 if current_player_hand.cards else 0,
+                deal_pos   = 0 if target == TARGET_PLAYER else (1 if target == TARGET_DEALER else 2),
+                card_str   = str(card),
+            )
+
         _safe_emit('state_update', get_full_state())
 
         # Notify player when cut card is reached
@@ -1159,6 +1214,111 @@ def handle_deal_card(data):
         print(f'[ERROR] handle_deal_card crashed: {e}')
         traceback.print_exc()
         emit('error', {'message': f'Server error processing card: {str(e)}'})
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FIX C1: Player action handlers — Double, Surrender, Insurance
+# Previously absent — these actions were recommended by the strategy engine
+# but had no socket listener, so they silently did nothing.
+# ══════════════════════════════════════════════════════════════════════════════
+
+@socketio.on('player_double')
+@with_session
+@debug_timed('player_double')
+def handle_player_double(data=None):
+    """Player doubles down: bet doubled, exactly one card dealt."""
+    global current_player_hand
+
+    if not current_player_hand.can_double:
+        emit('error', {'message': 'Cannot double: hand conditions not met'})
+        return
+
+    if current_player_hand.is_split and not game_config.ALLOW_DOUBLE_AFTER_SPLIT:
+        emit('error', {'message': 'Casino rules: no double after split'})
+        return
+
+    # Double the bet and mark the hand
+    current_player_hand.bet *= 2
+    current_player_hand.is_doubled = True
+
+    # Deal one card and count it immediately
+    card = shoe.deal()
+    if card is None:
+        emit('error', {'message': 'Shoe empty — shuffle required'})
+        return
+
+    current_player_hand.add_card(card)
+    counter.count_card(card)
+    shuffle_tracker.observe_card(card.count_key, card.is_ace, 0)
+
+    _safe_emit('state_update', get_full_state())
+    emit('notification', {
+        'type': 'info',
+        'message': f'Doubled — dealt {card}. Hand total: {current_player_hand.best_value}'
+    })
+
+
+@socketio.on('player_surrender')
+@with_session
+@debug_timed('player_surrender')
+def handle_player_surrender(data=None):
+    """Late surrender: forfeit half the bet, end the hand."""
+    global current_player_hand
+
+    if not game_config.ALLOW_LATE_SURRENDER:
+        emit('error', {'message': 'Surrender not allowed at this table'})
+        return
+    if len(current_player_hand.cards) != 2:
+        emit('error', {'message': 'Surrender only allowed on initial 2-card hand'})
+        return
+    if current_player_hand.is_split:
+        emit('error', {'message': 'Surrender not allowed on split hands'})
+        return
+
+    current_player_hand.is_surrendered = True
+    current_player_hand.result = HandResult.SURRENDER
+
+    refund = current_player_hand.bet / 2
+    _safe_emit('state_update', get_full_state())
+    emit('notification', {
+        'type': 'info',
+        'message': f'Surrendered — half bet ({refund:.2f}) returned. Click N for new hand.'
+    })
+
+
+@socketio.on('player_insurance')
+@with_session
+@debug_timed('player_insurance')
+def handle_player_insurance(data=None):
+    """Insurance side bet — half the main bet, pays 2:1 if dealer has blackjack."""
+    global current_player_hand
+
+    dealer_upcard_card = (
+        current_dealer_hand.cards[0] if current_dealer_hand.cards else None
+    )
+    if dealer_upcard_card is None or not dealer_upcard_card.is_ace:
+        emit('error', {'message': 'Insurance only when dealer shows an Ace'})
+        return
+    if current_player_hand.is_insured:
+        emit('notification', {'type': 'warning', 'message': 'Insurance already taken'})
+        return
+
+    current_player_hand.is_insured = True
+    current_player_hand.insurance_bet = current_player_hand.bet / 2
+
+    tc = counter.true_count
+    recommended = tc >= 3.0
+    _safe_emit('state_update', get_full_state())
+    emit('notification', {
+        'type': 'info' if recommended else 'warning',
+        'message': (
+            f'Insurance taken ({current_player_hand.insurance_bet:.2f}). '
+            f'TC={tc:.1f} — '
+            f'{"mathematically correct (+EV)" if recommended else "negative EV at this count"}.'
+        )
+    })
+
+
 
 
 @socketio.on('player_split')
@@ -1192,9 +1352,12 @@ def handle_player_split(data=None):
         emit('error', {'message': f'Max splits ({game_config.MAX_SPLITS-1}) reached'})
         return
 
-    # Each split hand starts with one card from the original pair
-    hand_a = Hand()
-    hand_b = Hand()
+    # Each split hand starts with one card from the original pair.
+    # FIX C4: carry the original bet into both split hands — previously Hand()
+    # defaulted to bet=0, causing every server-side payout to be $0.
+    original_bet = current_player_hand.bet
+    hand_a = Hand(bet=original_bet)
+    hand_b = Hand(bet=original_bet)
     hand_a.is_split = True
     hand_b.is_split = True
     # If splitting aces, mark both hands so is_split_ace_hand is reliable
@@ -1208,6 +1371,16 @@ def handle_player_split(data=None):
     active_hand_index  = 0
     num_splits_done   += 1
     current_player_hand = hand_a   # keep current_player_hand pointing to active
+
+    # D1: Log split creation event for lifecycle tracing
+    if _DBG:
+        debug_logger.log_split_event(
+            'created',
+            num_hands    = 2,
+            bet          = original_bet,
+            is_ace_split = hand_a.split_from_ace,
+            splits_done  = num_splits_done,
+        )
 
     _safe_emit('state_update', get_full_state())
     emit('notification', {
@@ -1231,20 +1404,29 @@ def handle_next_split_hand(data=None):
 
     next_idx = active_hand_index + 1
     if next_idx >= len(split_hands):
-        # FIX : Advance index PAST all hands so no hands stays marked active.
-        # Previouly this returned early without updating state, leaving the
-        # last hand stuck as "active" with a non-functional Done button.
+        # Advance index PAST all hands so no hand stays marked active.
+        prev_idx = active_hand_index
         active_hand_index = len(split_hands)
+        # D1: log split completion
+        if _DBG:
+            debug_logger.log_split_event('completed',
+                num_hands=len(split_hands), last_idx=prev_idx)
         _safe_emit('state_update', get_full_state())
         emit('notification', {
             'type': 'info',
             'message': 'All split hands are complete - click N for new hand.'
         })
-
         return
 
+    prev_idx = active_hand_index
     active_hand_index   = next_idx
     current_player_hand = split_hands[active_hand_index]
+
+    # D1: log hand advance
+    if _DBG:
+        debug_logger.log_split_event('hand_advanced',
+            from_idx=prev_idx, to_idx=active_hand_index,
+            total=len(split_hands))
 
     _safe_emit('state_update', get_full_state())
     emit('notification', {
@@ -1355,6 +1537,9 @@ def handle_new_hand(data=None):
         # Without this, replayed cards get double-removed from the shoe.
         'shoe_cards':       list(shoe.cards),
         'shoe_dealt':       list(shoe.dealt),
+        # FIX M16: include burned pile so undo restores full shoe state.
+        # Previously shoe.burned was stale after undo — minor tracking inaccuracy.
+        'shoe_burned':      list(shoe.burned),
     }
     _reset_hand_state()
     # counter and shoe are intentionally NOT touched here
@@ -1395,12 +1580,16 @@ def handle_undo_hand(data=None):
         # The per-card entries beyond this point belong to the hand being undone.
         hist_len = snap['count_history_len']
         if len(counter.count_history) > hist_len:
-            counter.count_history = counter.count_history[:hist_len]
+            # Trim deque to snapshot length (deque has no slice support)
+            _hist = list(counter.count_history)[:hist_len]
+            from collections import deque as _deque
+            counter.count_history = _deque(_hist, maxlen=500)
         # Restore shoe state so replayed cards don't get double-removed.
         # Without this, shoe.remaining_by_rank goes negative and display corrupts.
         if 'shoe_cards' in snap:
-            shoe.cards = list(snap['shoe_cards'])
-            shoe.dealt = list(snap['shoe_dealt'])
+            shoe.cards  = list(snap['shoe_cards'])
+            shoe.dealt  = list(snap['shoe_dealt'])
+            shoe.burned = list(snap.get('shoe_burned', shoe.burned))  # FIX M16
     else:
         # No snapshot: first hand of the session — counter should already be at
         # zero, but reset explicitly for safety. Replayed cards rebuild from zero.
@@ -1460,8 +1649,10 @@ def handle_change_system(data):
         # Save the rank-key log from the old counter so we can replay it
         old_log = list(counter._card_log)
 
-        # Create a fresh counter with the new system
-        counter = CardCounter(system, game_config.NUM_DECKS)
+        # Create a fresh counter with the new system.
+        # FIX M4: pass burn_cards so _total_cards is correct after switch.
+        # Previously missing, causing a systematic TC error if BURN_CARDS != 1.
+        counter = CardCounter(system, game_config.NUM_DECKS, game_config.BURN_CARDS)
 
         # Replay every card seen so far through the new system's tag values.
         # Uses module-level _CountKey instead of a re-created inner class.

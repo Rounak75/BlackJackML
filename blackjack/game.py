@@ -224,19 +224,25 @@ class Round:
         self.cards_dealt_this_round: List[Card] = []
 
     def deal_initial(self) -> Tuple[List[Card], Card]:
-        """Deal initial cards: 2 to player, 2 to dealer (one face down)."""
+        """Deal initial cards in correct casino order: P → D → P → D.
+
+        FIX M6: The previous implementation dealt PP then DD (two loops).
+        Real blackjack alternates: one card to each position per round.
+        Correct order matters for shuffle tracking (card position in shoe)
+        and any ML model that models positional card dependency.
+        """
         dealt = []
         for _ in range(2):
-            card = self.shoe.deal()
-            self.player_hands[0].add_card(card)
-            dealt.append(card)
-            self.cards_dealt_this_round.append(card)
-
-        for _ in range(2):
-            card = self.shoe.deal()
-            self.dealer_hand.add_card(card)
-            dealt.append(card)
-            self.cards_dealt_this_round.append(card)
+            # Player card
+            p_card = self.shoe.deal()
+            self.player_hands[0].add_card(p_card)
+            dealt.append(p_card)
+            self.cards_dealt_this_round.append(p_card)
+            # Dealer card (second dealer card is the hole card)
+            d_card = self.shoe.deal()
+            self.dealer_hand.add_card(d_card)
+            dealt.append(d_card)
+            self.cards_dealt_this_round.append(d_card)
 
         dealer_upcard = self.dealer_hand.cards[0]
         return dealt, dealer_upcard

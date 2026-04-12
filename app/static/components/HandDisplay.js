@@ -110,34 +110,20 @@ function HandDisplay({
         flexDirection: 'column',
         gap: 0,
         position: 'relative',
-        opacity: dealEngineActive ? 0.6 : 1,
-        transition: 'opacity 0.2s, border-color 0.2s',
+        transition: 'border-color 0.2s',
       }}
     >
-      {/* ── Deal Engine isolation overlay ──────────────────────────── */}
+      {/* FIX U1 — Deal Engine banner: replaces blurry absolute overlay.
+           Clear inline banner explains why the display is empty. */}
       {dealEngineActive && (
-        <div style={{
-          position: 'absolute', inset: 0, zIndex: 2,
-          borderRadius: 11,
-          background: 'rgba(10,14,24,0.55)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          backdropFilter: 'blur(1px)',
-          pointerEvents: 'none',
-        }}>
-          <div style={{
-            background: 'rgba(255,212,71,0.10)',
-            border: '1.5px solid rgba(255,212,71,0.45)',
-            borderRadius: 10,
-            padding: '8px 16px',
-            textAlign: 'center',
-          }}>
-            <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#ffd447', letterSpacing: '0.07em', textTransform: 'uppercase' }}>
-              🎯 Deal Engine Active
-            </div>
-            <div style={{ fontSize: '0.58rem', color: '#b8ccdf', marginTop: 3 }}>
-              Hands isolated · Press <kbd style={{ background: '#212d45', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 3, padding: '0 3px', color: '#ffd447', fontFamily: 'monospace' }}>E</kbd> for Manual mode
-            </div>
-          </div>
+        <div className="hd-engine-banner">
+          <span className="hd-engine-badge">🎯 DEAL ENGINE</span>
+          <span className="hd-engine-text">
+            <strong>Hand display disabled</strong> — cards tracked per seat above.
+            Press{' '}
+            <kbd style={{ background: '#212d45', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 3, padding: '1px 4px', color: '#ffd447', fontFamily: 'monospace', fontSize: '0.75em' }}>E</kbd>
+            {' '}to switch to Manual mode.
+          </span>
         </div>
       )}
 

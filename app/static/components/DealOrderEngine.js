@@ -153,10 +153,17 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
     return { label: 'Low', cls: 'b' };
   }
 
-  /** Info visibility: % of round cards visible before my decision */
+  /** Info visibility: % of round cards visible before my decision (2nd card).
+   *  FIX M9: The previous formula used (numP + seat) for cardsBeforeMe.
+   *  Correct derivation:
+   *    Round 1: numP cards dealt before player sees their 2nd card (all of round 1)
+   *    Round 2: (seat - 1) cards dealt before player's 2nd card (seats 1..seat-1 ahead of me)
+   *    Total cards before my 2nd card = numP + (seat - 1)
+   *  Old formula overcounted by 1 for every seat (added seat not seat-1).
+   */
   function getInfoVisibility(seat, numP) {
-    var cardsBeforeMe = numP + seat;
-    var totalRoundCards = numP * 2 + 1;
+    var cardsBeforeMe = numP + (seat - 1);          // FIX M9: was numP + seat
+    var totalRoundCards = numP * 2 + 1;             // N player cards × 2 rounds + 1 dealer upcard
     return Math.round((cardsBeforeMe / totalRoundCards) * 100);
   }
 
@@ -453,9 +460,15 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
 
   var serverRC = count ? count.running : 0;
   var serverTC = count ? count.true : 0;
+  // Use effective_true (IRC-adjusted) for all EV decisions — correct for KO
+  var serverEffTC = count ? (count.effective_true !== undefined ? count.effective_true : count.true) : 0;
+  var isKO = count ? count.is_ko : false;
   var decisionCount = countAtMyDecision !== null ? countAtMyDecision : serverRC;
   var decksLeft = shoe ? parseFloat(shoe.decks_remaining) : 6.0;
-  var decisionTC = decksLeft > 0 ? (decisionCount / decksLeft).toFixed(1) : '0.0';
+  // For KO: effective TC = (RC - IRC) / decks; we use serverEffTC directly when no snapshot
+  var decisionTC = countAtMyDecision !== null
+    ? (decksLeft > 0 ? parseFloat((decisionCount / decksLeft).toFixed(1)) : 0)
+    : serverEffTC;
   var mySeatIdx = mySeat - 1;
   var posEdge = getPositionEdge(mySeat, players);
   var infoVis = getInfoVisibility(mySeat, players);
@@ -463,21 +476,28 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
   var myCards = seatCards[mySeatIdx] || [];
   var totalCardsDealt = cardLog.length;
 
-  // Count class for decision count colour
-  var dcCls = decisionCount >= 3 ? 'g' : decisionCount < 0 ? 'b' : 'a';
+  // FIX U5: Bet signals must use TRUE COUNT (decisionTC), not the raw running count.
+  // RC-based thresholds are only meaningful at exactly 1 deck remaining.
+  // At 6 decks remaining, RC=+5 is only TC≈+0.8 — a neutral count.
+  // Using TC as the signal gives consistent, deck-adjusted recommendations.
+  // Thresholds: TC≥+2 = bet up, TC≥+3 = big bet, TC≥+4 = max bet (Hi-Lo equivalents).
+  var betTC = decisionTC; // true count at decision point
 
-  // Bet recommendation
+  // Count class for decision count colour — use TC for colouring too
+  var dcCls = betTC >= 2 ? 'g' : betTC < 0 ? 'b' : 'a';
+
+  // Bet recommendation based on True Count
   var recText, recClass;
-  if (decisionCount >= 5) {
-    recClass = 'de-rec-hot'; recText = '\uD83D\uDD25 MAX BET \u2014 Count ' + (decisionCount >= 0 ? '+' : '') + decisionCount;
-  } else if (decisionCount >= 3) {
-    recClass = 'de-rec-big'; recText = 'BET BIG \u2014 Strong count advantage';
-  } else if (decisionCount >= 1) {
-    recClass = 'de-rec-mid'; recText = 'Slight edge \u2014 moderate bet';
-  } else if (decisionCount === 0) {
+  if (betTC >= 4) {
+    recClass = 'de-rec-hot'; recText = '\uD83D\uDD25 MAX BET \u2014 TC ' + (betTC >= 0 ? '+' : '') + betTC.toFixed(1);
+  } else if (betTC >= 3) {
+    recClass = 'de-rec-big'; recText = 'BET BIG \u2014 TC ' + (betTC >= 0 ? '+' : '') + betTC.toFixed(1) + ' strong advantage';
+  } else if (betTC >= 1) {
+    recClass = 'de-rec-mid'; recText = 'Slight edge \u2014 TC ' + (betTC >= 0 ? '+' : '') + betTC.toFixed(1) + ' moderate bet';
+  } else if (betTC === 0) {
     recClass = 'de-rec-mid'; recText = 'Neutral \u2014 minimum bet';
   } else {
-    recClass = 'de-rec-small'; recText = 'House advantage \u2014 sit out or min';
+    recClass = 'de-rec-small'; recText = 'House advantage (TC ' + betTC.toFixed(1) + ') \u2014 sit out or min';
   }
 
   // Add hand hint to rec
@@ -486,12 +506,12 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
     recText += ' \u00B7 My hand: ' + handLabels;
   }
 
-  // Short bet signal for compact mode
+  // Short bet signal for compact mode (TC-based)
   var betSignalText, betSignalCls;
-  if (decisionCount >= 5) { betSignalText = 'MAX'; betSignalCls = 'de-sig-hot'; }
-  else if (decisionCount >= 3) { betSignalText = 'BIG'; betSignalCls = 'de-sig-big'; }
-  else if (decisionCount >= 1) { betSignalText = 'UP'; betSignalCls = 'de-sig-mid'; }
-  else if (decisionCount === 0) { betSignalText = 'MIN'; betSignalCls = 'de-sig-neu'; }
+  if (betTC >= 4) { betSignalText = 'MAX'; betSignalCls = 'de-sig-hot'; }
+  else if (betTC >= 3) { betSignalText = 'BIG'; betSignalCls = 'de-sig-big'; }
+  else if (betTC >= 1) { betSignalText = 'UP'; betSignalCls = 'de-sig-mid'; }
+  else if (betTC >= 0) { betSignalText = 'MIN'; betSignalCls = 'de-sig-neu'; }
   else { betSignalText = 'OUT'; betSignalCls = 'de-sig-neg'; }
 
   // ══════════════════════════════════════════════════════════════

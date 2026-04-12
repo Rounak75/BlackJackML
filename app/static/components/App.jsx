@@ -282,13 +282,18 @@ function App() {
       }
     }
 
-    // Server replay (cards re-emitted so server hand rebuilds)
-    // In deal_engine mode, replay as 'seen' (count only) — not into hands
+    // Server replay — re-emit each card to rebuild server hand state.
+    // FIX M5: In deal engine mode the original undo routed ALL replay cards as
+    // 'seen', which correctly updated the count but left current_player_hand and
+    // current_dealer_hand empty — the hand display showed nothing after undo.
+    // Fix: replay cards with their ORIGINAL targets so both count AND hand state
+    // are rebuilt correctly on the server.  The deal engine seat tracker is synced
+    // separately via replayCards() above.
     replay.forEach((c, i) => {
       setTimeout(() => {
         undoStack.current.push(c)
-        const replayTarget = dealOrderEnabled ? 'seen' : c.target
-        socketRef.current?.emit('deal_card', { rank: c.rank, suit: c.suit, target: replayTarget })
+        // Always use the original target so the server hand rebuilds correctly.
+        socketRef.current?.emit('deal_card', { rank: c.rank, suit: c.suit, target: c.target })
       }, 80 * i + 120)
     })
 
@@ -444,6 +449,13 @@ function App() {
           />
 
           {/* Basic Strategy Grid — moved here from right column for easier access */}
+          {/* True Count Betting Ramp — TC→units→$ table, highlights current TC row */}
+          <BettingRampPanel
+            count={count}
+            betting={betting}
+            currency={currency}
+          />
+
           <StrategyRefTable playerHand={playerHand} dealerUpcard={dealerUp} />
 
           {/* Ace & Ten Side Counts — moved here from right column */}
