@@ -52,9 +52,9 @@ build-src/out/
 
 # ── Debug & Test Templates ─────────────────────────────────────────────────────
 # diagnostic page — exposes internal server state
-app/templates/diag.html
+#app/templates/diag.html
 # test harness — not for production
-app/templates/test.html
+#app/templates/test.html
 
 # live scan region coordinates — different on each machine
 overlay_settings.json

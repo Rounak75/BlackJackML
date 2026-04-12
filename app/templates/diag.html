@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>BlackjackML — Diagnostics</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body { background: #0a0e18; color: #f0f4ff; font-family: monospace; padding: 20px; }
+    .ok  { color: #44e882; }
+    .err { color: #ff5c5c; font-weight: bold; font-size: 1.2em; }
+    #log { max-height: 80vh; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <h2 style="color:#ffd447">BlackjackML — Loading Diagnostics</h2>
+  <div id="log"></div>
+
+  <script>
+    window._diag = {
+      log: function(msg, ok) {
+        var d = document.getElementById('log');
+        var p = document.createElement('p');
+        p.className = ok ? 'ok' : 'err';
+        p.textContent = (ok ? '✅ ' : '❌ ') + msg;
+        d.appendChild(p);
+        console.log((ok ? '[OK] ' : '[ERR] ') + msg);
+      },
+      loaded: 0
+    };
+    window.onerror = function(msg, src, line, col, err) {
+      _diag.log('JS ERROR: ' + msg + ' at ' + src + ':' + line, false);
+    };
+  </script>
+
+  <!-- Load each component and log result -->
+  <script type="text/babel" src="/static/components/constants.js"></script>
+  <script type="text/babel">_diag.log('constants.js', true);</script>
+
+  <script type="text/babel" src="/static/components/utils.js"></script>
+  <script type="text/babel">_diag.log('utils.js', true);</script>
+
+  <script type="text/babel" src="/static/components/Widget.js"></script>
+  <script type="text/babel">_diag.log('Widget.js', true);</script>
+
+  <script type="text/babel" src="/static/components/TopBar.js"></script>
+  <script type="text/babel">_diag.log('TopBar.js', true);</script>
+
+  <script type="text/babel" src="/static/components/ActionPanel.js"></script>
+  <script type="text/babel">_diag.log('ActionPanel.js', true);</script>
+
+  <script type="text/babel" src="/static/components/BettingPanel.js"></script>
+  <script type="text/babel">_diag.log('BettingPanel.js', true);</script>
+
+  <script type="text/babel" src="/static/components/SideBetPanel.js"></script>
+  <script type="text/babel">_diag.log('SideBetPanel.js', true);</script>
+
+  <script type="text/babel" src="/static/components/HandDisplay.js"></script>
+  <script type="text/babel">_diag.log('HandDisplay.js', true);</script>
+
+  <script type="text/babel" src="/static/components/CardGrid.js"></script>
+  <script type="text/babel">_diag.log('CardGrid.js', true);</script>
+
+  <script type="text/babel" src="/static/components/StrategyRefTable.js"></script>
+  <script type="text/babel">_diag.log('StrategyRefTable.js', true);</script>
+
+  <script type="text/babel" src="/static/components/ShoePanel.js"></script>
+  <script type="text/babel">_diag.log('ShoePanel.js', true);</script>
+
+  <script type="text/babel" src="/static/components/EdgeMeter.js"></script>
+  <script type="text/babel">_diag.log('EdgeMeter.js', true);</script>
+
+  <script type="text/babel" src="/static/components/SessionStats.js"></script>
+  <script type="text/babel">_diag.log('SessionStats.js', true);</script>
+
+  <script type="text/babel" src="/static/components/ShuffleTracker.js"></script>
+  <script type="text/babel">_diag.log('ShuffleTracker.js', true);</script>
+
+  <script type="text/babel" src="/static/components/CountHistory.js"></script>
+  <script type="text/babel">_diag.log('CountHistory.js', true);</script>
+
+  <script type="text/babel" src="/static/components/I18Panel.js"></script>
+  <script type="text/babel">_diag.log('I18Panel.js', true);</script>
+
+  <script type="text/babel" src="/static/components/LiveOverlayPanel.jsx"></script>
+  <script type="text/babel">_diag.log('LiveOverlayPanel.jsx', true);</script>
+
+  <script type="text/babel" src="/static/components/CenterToolbar.js"></script>
+  <script type="text/babel">_diag.log('CenterToolbar.js', true);</script>
+
+  <script type="text/babel" src="/static/components/SplitHandPanel.js"></script>
+  <script type="text/babel">_diag.log('SplitHandPanel.js', true);</script>
+
+  <script type="text/babel" src="/static/components/SideCountPanel.js"></script>
+  <script type="text/babel">_diag.log('SideCountPanel.js', true);</script>
+
+  <script type="text/babel" src="/static/components/CasinoRiskMeter.js"></script>
+  <script type="text/babel">_diag.log('CasinoRiskMeter.js', true);</script>
+
+  <script type="text/babel" src="/static/components/StopAlerts.js"></script>
+  <script type="text/babel">_diag.log('StopAlerts.js', true);</script>
+
+  <script type="text/babel" src="/static/components/ZoneConfigPanel.js"></script>
+  <script type="text/babel">_diag.log('ZoneConfigPanel.js', true);</script>
+
+  <script type="text/babel" src="/static/components/WongPanel.js"></script>
+  <script type="text/babel">_diag.log('WongPanel.js', true);</script>
+
+  <script type="text/babel" src="/static/components/SeenCardsPanel.js"></script>
+  <script type="text/babel">_diag.log('SeenCardsPanel.js', true);</script>
+
+  <script type="text/babel" src="/static/components/ConfirmationPanel.js"></script>
+  <script type="text/babel">_diag.log('ConfirmationPanel.js', true);</script>
+
+  <script type="text/babel" src="/static/components/App.jsx"></script>
+  <script type="text/babel">_diag.log('App.jsx', true);</script>
+
+  <script type="text/babel">
+    _diag.log('All scripts loaded — attempting render...', true);
+    try {
+      const root = ReactDOM.createRoot(document.getElementById('diag-root'));
+      root.render(React.createElement('div', {style:{color:'#44e882',fontSize:20}}, '✅ React render OK'));
+      _diag.log('React render succeeded', true);
+    } catch(e) {
+      _diag.log('React render FAILED: ' + e.message, false);
+    }
+  </script>
+
+  <div id="diag-root" style="margin-top:20px"></div>
+</body>
+</html>
