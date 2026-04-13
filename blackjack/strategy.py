@@ -77,8 +77,8 @@ HARD_TABLE = {
     12: [  H,  H,  S,  S,  S,  H,  H,  H,  H,  H],
     13: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],
     14: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],
-    15: [  S,  S,  S,  S,  S,  H,  H,  H,SUR,SUR],  # vs 10,A: Surrender
-    16: [  S,  S,  S,  S,  S,  H,  H,  H,SUR,SUR],  # vs 10,A: Surrender
+    15: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],  # vs 10,A: surrender via SURRENDER_TABLE
+    16: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],  # vs 9,10,A: surrender via SURRENDER_TABLE
     17: [  S,  S,  S,  S,  S,  S,  S,  S,  S,  S],
     18: [  S,  S,  S,  S,  S,  S,  S,  S,  S,  S],
     19: [  S,  S,  S,  S,  S,  S,  S,  S,  S,  S],

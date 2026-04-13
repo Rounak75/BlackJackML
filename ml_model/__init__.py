@@ -1,33 +1,45 @@
 """
-ml_model/__init__.py — Machine Learning Models Package
-───────────────────────────────────────────────────────
-This package contains the neural network components.
+blackjack/__init__.py — Core Game Engine Package
+─────────────────────────────────────────────────
+This package contains the pure Python game engine — no ML required.
 
-MODULES:
-    model.py          → BlackjackNet (PyTorch neural network)
-                        BlackjackDecisionModel (high-level wrapper)
-    shuffle_tracker.py→ ShuffleTracker (LSTM + Bayesian + Ace sequencer)
-    simulate.py       → Simulator (Monte Carlo engine for training data + validation)
-    train.py          → Trainer (full training pipeline: data gen → train → save)
+HOW TO USE DIRECTLY (without the web UI):
+    from blackjack import Shoe, CardCounter, BasicStrategy
 
-QUICK USAGE:
-    # Load a trained model
-    from ml_model import BlackjackDecisionModel
-    model = BlackjackDecisionModel(model_path='models/best_model.pt')
-    # model.predict(features) → {'action': 'hit', 'confidence': 0.87, ...}
+    shoe    = Shoe(num_decks=6)
+    counter = CardCounter(system="hi_lo", num_decks=6)
+    strategy = BasicStrategy()
 
-    # Train a new model
-    from ml_model.train import Trainer
-    trainer = Trainer()
-    trainer.train(num_hands=1_000_000, epochs=50)
+    card = shoe.deal()
+    counter.count_card(card)
+    print(f"True Count: {counter.true_count:.1f}")
 
-    # Validate strategy performance
-    from ml_model.simulate import Simulator
-    sim = Simulator()
-    sim.run_validation(num_hands=500_000)
+WHAT EACH MODULE CONTAINS:
+    card.py       → Card, Deck, Shoe, Rank, Suit, ShuffleType
+    game.py       → Hand, Round, BlackjackTable, Action, HandResult
+    counting.py   → CardCounter (Hi-Lo, KO, Omega II, Zen)
+    strategy.py   → BasicStrategy (hard/soft/pair/surrender tables)
+    deviations.py → DeviationEngine (Illustrious 18 + Fab 4)
+    betting.py    → BettingEngine (Kelly Criterion + spread)
+    side_bets.py  → SideBetAnalyzer (Perfect Pairs, 21+3, Lucky Ladies)
+    # Note: Insurance is a core game mechanic handled in app/server.py, not here.
 """
 
-from .model          import BlackjackDecisionModel
-from .shuffle_tracker import ShuffleTracker
+from .card     import Card, Deck, Shoe
+from .game     import Hand, Round, BlackjackTable
+from .counting import CardCounter
+from .strategy import BasicStrategy
+from .deviations import DeviationEngine
+from .betting  import BettingEngine
+from .side_bets import SideBetAnalyzer
 
-__all__ = ['BlackjackDecisionModel', 'ShuffleTracker']
+# __all__ controls what gets imported with "from blackjack import *"
+__all__ = [
+    'Card', 'Deck', 'Shoe',
+    'Hand', 'Round', 'BlackjackTable',
+    'CardCounter',
+    'BasicStrategy',
+    'DeviationEngine',
+    'BettingEngine',
+    'SideBetAnalyzer',
+]

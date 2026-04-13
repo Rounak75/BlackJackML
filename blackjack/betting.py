@@ -46,6 +46,7 @@
 """
 import math
 import random
+import logging as _log
 from typing import Dict, Optional
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -82,13 +83,6 @@ class BettingEngine:
         self.aggressive_mode = aggressive_mode  # Fix #1: default off
         self.stealth_mode = stealth_mode        # Fix #5: default off
         self._last_bet: float = self.config.TABLE_MIN  # for stealth smoothing
-        self.config = config or BettingConfig()
-        self.bankroll = self.config.INITIAL_BANKROLL
-        self.session_profit = 0.0
-        self.max_bankroll = self.bankroll
-        self.min_bankroll = self.bankroll
-        self.bet_history = []
-        self.hands_played = 0
 
         # ── Session stop thresholds ────────────────────────────────────────
         # Configurable server-side limits. The frontend JS mirrors these for
@@ -291,7 +285,6 @@ class BettingEngine:
         if self._stop_triggered is None:
             self._stop_triggered = self._evaluate_stop()
             if self._stop_triggered:
-                import logging as _log
                 _log.getLogger(__name__).warning(
                     "[STOP] %s triggered — session_profit=%.2f  threshold=%.2f  "
                     "bankroll=%.2f  hands=%d",
@@ -380,7 +373,6 @@ class BettingEngine:
             mean_unit     = sum(unit_profits) / len(unit_profits)
             variance      = sum((x - mean_unit) ** 2 for x in unit_profits) / len(unit_profits)
 
-            import logging as _log
             _log.getLogger(__name__).debug(
                 "[N0] hands=%d  edge_per_hand=%.5f  variance=%.4f",
                 self.hands_played, edge_per_hand, variance

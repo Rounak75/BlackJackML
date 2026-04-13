@@ -58,6 +58,8 @@ import sys
 import os
 
 import threading as _threading
+import time
+import logging as _log
 import functools as _functools
 
 # ── Windows UTF-8 fix ─────────────────────────────────────────────────────────
@@ -129,10 +131,10 @@ except ImportError:
         debug_logger = _NullLogger()
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = 'blackjack-ml-counter-secret'
+app.config['SECRET_KEY'] = os.environ.get('BJML_SECRET_KEY', 'blackjack-ml-counter-secret')
 socketio = SocketIO(
     app,
-    cors_allowed_origins="*",
+    cors_allowed_origins=os.environ.get('BJML_CORS_ORIGINS', '*').split(','),
     async_mode='threading',   # threading mode: Ctrl+C works on Windows
     ping_timeout=60,           # wait 60s before declaring client dead
     ping_interval=25,          # keep-alive ping every 25s (survives tab switch)
@@ -337,6 +339,8 @@ class GameSession:
         'active_hand_index', 'num_splits_done', 'session_history',
         # Feature 2: seen-cards tracking
         'seen_cards_this_hand',
+        # Y12 fix: per-session feature flags (were module-level globals)
+        'wonging_mode', 'confirmation_mode', 'zone_config',
         # Undo support: counter snapshot taken at the start of each hand.
         # Restored by handle_undo_hand so replay cards count from the
         # correct baseline instead of stacking on the already-counted hand.
@@ -358,6 +362,12 @@ class GameSession:
         self.num_splits_done             = 0
         self.session_history             = []
         self.seen_cards_this_hand        = []
+        self.wonging_mode                = False
+        self.confirmation_mode           = False
+        self.zone_config                 = {
+            'player_end':  0.33,
+            'dealer_end':  0.66,
+        }
         self.hand_start_counter_snapshot = None   # set by handle_new_hand
         self.lock                        = _threading.Lock()  # FIX M3
 
@@ -369,6 +379,7 @@ def _load_session_globals():
     global current_player_hand, current_dealer_hand
     global split_hands, active_hand_index, num_splits_done, session_history
     global _seen_cards_this_hand, _hand_start_counter_snapshot
+    global _wonging_mode, _confirmation_mode, _zone_config
     s = sessions.get(request.sid)
     if s is None:
         return
@@ -383,6 +394,9 @@ def _load_session_globals():
     num_splits_done               = s.num_splits_done
     session_history               = s.session_history
     _seen_cards_this_hand         = s.seen_cards_this_hand
+    _wonging_mode                 = s.wonging_mode
+    _confirmation_mode            = s.confirmation_mode
+    _zone_config                  = s.zone_config
     _hand_start_counter_snapshot  = s.hand_start_counter_snapshot
 def _save_session_globals():
     """Copy module globals back into the session object."""
@@ -400,6 +414,9 @@ def _save_session_globals():
     s.num_splits_done                = num_splits_done
     s.session_history                = session_history
     s.seen_cards_this_hand           = _seen_cards_this_hand
+    s.wonging_mode                   = _wonging_mode
+    s.confirmation_mode              = _confirmation_mode
+    s.zone_config                    = _zone_config
     s.hand_start_counter_snapshot    = _hand_start_counter_snapshot
 def with_session(fn):
     """Decorator: load session state before handler, save after.
@@ -507,11 +524,15 @@ def _process_card_entry(card: Card, target: str, suit_str: str):
     shuffle_tracker.observe_card(card.count_key, card.is_ace, SUIT_IDX.get(suit_str, 0))
 
     # Remove from shoe tracking (manual entry — just remove first matching card)
+    _card_removed = False
     for i, c in enumerate(shoe.cards):
         if c.rank == card.rank and c.suit == card.suit:
             shoe.cards.pop(i)
             shoe.dealt.append(c)
+            _card_removed = True
             break
+    if not _card_removed:
+        print(f"[WARN] Card {card} not found in shoe — possible over-removal (seen more copies than exist)")
 
     # Route card to correct hand
     if target == TARGET_PLAYER:
@@ -606,7 +627,7 @@ def _get_insurance_data(dealer_upcard_card):
             "reason":          "",
         }
 
-    tc = counter.true_count
+    tc = counter.effective_tc
     remaining = counter.get_remaining_estimate()
     ten_prob = remaining.get(10, 0.0)
 
@@ -633,7 +654,7 @@ def _get_insurance_data(dealer_upcard_card):
 # ML RECOMMENDATION HELPER
 # ══════════════════════════════════════════════════════════════
 
-def _get_ml_recommendation(player_hand, dealer_upcard_card):
+def _get_ml_recommendation(player_hand, dealer_upcard_card, num_splits_done=0):
     """
     Get play recommendation from the trained ML model.
 
@@ -652,7 +673,7 @@ def _get_ml_recommendation(player_hand, dealer_upcard_card):
         remaining = counter.get_remaining_estimate()
         remaining_probs = [remaining.get(i, 0.0) for i in range(2, 12)]  # [8-17]
 
-        available_actions = player_hand.available_actions(game_config)
+        available_actions = player_hand.available_actions(game_config, num_splits_done)
         available_names   = [a.value for a in available_actions]
 
         bankroll_ratio = min(
@@ -673,12 +694,13 @@ def _get_ml_recommendation(player_hand, dealer_upcard_card):
             can_double        = player_hand.can_double,
             can_split         = player_hand.can_split,
             can_surrender     = Action.SURRENDER in available_actions,
-            num_hands         = 1,
+            num_hands         = len(split_hands) if split_hands else 1,
             bankroll_ratio    = bankroll_ratio,
             advantage         = counter.advantage,
             running_count     = counter.running_count,
             decks_remaining   = counter.decks_remaining,
             system            = counter.system_name,  # pass active system for correct normalisation
+            is_split          = player_hand.is_split,
         )
 
         _inf_start = time.time()
@@ -762,11 +784,11 @@ def _get_casino_risk() -> dict:
     if len(tc_history) >= 10:
         high_tc_big_bet = sum(
             1 for i, h in enumerate(tc_history)
-            if h.get('true_count', 0) >= 2
+            if h.get('effective_tc', h.get('true_count', 0)) >= 2
             and i < len(recent_bets)
             and recent_bets[i] > min_bet * 1.5
         )
-        high_tc_count = sum(1 for h in tc_history if h.get('true_count', 0) >= 2)
+        high_tc_count = sum(1 for h in tc_history if h.get('effective_tc', h.get('true_count', 0)) >= 2)
         correlation   = high_tc_big_bet / high_tc_count if high_tc_count > 0 else 0
         if correlation >= 0.8:
             score += 3
@@ -838,17 +860,21 @@ def _build_dealer_data() -> dict:
         "is_blackjack": current_dealer_hand.is_blackjack if current_dealer_hand.cards else False,
         "is_bust":      current_dealer_hand.is_bust     if current_dealer_hand.cards else False,
         "card_count":   len(current_dealer_hand.cards),
-        # S17 rule: dealer must draw on 16 or less, stands on 17+
+        # S17/H17 rule: dealer must draw on 16 or less; with H17, also draws on soft 17
         "must_draw": (
             len(current_dealer_hand.cards) >= 2 and
             not current_dealer_hand.is_bust and
             not current_dealer_hand.is_blackjack and
-            current_dealer_hand.best_value < 17
+            (current_dealer_hand.best_value < 17 or
+             (game_config.DEALER_HITS_SOFT_17 and current_dealer_hand.is_soft
+              and current_dealer_hand.best_value == 17))
         ),
         "dealer_stands": (
             len(current_dealer_hand.cards) >= 2 and
             not current_dealer_hand.is_bust and
-            current_dealer_hand.best_value >= 17
+            current_dealer_hand.best_value >= 17 and
+            not (game_config.DEALER_HITS_SOFT_17 and current_dealer_hand.is_soft
+                 and current_dealer_hand.best_value == 17)
         ),
     }
 
@@ -882,7 +908,7 @@ def _build_split_data(dealer_upcard_card, tc: float) -> list:
         if sh.cards and dealer_upcard_card:
             sh_avail = sh.available_actions(game_config, num_splits_done)
             sh_info  = deviation_engine.get_action_with_info(
-                sh, dealer_upcard_card, tc, sh_avail)
+                sh, dealer_upcard_card, tc, sh_avail, num_splits=num_splits_done)
             sh_rec = {
                 "action":         sh_info["action"].value.upper(),
                 "is_deviation":   sh_info["is_deviation"],
@@ -912,7 +938,7 @@ def _build_wonging_data() -> dict:
     Feature 5: Wonging (back-counting) mode state.
     Provides the TC-based sit/leave signal without resetting the count.
     """
-    tc = counter.true_count
+    tc = counter.effective_tc
     tc_r = round(tc, 2)
     if tc >= 2.0:
         signal     = 'SIT DOWN NOW'
@@ -948,6 +974,7 @@ def get_full_state():
     Uses the _build_* helpers above to assemble each sub-section.
     """
     tc          = counter.true_count
+    eff_tc      = counter.effective_tc          # C1/C5 fix: balanced-equivalent TC for deviations
     enhanced_tc = shuffle_tracker.get_enhanced_true_count(tc)
     penetration = counter.penetration
 
@@ -957,9 +984,10 @@ def get_full_state():
     # ── Rule-based strategy recommendation (always computed) ──────────────
     recommendation = None
     if current_player_hand.cards and dealer_upcard_card:
-        available   = current_player_hand.available_actions(game_config)
+        available   = current_player_hand.available_actions(game_config, num_splits_done)
         action_info = deviation_engine.get_action_with_info(
-            current_player_hand, dealer_upcard_card, tc, available
+            current_player_hand, dealer_upcard_card, eff_tc, available,
+            num_splits=num_splits_done
         )
         recommendation = {
             "action":         action_info["action"].value.upper(),
@@ -984,7 +1012,6 @@ def get_full_state():
             c1, c2 = cards[0].count_key, cards[1].count_key
             is_ten_six = (c1 == 10 and c2 == 6) or (c1 == 6 and c2 == 10)
             threshold = 0 if is_ten_six else 1
-            import logging as _log
             _log.getLogger('strategy.comp_dep').debug(
                 "[COMP-DEP-META] hand=%s+%s  is_ten_six=%s  tc=%.2f  threshold=%d  action=%s",
                 cards[0], cards[1], is_ten_six, tc, threshold, recommendation["action"]
@@ -1002,7 +1029,7 @@ def get_full_state():
         recommendation["comp_dep_16"] = comp_dep_16
 
     # ── ML model recommendation ───────────────────────────────────────────
-    ml_rec = _get_ml_recommendation(current_player_hand, dealer_upcard_card)
+    ml_rec = _get_ml_recommendation(current_player_hand, dealer_upcard_card, num_splits_done)
     if ml_rec and ml_rec["is_confident"] and recommendation is not None:
         # ML overrides rules — surface both so UI can show the difference
         final_recommendation = {
@@ -1065,7 +1092,7 @@ def get_full_state():
         "count_history":     list(counter.count_history)[-60:],
         "side_counts":       counter.get_side_count_state(),
         "casino_risk":       _get_casino_risk(),
-        "split_hands":       _build_split_data(dealer_upcard_card, tc),
+        "split_hands":       _build_split_data(dealer_upcard_card, eff_tc),
         "active_hand_index": active_hand_index,
         "num_splits_done":   num_splits_done,
         # insurance: separate from side_bets — it is a game mechanic.
@@ -1241,20 +1268,16 @@ def handle_player_double(data=None):
     current_player_hand.bet *= 2
     current_player_hand.is_doubled = True
 
-    # Deal one card and count it immediately
-    card = shoe.deal()
-    if card is None:
-        emit('error', {'message': 'Shoe empty — shuffle required'})
-        return
-
-    current_player_hand.add_card(card)
-    counter.count_card(card)
-    shuffle_tracker.observe_card(card.count_key, card.is_ace, 0)
+    # C3/C4 fix: Do NOT auto-deal a card from the simulated shoe.
+    # In live tracking mode, the user must input the actual observed card
+    # via the card grid. The next deal_card event with target='player'
+    # will add the double-down card to this hand.
+    # This keeps shoe composition, count, and shuffle tracker in sync.
 
     _safe_emit('state_update', get_full_state())
     emit('notification', {
         'type': 'info',
-        'message': f'Doubled — dealt {card}. Hand total: {current_player_hand.best_value}'
+        'message': f'Doubled down (bet: {current_player_hand.bet:.0f}). Input the dealt card now.'
     })
 
 
@@ -1278,7 +1301,10 @@ def handle_player_surrender(data=None):
     current_player_hand.is_surrendered = True
     current_player_hand.result = HandResult.SURRENDER
 
-    refund = current_player_hand.bet / 2
+    bet = current_player_hand.bet
+    refund = bet / 2
+    # M1 fix: record the −0.5× bet loss so session stats are accurate
+    betting_engine.record_result(bet, -(bet / 2))
     _safe_emit('state_update', get_full_state())
     emit('notification', {
         'type': 'info',
@@ -1306,7 +1332,7 @@ def handle_player_insurance(data=None):
     current_player_hand.is_insured = True
     current_player_hand.insurance_bet = current_player_hand.bet / 2
 
-    tc = counter.true_count
+    tc = counter.effective_tc
     recommended = tc >= 3.0
     _safe_emit('state_update', get_full_state())
     emit('notification', {
@@ -1574,6 +1600,10 @@ def handle_undo_hand(data=None):
         counter.running_count = snap['running_count']
         counter.cards_seen    = snap['cards_seen']
         counter._card_log     = list(snap['card_log'])
+        # Rebuild incremental seen_counts from restored card_log
+        counter._seen_counts = {i: 0 for i in range(2, 12)}
+        for _k in counter._card_log:
+            counter._seen_counts[_k] = counter._seen_counts.get(_k, 0) + 1
         counter.aces_seen     = snap['aces_seen']
         counter.tens_seen     = snap['tens_seen']
         # Trim count_history to the length it had at hand start.
@@ -1592,10 +1622,11 @@ def handle_undo_hand(data=None):
             shoe.burned = list(snap.get('shoe_burned', shoe.burned))  # FIX M16
     else:
         # No snapshot: first hand of the session — counter should already be at
-        # zero, but reset explicitly for safety. Replayed cards rebuild from zero.
-        counter.running_count = 0
+        # zero (or IRC for KO), but reset explicitly for safety.
+        counter.running_count = getattr(counter, '_ko_irc', 0)
         counter.cards_seen    = 0
         counter._card_log     = []
+        counter._seen_counts  = {i: 0 for i in range(2, 12)}
         counter.count_history = []
         counter.aces_seen     = 0
         counter.tens_seen     = 0
@@ -1678,7 +1709,6 @@ def handle_record_result(data):
     # ── Stop-loss / stop-win logging ──────────────────────────────────────
     stats = betting_engine.get_session_stats()
     total_profit = stats['total_profit']
-    import logging as _log
     _slog = _log.getLogger('session.stops')
     _slog.info("[RESULT] bet=%.2f profit=%.2f  session_profit=%.2f  bankroll=%.2f  should_leave=%s  stop_reason=%s",
                bet, profit, total_profit, stats['bankroll'],
@@ -1701,7 +1731,6 @@ def handle_set_stop_thresholds(data):
         stop_loss = float(data.get('stop_loss', betting_engine.stop_loss))
         stop_win  = float(data.get('stop_win',  betting_engine.stop_win))
         betting_engine.set_stop_thresholds(stop_loss, stop_win)
-        import logging as _log
         _log.getLogger('session.stops').info(
             "[THRESHOLDS] Updated: stop_loss=%.2f  stop_win=%.2f", stop_loss, stop_win
         )

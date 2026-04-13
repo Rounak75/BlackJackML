@@ -45,7 +45,7 @@ function App() {
   const [scanMode, setScanMode] = useState('manual')
 
   // Deal-Order Engine state
-  const [dealOrderEnabled, setDealOrderEnabled] = useState(true)
+  const [dealOrderEnabled, setDealOrderEnabled] = useState(false)
 
   // CardGrid collapse state — separate from scanMode collapse
   const [cardGridCollapsed, setCardGridCollapsed] = useState(false)
@@ -153,8 +153,10 @@ function App() {
   // ─────────────────────────────────────────────────────────────────────────
   const handleDealCardWrapped = useCallback((rank, suit, targetOverride) => {
     if (dealOrderEnabled) {
-      // DEAL ENGINE MODE: count the card but do NOT touch player/dealer hands
-      handleDealCard(rank, suit, 'seen')
+      // C9/C10 fix: resolve the correct server target from the deal engine's
+      // current position — MY SEAT → 'player', DEALER → 'dealer', else 'seen'
+      const resolvedTarget = dealOrderRef.current?.getCurrentTarget?.() || 'seen'
+      handleDealCard(rank, suit, resolvedTarget)
       if (dealOrderRef.current) {
         dealOrderRef.current.recordCard(rank, suit, targetOverride || dealTargetRef.current)
       }

@@ -27,6 +27,7 @@
 ║    info   = engine.get_action_with_info(...)   # includes deviation details ║
 ╚══════════════════════════════════════════════════════════════════════════════╝
 """
+import logging as _log
 from typing import Optional
 from .game import Action, Hand
 from .card import Card
@@ -216,7 +217,6 @@ class DeviationEngine:
             c1, c2 = hand.cards[0].count_key, hand.cards[1].count_key
             is_ten_six = (c1 == 10 and c2 == 6) or (c1 == 6 and c2 == 10)
             threshold = 0 if is_ten_six else 1  # 9+7 needs TC ≥ +1
-            import logging as _log
             _log.getLogger(__name__).debug(
                 "[COMP-DEP] Hard 16 vs 10: %s  TC=%.2f  threshold=%d",
                 "10+6" if is_ten_six else "9+7", true_count, threshold
@@ -260,9 +260,10 @@ class DeviationEngine:
 
     def get_action_with_info(self, hand: Hand, dealer_upcard: Card,
                              true_count: float,
-                             available_actions: list = None) -> dict:
+                             available_actions: list = None,
+                             num_splits: int = 0) -> dict:
         """Get action with explanation of whether a deviation was used."""
-        action = self.get_action(hand, dealer_upcard, true_count, available_actions)
+        action = self.get_action(hand, dealer_upcard, true_count, available_actions, num_splits)
         basic_action = self.basic_strategy.get_action(hand, dealer_upcard, available_actions)
 
         info = {

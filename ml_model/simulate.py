@@ -67,7 +67,7 @@ class Simulator:
                 f"Choose from {list(CountingConfig.SYSTEMS.keys())}"
             )
         self.system = system
-        self.counter = CardCounter(system, self.config.NUM_DECKS)
+        self.counter = CardCounter(system, self.config.NUM_DECKS, self.config.BURN_CARDS)
 
         # ── Normalisation scalars for _extract_state() ─────────────────────
         # Each system's counts live in a different numerical range.
@@ -116,7 +116,7 @@ class Simulator:
             # Bet sizing: use counting engine when counting is enabled,
             # otherwise flat minimum bet (for the basic-strategy-only baseline)
             if use_counting:
-                bet = self.betting_engine.get_optimal_bet(self.counter.true_count)
+                bet = self.betting_engine.get_optimal_bet(self.counter.effective_tc)
             else:
                 bet = BettingConfig.TABLE_MIN
 
@@ -155,7 +155,7 @@ class Simulator:
                     # Get action
                     if use_deviations:
                         action = self.deviation_engine.get_action(
-                            hand, dealer_upcard, self.counter.true_count,
+                            hand, dealer_upcard, self.counter.effective_tc,
                             available, num_splits_done)
                     else:
                         action = self.strategy.get_action(
@@ -271,7 +271,7 @@ class Simulator:
             "session_stats": self.betting_engine.get_session_stats(),
         }
 
-    def _extract_state(self, hand: Hand, dealer_upcard, hand_idx: int,
+    def _extract_state(self, hand: Hand, dealer_upcard, num_splits_done: int,
                        num_hands: int = 1) -> List[float]:
         """Extract state features for ML training.
 
@@ -292,7 +292,7 @@ class Simulator:
             len(hand.cards) / 10.0,                                      # [18]
             float(hand.can_double),                                      # [19]
             float(hand.can_split),                                       # [20]
-            float(Action.SURRENDER in hand.available_actions(self.config, hand_idx)),                                                           # [21] can_surrender
+            float(Action.SURRENDER in hand.available_actions(self.config, num_splits_done)),                                                           # [21] can_surrender
             float(num_hands) / 4.0,                                     # [22] active split hands
             min(self.betting_engine.bankroll / self.betting_engine.config.INITIAL_BANKROLL, 2.0),  # [23] bankroll ratio (capped at 2x)
             self.counter.advantage / self._adv_scale,                    # [24] system-normalised advantage

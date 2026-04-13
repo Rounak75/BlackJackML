@@ -169,11 +169,14 @@ class Shoe:
         self._cut_position = int(self.total_cards * self.penetration)
         self.dealt = []
 
+        # M2 perf fix: reverse so pop() deals from the "top" in O(1)
+        self.cards.reverse()
+
         # Burn cards
         self.burned = []
         for _ in range(self.burn_cards):
             if self.cards:
-                self.burned.append(self.cards.pop(0))
+                self.burned.append(self.cards.pop())
 
     def _riffle_shuffle(self, imperfection: float = 0.1):
         """Simulate imperfect riffle shuffle — cards maintain some clumping."""
@@ -235,7 +238,7 @@ class Shoe:
         """Deal one card from the shoe."""
         if not self.cards:
             return None
-        card = self.cards.pop(0)
+        card = self.cards.pop()
         self.dealt.append(card)
         return card
 

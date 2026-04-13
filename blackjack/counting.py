@@ -100,6 +100,8 @@ class CardCounter:
         # FIX M10: deque(maxlen) drops oldest entry O(1) vs list slice O(N)
         self.count_history: deque = deque(maxlen=_MAX_HISTORY)
         self._card_log: List[int] = []  # Rank keys of every card seen
+        # M3+Y10 perf fix: incremental rank frequency counts — avoids O(n) iteration
+        self._seen_counts: Dict[int, int] = {i: 0 for i in range(2, 12)}
 
         # ── Side counts ────────────────────────────────────────────────────
         # Track Aces and 10-value cards separately from the main count.
@@ -131,6 +133,7 @@ class CardCounter:
         self.running_count += val
         self.cards_seen += 1
         self._card_log.append(card.count_key)
+        self._seen_counts[card.count_key] = self._seen_counts.get(card.count_key, 0) + 1
         # Side counts — tracked independently of main counting system
         if card.is_ace:
             self.aces_seen += 1
@@ -141,6 +144,7 @@ class CardCounter:
             "count_value": val,
             "running_count": self.running_count,
             "true_count": self.true_count,
+            "effective_tc": self.effective_tc,
             "cards_seen": self.cards_seen,
         })
         # deque(maxlen=_MAX_HISTORY) auto-drops the oldest entry — no manual slice needed.
@@ -364,6 +368,7 @@ class CardCounter:
         self.cards_seen = 0
         self.count_history = deque(maxlen=_MAX_HISTORY)
         self._card_log = []
+        self._seen_counts = {i: 0 for i in range(2, 12)}
         self.aces_seen = 0
         self.tens_seen = 0
 
@@ -372,24 +377,19 @@ class CardCounter:
         Estimate remaining card composition based on dealt cards.
         Returns probability of each rank value remaining.
 
-        PERF: Uses self._total_per_rank (pre-computed in __init__) instead of
-        rebuilding the dict on every call. The dict is identical across all calls
-        since num_decks is fixed at construction time.
+        PERF: Uses self._total_per_rank (pre-computed in __init__) and
+        self._seen_counts (incrementally updated) — O(1) per call.
         """
-        seen_counts = {i: 0 for i in range(2, 12)}
-        for key in self._card_log:
-            seen_counts[key] = seen_counts.get(key, 0) + 1
-
         remaining = {}
         total_remaining = sum(
-            self._total_per_rank[k] - seen_counts.get(k, 0)
+            self._total_per_rank[k] - self._seen_counts.get(k, 0)
             for k in self._total_per_rank
         )
         if total_remaining <= 0:
             return {k: 1.0 / len(self._total_per_rank) for k in self._total_per_rank}
 
         for rank_val, total in self._total_per_rank.items():
-            left = total - seen_counts.get(rank_val, 0)
+            left = total - self._seen_counts.get(rank_val, 0)
             remaining[rank_val] = max(left, 0) / total_remaining
 
         return remaining

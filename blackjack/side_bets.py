@@ -338,7 +338,7 @@ class SideBetAnalyzer:
         matched_20 = sum(
             comb(cnt, 2)
             for (rank, suit), cnt in by_rank_suit.items()
-            if Card(rank, suit).value == 10 and cnt >= 2
+            if rank.bj_value == 10 and cnt >= 2
         )
         # QH pair is a subset of matched_20 (QH are rank=QUEEN, suit=HEARTS, value=10)
 
@@ -355,7 +355,7 @@ class SideBetAnalyzer:
             matched_this_suit = sum(
                 comb(cnt, 2)
                 for (rank, s), cnt in by_rank_suit.items()
-                if s == suit and Card(rank, s).value == 10 and cnt >= 2
+                if s == suit and rank.bj_value == 10 and cnt >= 2
             )
             suited_10_10 += comb(ten_val_this_suit, 2) - matched_this_suit
 
@@ -386,8 +386,8 @@ class SideBetAnalyzer:
         p_qh      = max(0, qh_pair / total_combos - p_qh_bj)    # QH pair (no dealer BJ): 200:1
         # matched includes QH; subtract QH to get non-QH matched tier
         p_matched = max(0, (matched_20 - qh_pair) / total_combos)
-        # suited_20 may overlap matched — subtract matched from suited
-        suited_non_matched = max(0, suited_20 - matched_20)
+        # suited_20 already has matched pairs excluded (subtracted during computation)
+        suited_non_matched = suited_20
         p_suited  = suited_non_matched / total_combos
         # any_20 minus the upper tiers
         any_non_special = max(0, any_20 - matched_20 - suited_non_matched)

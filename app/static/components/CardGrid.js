@@ -34,8 +34,8 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
   ];
 
   const targets = [
-    { t: 'player', label: '👤 Player', ariaLabel: 'Deal next card to player hand', lockedByEngine: dealEngineActive },
-    { t: 'dealer', label: dealerMustDraw ? '🏦 Dealer ←' : '🏦 Dealer', ariaLabel: dealerMustDraw ? 'Deal next card to dealer (dealer must draw)' : 'Deal next card to dealer hand', lockedByEngine: dealEngineActive },
+    { t: 'player', label: '👤 Player', ariaLabel: 'Deal next card to player hand', lockedByEngine: false },
+    { t: 'dealer', label: dealerMustDraw ? '🏦 Dealer ←' : '🏦 Dealer', ariaLabel: dealerMustDraw ? 'Deal next card to dealer (dealer must draw)' : 'Deal next card to dealer hand', lockedByEngine: false },
     { t: 'seen',   label: '👁 Seen',   ariaLabel: 'Mark card as seen (count only, no hand)', lockedByEngine: false },
   ];
 

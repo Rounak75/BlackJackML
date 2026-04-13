@@ -442,6 +442,13 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
   // EXPOSE IMPERATIVE API TO APP VIA REF
   // ══════════════════════════════════════════════════════════════
 
+  // C9/C10 fix: resolve the server-side target for the current deal position
+  var getCurrentTarget = useCallback(function () {
+    if (dealPos === mySeat - 1) return 'player';
+    if (dealPos === players) return 'dealer';
+    return 'seen';
+  }, [dealPos, mySeat, players]);
+
   useImperativeHandle(ref, function () {
     return {
       recordCard: recordCard,
@@ -451,8 +458,9 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
       undoDealCard: undoDealCard,
       softReset: softReset,
       replayCards: replayCards,
+      getCurrentTarget: getCurrentTarget,
     };
-  }, [recordCard, resetForNewHand, resetForShuffle, skipCard, undoDealCard, softReset, replayCards]);
+  }, [recordCard, resetForNewHand, resetForShuffle, skipCard, undoDealCard, softReset, replayCards, getCurrentTarget]);
 
   // ══════════════════════════════════════════════════════════════
   // DERIVED VALUES
