@@ -44,7 +44,7 @@ build() {
               DealOrderEngine \
               SplitHandPanel SideCountPanel CasinoRiskMeter StopAlerts \
               SeenCardsPanel ZoneConfigPanel ConfirmationPanel WongPanel \
-              AccordionPanel BettingRampPanel App; do
+              AccordionPanel BettingRampPanel BetSpreadHelper MultiSystemPanel App; do
       echo "/* ── $f ── */"
       cat "$OUT_DIR/$f.js"
       echo ""

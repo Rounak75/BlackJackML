@@ -69,7 +69,7 @@ $loadOrder = @(
     "DealOrderEngine",
     "SplitHandPanel","SideCountPanel","CasinoRiskMeter","StopAlerts",
     "SeenCardsPanel","ZoneConfigPanel","ConfirmationPanel","WongPanel",
-    "AccordionPanel","BettingRampPanel","DebugLayer","App"
+    "AccordionPanel","BettingRampPanel","BetSpreadHelper","MultiSystemPanel","DebugLayer","App"
 )
 
 $timestamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")

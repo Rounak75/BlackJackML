@@ -72,6 +72,8 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
       flex: 1, borderRadius: 10, padding: '12px',
       background: isActive ? 'rgba(255,212,71,0.06)' : 'rgba(255,255,255,0.02)',
       border: `2px solid ${isActive ? 'rgba(255,212,71,0.5)' : 'rgba(255,255,255,0.1)'}`,
+      boxShadow: isActive ? '0 0 18px rgba(255,212,71,0.25), inset 0 0 12px rgba(255,212,71,0.05)' : 'none',
+      transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
       position: 'relative', transition: 'all 0.2s',
     }}>
       {/* Header */}
@@ -84,7 +86,8 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
           {isActive && (
             <span style={{ fontSize: 8, fontWeight: 700, color: '#ffd447',
               background: 'rgba(255,212,71,0.15)', border: '1px solid rgba(255,212,71,0.4)',
-              borderRadius: 3, padding: '1px 5px' }}>ACTIVE</span>
+              borderRadius: 3, padding: '1px 5px',
+              animation: 'splitActivePulse 1.5s ease-in-out infinite' }}>PLAYING</span>
           )}
           {baseBet > 0 && (
             <span style={{ fontSize: 9, fontWeight: 600, color: '#94a7c4',

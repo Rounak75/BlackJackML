@@ -746,6 +746,14 @@ function App() {
               <ShuffleTrackerPanel tracker={tracker} />
             </AccordionPanel>
 
+            <AccordionPanel label="Bet Spread Visual">
+              <BetSpreadHelper count={count} betting={betting} currency={currency} shoe={shoe} />
+            </AccordionPanel>
+
+            <AccordionPanel label="Multi-System Comparison">
+              <MultiSystemPanel socket={socketRef.current} count={count} shoe={shoe} />
+            </AccordionPanel>
+
           </div>
 
         </div>

@@ -119,21 +119,24 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction }) 
   const rc  = count ? count.running    : 0;
   const adv = count ? count.advantage  : -0.5;
   const etc = count ? count.enhanced_true : 0;
+  // UI/UX fix: use effective_true for KO systems so hero TC starts at 0, not -3.5
+  const effTC = count ? (typeof count.effective_true === 'number' ? count.effective_true : count.true) : 0;
+  const isKO  = count ? (count.is_ko || count.system === 'ko') : false;
 
   const sysMeta  = COUNTING_SYSTEMS[activeSystem]  || COUNTING_SYSTEMS.hi_lo;
   const shufMeta = SHUFFLE_TYPES[activeShuffle] || SHUFFLE_TYPES.machine;
 
   // ── TC flash on threshold crossing ──────────────────────
-  const prevTcRef = useRef(tc);
+  const prevTcRef = useRef(effTC);
   const tcBlockRef = useRef(null);
   useEffect(() => {
     const prev = prevTcRef.current;
-    prevTcRef.current = tc;
+    prevTcRef.current = effTC;
     const thresholds = [-5, -3, 3, 5];
     for (const t of thresholds) {
-      const crossed = (prev < t && tc >= t) || (prev > t && tc <= t) ||
-                      (prev >= t && tc < t) || (prev <= t && tc > t);
-      if (crossed && prev !== tc) {
+      const crossed = (prev < t && effTC >= t) || (prev > t && effTC <= t) ||
+                      (prev >= t && effTC < t) || (prev <= t && effTC > t);
+      if (crossed && prev !== effTC) {
         if (tcBlockRef.current) {
           tcBlockRef.current.classList.remove('tc-flash');
           void tcBlockRef.current.offsetWidth; // force reflow
@@ -225,13 +228,13 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction }) 
                 color: '#b8ccdf', marginBottom: 3,
               }}
             >
-              True Count
+              {isKO ? 'Effective TC' : 'True Count'}
             </div>
             <div
-              className={`font-mono font-bold leading-none ${countClass(tc)}`}
+              className={`font-mono font-bold leading-none ${countClass(effTC)}`}
               style={{ fontSize: '3rem' }}
             >
-              {tc.toFixed(1)}
+              {effTC.toFixed(1)}
             </div>
           </div>
 

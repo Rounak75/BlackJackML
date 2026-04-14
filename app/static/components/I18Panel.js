@@ -9,7 +9,10 @@
  */
 
 function I18Panel({ count }) {
-  const tc = count ? count.true : 0;
+  // Use effective_true (IRC-adjusted) so KO deviations fire at correct thresholds
+  const tc = count
+    ? (typeof count.effective_true === 'number' ? count.effective_true : count.true)
+    : 0;
 
   // Colour map for each action type
   const actColor = {

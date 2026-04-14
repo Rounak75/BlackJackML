@@ -1693,6 +1693,28 @@ def handle_change_system(data):
         _safe_emit('state_update', get_full_state())
 
 
+@socketio.on('get_multi_system_compare')
+@with_session
+def handle_multi_system_compare(data=None):
+    """Replay current card log through ALL counting systems for side-by-side comparison.
+    Emits 'multi_system_data' with per-system RC, TC, effective_tc, advantage."""
+    from config import CountingConfig as _CC
+    results = {}
+    for sys_name in _CC.SYSTEMS:
+        temp = CardCounter(sys_name, game_config.NUM_DECKS, game_config.BURN_CARDS)
+        for key in counter._card_log:
+            temp.count_card(_CountKey(key))
+        results[sys_name] = {
+            'running_count': round(temp.running_count, 1),
+            'true_count': round(temp.true_count, 2),
+            'effective_tc': round(temp.effective_tc, 2),
+            'advantage': round(temp.advantage, 2),
+            'is_ko': sys_name == 'ko',
+            'is_active': sys_name == counter.system_name,
+        }
+    emit('multi_system_data', results)
+
+
 @socketio.on('record_result')
 @with_session
 @debug_timed('record_result')
