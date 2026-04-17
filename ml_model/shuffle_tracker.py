@@ -402,7 +402,12 @@ class ShuffleTracker:
             with torch.no_grad():
                 seq = np.array(self.card_sequence[-self.max_sequence_len:])
                 x = torch.FloatTensor(seq).unsqueeze(0)
-                dist, self.lstm_hidden = self.lstm(x, self.lstm_hidden)
+                # FIX CRIT-05: Discard hidden state on read-only pass.
+                # Previously this wrote back to self.lstm_hidden, causing
+                # progressive drift every time get_full_state() was called
+                # (multiple times per tick). Only on_shuffle() should
+                # advance the LSTM hidden state.
+                dist, _discarded_hidden = self.lstm(x, self.lstm_hidden)
                 dist = dist.numpy()[0]
 
                 # Compare LSTM prediction to uniform

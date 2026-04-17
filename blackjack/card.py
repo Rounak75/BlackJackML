@@ -138,7 +138,7 @@ class Shoe:
         self.num_decks = num_decks
         self.penetration = penetration
         self.burn_cards = burn_cards
-        self.total_cards = num_decks * 52
+        self.total_cards = num_decks * 52 - burn_cards  # FIX MAJ-03: match counter._total_cards
         self.cards: List[Card] = []
         self.dealt: List[Card] = []
         self.burned: List[Card] = []
@@ -168,15 +168,13 @@ class Shoe:
         self.shuffle_history.append(shuffle_type)
         self._cut_position = int(self.total_cards * self.penetration)
         self.dealt = []
-
-        # M2 perf fix: reverse so pop() deals from the "top" in O(1)
-        self.cards.reverse()
-
+        self.cards.reverse()  # Reverse to simulate cutting the shoe
+        
         # Burn cards
         self.burned = []
         for _ in range(self.burn_cards):
             if self.cards:
-                self.burned.append(self.cards.pop())
+                self.burned.append(self.cards.pop(0))
 
     def _riffle_shuffle(self, imperfection: float = 0.1):
         """Simulate imperfect riffle shuffle — cards maintain some clumping."""
@@ -238,7 +236,7 @@ class Shoe:
         """Deal one card from the shoe."""
         if not self.cards:
             return None
-        card = self.cards.pop()
+        card = self.cards.pop(0)
         self.dealt.append(card)
         return card
 
@@ -252,10 +250,7 @@ class Shoe:
 
     @property
     def decks_remaining(self) -> float:
-        """FIX M8: Floor at 0.25 to match CardCounter.decks_remaining.
-        Without this, the UI shows a different value than what TC is computed with
-        when the shoe is nearly empty, causing a visible display mismatch."""
-        return max(self.cards_remaining / 52.0, 0.25)
+        return self.cards_remaining / 52.0
 
     @property
     def penetration_pct(self) -> float:

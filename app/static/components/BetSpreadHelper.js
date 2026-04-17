@@ -63,9 +63,22 @@ var BetSpreadHelper = (function () {
     var setHandsPerHour = _handsPerHour[1];
 
     // Current TC (effective for KO)
-    var currentTC = typeof count.effective_true === 'number' ? count.effective_true
+    var rawTC = typeof count.effective_true === 'number' ? count.effective_true
                   : (typeof count.true === 'number' ? count.true : 0);
     var systemName = (count.system || 'hi_lo').replace('_', '-').toUpperCase();
+
+    // FIX MAJ-06: Normalize TC to Hi-Lo equivalent for ramp lookup.
+    // Level-2/3 systems (Omega II, Zen, Wong Halves) produce raw TC ~2-3x
+    // larger than Hi-Lo, which would make the spread chart show fake-high bets.
+    // Normalization factors: Hi-Lo scalar = 10, Omega II = 20, Zen = 18, etc.
+    var NORM_SCALARS = {
+      'HI-LO': 10, 'HI-OPT-I': 10, 'HI-OPT-II': 18, 'KO': 10,
+      'OMEGA-II': 20, 'ZEN': 18, 'WONG-HALVES': 10, 'HALVES': 10,
+      'RED-7': 10, 'USTON-APC': 23, 'USTON-SS': 18,
+    };
+    var sysScalar = NORM_SCALARS[systemName] || 10;
+    var hiloScalar = 10;
+    var currentTC = rawTC / (sysScalar / hiloScalar);
 
     // Base unit
     var baseUnit = useMemo(function () {

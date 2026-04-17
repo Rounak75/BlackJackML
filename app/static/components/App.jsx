@@ -428,6 +428,69 @@ function App() {
   const handsPlayed = session?.hands_played ?? 0
   const lastUpdateAgo = lastUpdateTime ? Math.round((Date.now() - lastUpdateTime) / 1000) : null
 
+  // ── PANEL REGISTRY for DragLayoutEditor ─────────────────────────────────
+  // Maps each draggable key to its rendered JSX element.
+  // Used by layoutOrder to dynamically reorder panels.
+  const _panelRegistry = {
+    // Left column defaults
+    betting: (
+      <BettingPanel
+        betting={betting} count={count} lastBet={lastBet}
+        onRecordResult={handleRecordResult} currency={currency}
+        onCurrencyChange={setCurrency} customBet={customBet}
+        onCustomBetChange={setCustomBet} playerHand={playerHand}
+        dealerHand={dealerHand} insurance={insurance}
+        isDoubled={isDoubled} onIsDoubledChange={setIsDoubled}
+        tookInsurance={tookInsurance} onTookInsuranceChange={setTookInsurance}
+      />
+    ),
+    strategy: <StrategyRefTable playerHand={playerHand} dealerUpcard={dealerUp} />,
+    sidecount: <SideCountPanel sideCounts={sideCounts} count={count} />,
+
+    // Right column — Tier 1 (always visible)
+    scanner: (
+      <LiveOverlayPanel
+        socket={socketRef.current} count={gameState?.count}
+        scanMode={scanMode} onSetMode={setScanMode}
+        onDealCard={handleDealCardWrapped} dealTarget={dealTarget}
+      />
+    ),
+    edge: <EdgeMeter count={count} />,
+    shoe: <ShoePanel shoe={shoe} />,
+    session: <SessionStats session={session} currency={currency} />,
+
+    // Right column — Tier 2 (accordion-wrapped)
+    sidebet: (<AccordionPanel label="Side Bet EV"><SideBetPanel sideBets={sideBets} /></AccordionPanel>),
+    casinorisk: (<AccordionPanel label="Casino Risk Meter"><CasinoRiskMeter casinoRisk={casinoRisk} /></AccordionPanel>),
+    history: (<AccordionPanel label="Count History"><CountHistoryPanel history={history} /></AccordionPanel>),
+    i18: (<AccordionPanel label="Illustrious 18 & Fab 4"><I18Panel count={count} /></AccordionPanel>),
+    shuffle: (<AccordionPanel label="Shuffle Tracker (ML)"><ShuffleTrackerPanel tracker={tracker} /></AccordionPanel>),
+    analytics: (<AccordionPanel label="Analytics"><AnalyticsPanel analytics={gameState?.analytics} /></AccordionPanel>),
+    stopalerts: (<AccordionPanel label="Stop Alerts ⚙"><StopAlertsConfig session={session} currency={currency} socket={socketRef.current} /></AccordionPanel>),
+    multisystem: typeof MultiSystemPanel !== 'undefined'
+      ? (<AccordionPanel label="Multi-System Compare"><MultiSystemPanel socket={socketRef.current} count={count} shoe={shoe} /></AccordionPanel>)
+      : null,
+    betspread: typeof BetSpreadHelper !== 'undefined'
+      ? (<AccordionPanel label="Bet Spread Helper"><BetSpreadHelper count={count} betting={betting} currency={currency} shoe={shoe} /></AccordionPanel>)
+      : null,
+  }
+
+  const _DEFAULT_LEFT  = ['betting', 'strategy', 'sidecount']
+  const _DEFAULT_RIGHT = ['scanner', 'edge', 'shoe', 'session', 'sidebet', 'casinorisk', 'history', 'i18', 'shuffle', 'analytics', 'stopalerts', 'multisystem', 'betspread']
+
+  // Resolve ordered keys — use saved layout if valid, else defaults.
+  // Filter out any keys whose component is null/undefined (guard for missing globals).
+  const _leftKeys  = (layoutOrder?.left  || _DEFAULT_LEFT).filter(k => _panelRegistry[k] != null)
+  const _rightKeys = (layoutOrder?.right || _DEFAULT_RIGHT).filter(k => _panelRegistry[k] != null)
+
+  // Safety: append any registry keys missing from both lists (prevents panels vanishing
+  // if the layout was saved before a new panel was added to the codebase).
+  const _allUsed = new Set([..._leftKeys, ..._rightKeys])
+  const _DEFAULT_ALL = [..._DEFAULT_LEFT, ..._DEFAULT_RIGHT]
+  _DEFAULT_ALL.forEach(k => {
+    if (!_allUsed.has(k) && _panelRegistry[k] != null) _rightKeys.push(k)
+  })
+
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen font-body" style={{ background: '#0a0e18', color: '#f0f4ff', display: 'flex', flexDirection: 'column' }}>
@@ -570,34 +633,11 @@ function App() {
           flex: 1,
         }}>
 
-        {/* ── LEFT COLUMN ───────────────────────────────────────────── */}
+        {/* ── LEFT COLUMN (dynamic order from DragLayoutEditor) ──── */}
         <div className="flex flex-col gap-2.5">
-
-          {/* Bet sizing — phase-aware (Issue #6) */}
-          <BettingPanel
-            betting={betting}
-            count={count}
-            lastBet={lastBet}
-            onRecordResult={handleRecordResult}
-            currency={currency}
-            onCurrencyChange={setCurrency}
-            customBet={customBet}
-            onCustomBetChange={setCustomBet}
-            playerHand={playerHand}
-            dealerHand={dealerHand}
-            insurance={insurance}
-            isDoubled={isDoubled}
-            onIsDoubledChange={setIsDoubled}
-            tookInsurance={tookInsurance}
-            onTookInsuranceChange={setTookInsurance}
-          />
-
-          {/* Basic Strategy Grid */}
-          <StrategyRefTable playerHand={playerHand} dealerUpcard={dealerUp} />
-
-          {/* Ace & Ten Side Counts */}
-          <SideCountPanel sideCounts={sideCounts} count={count} />
-
+          {_leftKeys.map(key => (
+            <div key={key}>{_panelRegistry[key]}</div>
+          ))}
         </div>
 
 
@@ -700,20 +740,10 @@ function App() {
         </div>
 
 
-        {/* ── RIGHT COLUMN ──────────────────────────────────────────── */}
+        {/* ── RIGHT COLUMN (dynamic order from DragLayoutEditor) ─── */}
         <div className="panel-right flex flex-col gap-2.5">
 
-          {/* ── Card scanner — Manual / Screenshot / Live Scan ── */}
-          <LiveOverlayPanel
-            socket={socketRef.current}
-            count={gameState?.count}
-            scanMode={scanMode}
-            onSetMode={setScanMode}
-            onDealCard={handleDealCardWrapped}
-            dealTarget={dealTarget}
-          />
-
-          {/* Zone config — only in live/screenshot mode */}
+          {/* Fixed conditional panels — not in drag editor, mode-dependent */}
           {(scanMode === 'live' || scanMode === 'screenshot') && (
             <ZoneConfigPanel
               socket={socketRef.current}
@@ -721,8 +751,6 @@ function App() {
               onApply={(msg) => showToast(msg, 'info')}
             />
           )}
-
-          {/* Confirmation mode — only in live mode */}
           {scanMode === 'live' && (
             <ConfirmationPanel
               socket={socketRef.current}
@@ -730,8 +758,6 @@ function App() {
               pendingCards={pendingCards}
             />
           )}
-
-          {/* Wonging — only in live mode */}
           {scanMode === 'live' && (
             <WongPanel
               socket={socketRef.current}
@@ -740,46 +766,10 @@ function App() {
             />
           )}
 
-          {/* ── TIER 1: Live decision panels (always visible) ─── */}
-          {/* CRIT-07: Capped to 3 panels max */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <EdgeMeter count={count} />
-            <ShoePanel shoe={shoe} />
-            <SessionStats session={session} currency={currency} />
-          </div>
-
-          {/* ── TIER 2: Reference / analytics (collapsed by default) ── */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-
-            <AccordionPanel label="Side Bet EV">
-              <SideBetPanel sideBets={sideBets} />
-            </AccordionPanel>
-
-            <AccordionPanel label="Casino Risk Meter">
-              <CasinoRiskMeter casinoRisk={casinoRisk} />
-            </AccordionPanel>
-
-            <AccordionPanel label="Count History">
-              <CountHistoryPanel history={history} />
-            </AccordionPanel>
-
-            <AccordionPanel label="Illustrious 18 & Fab 4">
-              <I18Panel count={count} />
-            </AccordionPanel>
-
-            <AccordionPanel label="Shuffle Tracker (ML)">
-              <ShuffleTrackerPanel tracker={tracker} />
-            </AccordionPanel>
-
-            <AccordionPanel label="Analytics">
-              <AnalyticsPanel analytics={gameState?.analytics} />
-            </AccordionPanel>
-
-            <AccordionPanel label="Stop Alerts ⚙">
-              <StopAlertsConfig session={session} currency={currency} socket={socketRef.current} />
-            </AccordionPanel>
-
-          </div>
+          {/* Dynamic panels — ordered by DragLayoutEditor */}
+          {_rightKeys.map(key => (
+            <div key={key}>{_panelRegistry[key]}</div>
+          ))}
 
         </div>
 
@@ -827,6 +817,8 @@ function App() {
             { key: 'shuffle', label: 'Shuffle Tracker (ML)', icon: '🔀' },
             { key: 'analytics', label: 'Analytics', icon: '🔬' },
             { key: 'stopalerts', label: 'Stop Alerts', icon: '⚠️' },
+            { key: 'multisystem', label: 'Multi-System Compare', icon: '🔄' },
+            { key: 'betspread', label: 'Bet Spread Helper', icon: '📐' },
           ]}
           onLayoutChange={(layout) => {
             setLayoutOrder(layout)

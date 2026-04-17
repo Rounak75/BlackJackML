@@ -73,12 +73,12 @@ HARD_TABLE = {
     8:  [  H,  H,  H,  H,  H,  H,  H,  H,  H,  H],
     9:  [  H,  D,  D,  D,  D,  H,  H,  H,  H,  H],
     10: [  D,  D,  D,  D,  D,  D,  D,  D,  H,  H],
-    11: [  D,  D,  D,  D,  D,  D,  D,  D,  D,  D],
+    11: [  D,  D,  D,  D,  D,  D,  D,  D,  D,  H],  # vs Ace = Hit (8-deck S17; Double is H17 play)
     12: [  H,  H,  S,  S,  S,  H,  H,  H,  H,  H],
     13: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],
     14: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],
-    15: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],  # vs 10,A: surrender via SURRENDER_TABLE
-    16: [  S,  S,  S,  S,  S,  H,  H,  H,  H,  H],  # vs 9,10,A: surrender via SURRENDER_TABLE
+    15: [  S,  S,  S,  S,  S,  H,  H,  H,SUR,SUR],  # vs 10,A: Surrender
+    16: [  S,  S,  S,  S,  S,  H,  H,  H,SUR,SUR],  # vs 10,A: Surrender
     17: [  S,  S,  S,  S,  S,  S,  S,  S,  S,  S],
     18: [  S,  S,  S,  S,  S,  S,  S,  S,  S,  S],
     19: [  S,  S,  S,  S,  S,  S,  S,  S,  S,  S],
@@ -99,7 +99,7 @@ SOFT_TABLE = {
     16:  [       H,   H,   D,   D,   D,   H,   H,   H,   H,   H],  # A,5
     17:  [       H,   D,   D,   D,   D,   H,   H,   H,   H,   H],  # A,6
     18:  [      Ds,  Ds,  Ds,  Ds,  Ds,   S,   S,   H,   H,   H],  # A,7 — S17: Ds vs 2-6
-    19:  [       S,   S,   S,   S,  Ds,   S,   S,   S,   S,   S],  # A,8
+    19:  [       S,   S,   S,   S,   S,   S,   S,   S,   S,   S],  # A,8 — always Stand (8-deck S17)
     20:  [       S,   S,   S,   S,   S,   S,   S,   S,   S,   S],  # A,9
 }
 

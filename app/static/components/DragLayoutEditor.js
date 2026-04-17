@@ -72,7 +72,9 @@ function DragLayoutEditor({ isOpen, onClose, leftPanels, rightPanels, onLayoutCh
 
   if (!isOpen) return null;
 
-  function handleDragStart(key, column) {
+  function handleDragStart(e, key, column) {
+    e.dataTransfer.setData('text/plain', key);
+    e.dataTransfer.effectAllowed = 'move';
     setDragging(key);
     setDragCol(column);
   }
@@ -156,7 +158,7 @@ function DragLayoutEditor({ isOpen, onClose, leftPanels, rightPanels, onLayoutCh
     return React.createElement('div', {
       key: key,
       draggable: true,
-      onDragStart: function () { handleDragStart(key, column); },
+      onDragStart: function (e) { handleDragStart(e, key, column); },
       onDragOver: function (e) { handleDragOver(e, key); },
       onDrop: function (e) { handleDrop(e, key, column); },
       onDragEnd: handleDragEnd,
