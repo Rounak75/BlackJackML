@@ -31,7 +31,6 @@ function HandDisplay({
   playerHand, dealerUpcard, dealerHand, dealerMustDraw,
   sideBets, insurance,
   isDoubled, tookInsurance, onInsuranceChange, activeBet, currency,
-  dealEngineActive,
 }) {
   const bv   = playerHand?.cards?.length > 0 ? playerHand.value : null
   const bj   = playerHand?.is_blackjack
@@ -99,40 +98,146 @@ function HandDisplay({
   }
 
   return (
-    <div
-      className="rounded-xl p-4"
-      style={{
-        background: '#1a2236',
-        border: dealEngineActive
-          ? '1.5px solid rgba(255,212,71,0.2)'
-          : '1.5px solid rgba(255,255,255,0.12)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 0,
-        position: 'relative',
-        transition: 'border-color 0.2s',
-      }}
+    <div className="rounded-xl overflow-hidden"
+      style={{ background: '#1a2236', border: '1.5px solid rgba(255,255,255,0.12)' }}
     >
-      {/* FIX U1 — Deal Engine banner: replaces blurry absolute overlay.
-           Clear inline banner explains why the display is empty. */}
-      {dealEngineActive && (
-        <div className="hd-engine-banner">
-          <span className="hd-engine-badge">🎯 DEAL ENGINE</span>
-          <span className="hd-engine-text">
-            <strong>Hand display disabled</strong> — cards tracked per seat above.
-            Press{' '}
-            <kbd style={{ background: '#212d45', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 3, padding: '1px 4px', color: '#ffd447', fontFamily: 'monospace', fontSize: '0.75em' }}>E</kbd>
-            {' '}to switch to Manual mode.
-          </span>
+
+      {/* ══ CRIT-09: INSURANCE BANNER — full-width, ABOVE the hand grid ═══
+          Moved from inside dealer column. Insurance is a time-critical player
+          decision that needs immediate visibility, not buried in one column. */}
+      {insurance?.available && (
+        <div style={{
+          padding: '10px 16px',
+          background: tookInsurance
+            ? 'rgba(106,175,255,0.12)'
+            : insurance.recommended
+            ? 'rgba(68,232,130,0.06)'
+            : 'rgba(255,212,71,0.08)',
+          borderBottom: '1.5px solid rgba(255,255,255,0.1)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            {/* Left: info */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 200 }}>
+              <span style={{ fontSize: 22 }}>🛡</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: '#ffffff' }}>
+                  Insurance Available
+                  {tookInsurance && (
+                    <span style={{
+                      marginLeft: 8, fontSize: 9, fontWeight: 700, padding: '2px 8px',
+                      borderRadius: 10, background: 'rgba(106,175,255,0.3)',
+                      color: '#6aafff', border: '1px solid rgba(106,175,255,0.6)',
+                    }}>✓ INSURED</span>
+                  )}
+                </div>
+                <div style={{ fontSize: 10, color: '#b8ccdf', marginTop: 2 }}>
+                  Pays 2:1 · Costs {sym}{activeBet > 0 ? (activeBet * 0.5).toFixed(0) : '½ bet'}
+                  {insurance.ev !== null && (
+                    <span style={{
+                      marginLeft: 6, fontWeight: 700, fontFamily: 'DM Mono, monospace',
+                      color: insurance.ev >= 0 ? '#44e882' : '#ff5c5c',
+                    }}>
+                      {insurance.ev >= 0 ? '+' : ''}{insurance.ev?.toFixed(1)}% EV
+                    </span>
+                  )}
+                  {insurance.reason && (
+                    <span style={{ marginLeft: 6, color: '#94a7c4' }}>· {insurance.reason}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Right: action buttons — large touch targets (44px+) */}
+            {!tookInsurance ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button
+                  onClick={() => onInsuranceChange && onInsuranceChange(true)}
+                  style={{
+                    padding: '10px 24px', borderRadius: 8, cursor: 'pointer',
+                    fontWeight: 800, fontSize: 14, border: 'none',
+                    minHeight: 44, minWidth: 120,
+                    background: insurance.recommended
+                      ? 'linear-gradient(135deg,#44e882,#22cc66)'
+                      : 'rgba(255,255,255,0.08)',
+                    color: insurance.recommended ? '#0a0e18' : '#94a7c4',
+                    boxShadow: insurance.recommended ? '0 2px 12px rgba(68,232,130,0.35)' : 'none',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.filter = 'brightness(1.1)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.filter = '';
+                    e.currentTarget.style.transform = '';
+                  }}
+                  aria-label="Take insurance — I placed the insurance side bet"
+                >
+                  ✓ Take
+                </button>
+                <button
+                  onClick={() => onInsuranceChange && onInsuranceChange(false)}
+                  style={{
+                    padding: '10px 24px', borderRadius: 8, cursor: 'pointer',
+                    fontWeight: 800, fontSize: 14, border: 'none',
+                    minHeight: 44, minWidth: 120,
+                    background: !insurance.recommended
+                      ? 'linear-gradient(135deg,#ff5c5c,#cc2222)'
+                      : 'rgba(255,255,255,0.08)',
+                    color: !insurance.recommended ? '#ffffff' : '#94a7c4',
+                    boxShadow: !insurance.recommended ? '0 2px 12px rgba(255,92,92,0.35)' : 'none',
+                    transition: 'all 0.15s',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.filter = 'brightness(1.1)';
+                    e.currentTarget.style.transform = 'translateY(-1px)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.filter = '';
+                    e.currentTarget.style.transform = '';
+                  }}
+                  aria-label="Decline insurance — continue without insurance bet"
+                >
+                  ✗ Decline
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{
+                  fontSize: 11, fontFamily: 'DM Mono, monospace', fontWeight: 700,
+                  color: '#6aafff',
+                }}>
+                  {dealerBj
+                    ? `🎯 Pays +${sym}${(activeBet).toFixed(0)}`
+                    : dealerHand?.card_count >= 2
+                    ? `❌ Lost ${sym}${(activeBet * 0.5).toFixed(0)}`
+                    : `⏳ Waiting…`}
+                </span>
+                <button
+                  onClick={() => onInsuranceChange && onInsuranceChange(false)}
+                  aria-label="Undo insurance"
+                  style={{
+                    padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+                    fontSize: 10, fontWeight: 600,
+                    background: 'transparent',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#94a7c4',
+                  }}
+                >
+                  ↩ Undo
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Inner grid — dealer left, player right */}
+      {/* ══ TWO-COLUMN HAND GRID ════════════════════════════════════════ */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr 1fr',
-        gap: 16,
+        display: 'grid', gridTemplateColumns: '1fr 1fr',
+        gap: 16, padding: 16,
       }}>
+
       {/* ══ LEFT — Dealer ════════════════════════════════════════════ */}
       <div style={{ borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: 14 }}>
 
@@ -177,177 +282,8 @@ function HandDisplay({
               animation: 'pulse 1.5s ease-in-out infinite',
             }}
           >
-            ↓ MUST DRAW — Dealer has {dealerValue}{dealerSoft ? ' soft' : ''} — must draw (rule: hit on 16 or below, stand on 17+)
+            ↓ MUST DRAW — has {dealerValue}{dealerSoft ? ' soft' : ''}
           </span>
-        )}
-
-        {/* ── INSURANCE PROMPT ─────────────────────────────────────────
-            Insurance is NOT a side bet — it is a core game mechanic.
-            Only appears when dealer upcard is an Ace.
-            Pays 2:1 on half the main bet if dealer has blackjack.
-            Profitable when True Count >= +3 (shoe rich in 10-value cards).
-            Rule source: casino rules images — insurance offered before
-            dealer peeks for blackjack, settled separately from main bet.
-            User confirms they took it via the toggle in BettingPanel.
-        ─────────────────────────────────────────────────────────────── */}
-        {insurance?.available && (
-          <div className="mb-3" style={{ borderRadius: 10, overflow: 'hidden' }}>
-
-            {/* ── Top info strip ─────────────────────────────────────── */}
-            <div style={{
-              padding: '8px 12px',
-              background: tookInsurance
-                ? 'rgba(106,175,255,0.15)'
-                : 'rgba(255,212,71,0.08)',
-              borderBottom: '1px solid rgba(255,255,255,0.08)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ fontSize: 18 }}>🛡</span>
-                <div>
-                  <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', marginBottom: 1 }}>
-                    Insurance Available
-                    {tookInsurance && (
-                      <span style={{
-                        marginLeft: 8, fontSize: 9, fontWeight: 700, padding: '1px 6px',
-                        borderRadius: 10, background: 'rgba(106,175,255,0.3)',
-                        color: '#6aafff', border: '1px solid rgba(106,175,255,0.6)',
-                      }}>✓ INSURED</span>
-                    )}
-                  </div>
-                  <div style={{ fontSize: 10, color: '#b8ccdf' }}>
-                    Pays 2:1 · Costs {sym}{activeBet > 0 ? (activeBet * 0.5).toFixed(0) : '½ bet'}
-                    {activeBet > 0 && tookInsurance && (
-                      <span style={{ color: '#6aafff', fontWeight: 700 }}>
-                        {' '}· win {sym}{(activeBet).toFixed(0)} if dealer BJ
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              {/* EV badge */}
-              {insurance.ev !== null && (
-                <div style={{
-                  textAlign: 'right', fontSize: 11, fontFamily: 'DM Mono, monospace',
-                }}>
-                  <div style={{ fontWeight: 800, color: insurance.ev >= 0 ? '#44e882' : '#ff5c5c' }}>
-                    {insurance.ev >= 0 ? '+' : ''}{insurance.ev?.toFixed(1)}% EV
-                  </div>
-                  <div style={{ fontSize: 9, color: '#94a7c4' }}>
-                    {insurance.ten_probability?.toFixed(1)}% tens left
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* ── AI recommendation + action button ──────────────────── */}
-            <div style={{
-              background: tookInsurance
-                ? 'rgba(106,175,255,0.10)'
-                : insurance.recommended
-                ? 'rgba(68,232,130,0.06)'
-                : 'rgba(255,92,92,0.06)',
-              padding: '10px 12px',
-              border: `1.5px solid ${
-                tookInsurance ? 'rgba(106,175,255,0.5)'
-                : insurance.recommended ? 'rgba(68,232,130,0.35)'
-                : 'rgba(255,92,92,0.25)'}`,
-              borderTop: 'none',
-            }}>
-
-              {/* Reason */}
-              <div style={{ fontSize: 10, color: '#ccdaec', marginBottom: 8, lineHeight: 1.5 }}>
-                {insurance.reason}
-              </div>
-
-              {/* Big YES / NO button */}
-              {!tookInsurance ? (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {/* TAKE button */}
-                  <button
-                    onClick={() => onInsuranceChange && onInsuranceChange(true)}
-                    style={{
-                      flex: insurance.recommended ? 2 : 1,
-                      padding: '9px 0', borderRadius: 8, cursor: 'pointer',
-                      fontWeight: 800, fontSize: 13, border: 'none',
-                      background: insurance.recommended
-                        ? 'linear-gradient(135deg,#44e882,#22cc66)'
-                        : 'rgba(255,255,255,0.07)',
-                      color: insurance.recommended ? '#0a0e18' : '#94a7c4',
-                      boxShadow: insurance.recommended ? '0 2px 12px rgba(68,232,130,0.35)' : 'none',
-                      transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.filter = 'brightness(1.1)';
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.filter = '';
-                      e.currentTarget.style.transform = '';
-                    }}
-                    aria-label="Take insurance — I placed the insurance side bet"
-                  >
-                    ✓ Take Insurance
-                  </button>
-                  {/* DECLINE button */}
-                  <button
-                    onClick={() => onInsuranceChange && onInsuranceChange(false)}
-                    style={{
-                      flex: !insurance.recommended ? 2 : 1,
-                      padding: '9px 0', borderRadius: 8, cursor: 'pointer',
-                      fontWeight: 800, fontSize: 13, border: 'none',
-                      background: !insurance.recommended
-                        ? 'linear-gradient(135deg,#ff5c5c,#cc2222)'
-                        : 'rgba(255,255,255,0.07)',
-                      color: !insurance.recommended ? '#ffffff' : '#94a7c4',
-                      boxShadow: !insurance.recommended ? '0 2px 12px rgba(255,92,92,0.35)' : 'none',
-                      transition: 'all 0.15s',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.filter = 'brightness(1.1)';
-                      e.currentTarget.style.transform = 'translateY(-1px)';
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.filter = '';
-                      e.currentTarget.style.transform = '';
-                    }}
-                    aria-label="Decline insurance — continue without insurance bet"
-                  >
-                    ✗ Decline
-                  </button>
-                </div>
-              ) : (
-                /* Already took insurance — show settlement + undo */
-                <div>
-                  <div style={{
-                    padding: '7px 10px', borderRadius: 7, marginBottom: 6,
-                    background: 'rgba(106,175,255,0.1)', border: '1px solid rgba(106,175,255,0.3)',
-                    fontSize: 11, fontFamily: 'DM Mono, monospace', color: '#6aafff',
-                    textAlign: 'center', fontWeight: 700,
-                  }}>
-                    {dealerBj
-                      ? `🎯 Dealer BJ! Insurance pays +${sym}${(activeBet).toFixed(0)}`
-                      : dealerHand?.card_count >= 2
-                      ? `❌ No dealer BJ — lost insurance ${sym}${(activeBet * 0.5).toFixed(0)}`
-                      : `⏳ Insured ${sym}${(activeBet * 0.5).toFixed(0)} · waiting for hole card`}
-                  </div>
-                  <button
-                    onClick={() => onInsuranceChange && onInsuranceChange(false)}
-                    aria-label="Undo — I did not actually take insurance"
-                    style={{
-                      width: '100%', padding: '5px', borderRadius: 6, cursor: 'pointer',
-                      fontSize: 10, fontWeight: 600,
-                      background: 'transparent',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      color: '#94a7c4',
-                    }}
-                  >
-                    ↩ Undo insurance
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
         )}
 
         {/* Cards */}
@@ -361,8 +297,6 @@ function HandDisplay({
               {dealerCards.map((c, i) => (
                 <MiniCard key={i} str={c} />
               ))}
-              {/* Show a face-down card placeholder when dealer has only the upcard
-                  (hole card not yet entered) */}
               {dealerCards.length === 1 && (
                 <MiniCardBack label="?" />
               )}
@@ -375,7 +309,7 @@ function HandDisplay({
           <div className="mt-1.5 text-[10px] font-mono" style={{ color: '#b8ccdf' }}>
             {dealerCards.length === 1
               ? 'Upcard shown · add hole card when revealed'
-              : `${dealerCards.length} cards — enter next dealer card (S17: stand on 17+)`}
+              : `${dealerCards.length} cards`}
           </div>
         )}
 
@@ -383,19 +317,19 @@ function HandDisplay({
         {dealerBust && (
           <div className="mt-2 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
             style={{ background: 'rgba(255,92,92,0.15)', border: '1.5px solid rgba(255,92,92,0.5)', color: '#ff5c5c' }}>
-            💥 DEALER BUST — resolving…
+            💥 DEALER BUST
           </div>
         )}
         {dealerHand && dealerHand.dealer_stands && !dealerBust && !dealerBj && (
           <div className="mt-2 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
             style={{ background: 'rgba(50,200,120,0.12)', border: '1.5px solid rgba(50,200,120,0.4)', color: '#5eead4' }}>
-            ✓ Dealer stands on {dealerValue}{dealerSoft ? ' soft' : ''} — comparing hands…
+            ✓ Dealer stands on {dealerValue}{dealerSoft ? ' soft' : ''}
           </div>
         )}
         {dealerBj && (
           <div className="mt-2 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
             style={{ background: 'rgba(255,212,71,0.15)', border: '1.5px solid rgba(255,212,71,0.5)', color: '#ffd447' }}>
-            ⚠ DEALER BLACKJACK — resolving…
+            ⚠ DEALER BLACKJACK
           </div>
         )}
       </div>
@@ -541,7 +475,7 @@ function HandDisplay({
           )
         })()}
       </div>
-      </div>{/* end inner grid */}
+      </div>{/* close two-column grid */}
     </div>
   )
 }

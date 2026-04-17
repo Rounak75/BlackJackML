@@ -3,9 +3,11 @@
  * ─────────────────────────────────────────────────────────
  * 52-button card deal grid (4 suits × 13 ranks).
  *
- * UX AUDIT — Issue #5:
- *   In live/screenshot mode, the grid collapses to a compact
- *   strip with an expand button. In manual mode, full grid.
+ * UX AUDIT — CRIT-03:
+ *   Default mode is now a compact RANK-ONLY strip (13 buttons).
+ *   Clicking a rank opens a 4-button suit popover inline.
+ *   Full 52-button grid available via "Expand Grid" toggle.
+ *   This reduces ~280px → ~60px of vertical space.
  *
  * ACCESSIBILITY IMPROVEMENTS:
  *   • Every card button has a descriptive aria-label
@@ -17,10 +19,15 @@
  *   • Split/Undo have descriptive aria-labels
  */
 
-function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands, scanMode, countSystem, dealEngineActive, inputMode }) {
-  const { useState } = React;
+function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands, scanMode, countSystem, uiMode }) {
+  const { useState, useEffect } = React;
   const [suitFilter, setSuitFilter] = useState('all');
   const [gridExpanded, setGridExpanded] = useState(false);
+  const [suitPopoverRank, setSuitPopoverRank] = useState(null);
+
+  const isZen   = uiMode === 'zen';
+  const isSpeed = uiMode === 'speed';
+  const isMinimal = isZen || isSpeed;
 
   const rankToKey = { A: 11, '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, J: 10, Q: 10, K: 10 };
   const maxByKey  = { 2: 24, 3: 24, 4: 24, 5: 24, 6: 24, 7: 24, 8: 24, 9: 24, 10: 96, 11: 24 };
@@ -34,52 +41,98 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
   ];
 
   const targets = [
-    { t: 'player', label: '👤 Player', ariaLabel: 'Deal next card to player hand', lockedByEngine: false },
-    { t: 'dealer', label: dealerMustDraw ? '🏦 Dealer ←' : '🏦 Dealer', ariaLabel: dealerMustDraw ? 'Deal next card to dealer (dealer must draw)' : 'Deal next card to dealer hand', lockedByEngine: false },
-    { t: 'seen',   label: '👁 Seen',   ariaLabel: 'Mark card as seen (count only, no hand)', lockedByEngine: false },
+    { t: 'player', label: '👤 Player', ariaLabel: 'Deal next card to player hand' },
+    { t: 'dealer', label: dealerMustDraw ? '🏦 Dealer ←' : '🏦 Dealer', ariaLabel: dealerMustDraw ? 'Deal next card to dealer (dealer must draw)' : 'Deal next card to dealer hand' },
+    { t: 'seen',   label: '👁 Seen',   ariaLabel: 'Mark card as seen (count only, no hand)' },
   ];
 
   const suitFullName = { spades: 'Spades', hearts: 'Hearts', diamonds: 'Diamonds', clubs: 'Clubs' };
 
-  // Issue #5: collapse grid in live/screenshot mode
+  // Collapse in live/screenshot mode
   const isManualMode = !scanMode || scanMode === 'manual';
-  const showGrid = isManualMode || gridExpanded;
+  const showFullGrid = !isMinimal && gridExpanded;
+  // Compact mode = rank-only strip (default in manual mode, forced in zen/speed)
+  const showCompact = isMinimal || (isManualMode && !gridExpanded);
+
+  // ── SPEED MODE: Number key shortcuts for rapid card entry ─────────────
+  const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+  const KEY_TO_RANK = { '1': 'A', '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7', '8': '8', '9': '9', '0': '10' };
+  const SUIT_KEYS = { '1': 'spades', '2': 'hearts', '3': 'diamonds', '4': 'clubs' };
+
+  useEffect(() => {
+    if (!isSpeed) return;
+    const handler = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+      // If suit popover is open, 1-4 picks suit
+      if (suitPopoverRank && SUIT_KEYS[e.key]) {
+        e.preventDefault();
+        onDealCard(suitPopoverRank, SUIT_KEYS[e.key]);
+        setSuitPopoverRank(null);
+        return;
+      }
+      // Number keys open rank popover
+      if (KEY_TO_RANK[e.key]) {
+        e.preventDefault();
+        setSuitPopoverRank(prev => prev === KEY_TO_RANK[e.key] ? null : KEY_TO_RANK[e.key]);
+        return;
+      }
+      // Letter keys for J/Q/K
+      const upper = e.key.toUpperCase();
+      if (upper === 'J' || upper === 'Q' || upper === 'K') {
+        // Only intercept if not already handled by App shortcuts
+        // J/Q/K are unused in App.jsx, so safe to use here
+        e.preventDefault();
+        setSuitPopoverRank(prev => prev === upper ? null : upper);
+        return;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isSpeed, suitPopoverRank, onDealCard]);
 
   return (
     <div
-      className={`rounded-xl p-3 ${!showGrid ? 'card-grid-collapsed' : ''}`}
+      className={`rounded-xl p-3`}
       style={{ background: '#1c2540', border: '1.5px solid rgba(255,255,255,0.12)' }}
       role="group"
       aria-label="Card entry panel"
     >
-      {/* Header row */}
-      <div className="flex items-center justify-between mb-3">
-        <span
-          className="font-display font-bold text-[10px] uppercase tracking-widest"
-          style={{ color: '#b8ccdf' }}
-          aria-hidden="true"
-        >
-          {isManualMode ? 'Click to Deal' : (showGrid ? 'Card Grid (Expanded)' : 'Card Grid')}
-        </span>
+      {/* Header row — CRIT-04: dynamic target in header */}
+      <div className="flex items-center justify-between mb-2">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span
+            className="font-display font-bold text-[10px] uppercase tracking-widest"
+            style={{ color: '#b8ccdf' }}
+            aria-hidden="true"
+          >
+            {showFullGrid ? 'Full Card Grid' : 'Click to Deal'}
+          </span>
+          <span style={{
+            fontSize: 10, fontWeight: 800, letterSpacing: '0.05em',
+            color: target === 'player' ? '#60a5fa' : target === 'dealer' ? '#ff9a20' : '#94a7c4',
+          }}>
+            → {target === 'player' ? 'PLAYER' : target === 'dealer' ? 'DEALER' : 'SEEN'}
+          </span>
+        </div>
 
         <div className="flex items-center gap-2">
-          {/* Collapse/expand toggle for non-manual modes */}
-          {!isManualMode && (
-            <button
-              onClick={() => setGridExpanded(e => !e)}
-              className="text-[10px] px-2 py-0.5 rounded-md font-semibold transition-all"
-              style={{
-                background: gridExpanded ? 'rgba(255,212,71,0.1)' : 'transparent',
-                border: `1px solid ${gridExpanded ? 'rgba(255,212,71,0.4)' : 'rgba(255,255,255,0.12)'}`,
-                color: gridExpanded ? '#ffd447' : '#b8ccdf',
-              }}
-            >
-              {gridExpanded ? 'Collapse ▲' : 'Expand Grid ▼'}
-            </button>
+          {/* Toggle compact/full — hidden in minimal modes */}
+          {!isMinimal && (
+          <button
+            onClick={() => { setGridExpanded(e => !e); setSuitPopoverRank(null); }}
+            className="text-[10px] px-2 py-0.5 rounded-md font-semibold transition-all"
+            style={{
+              background: gridExpanded ? 'rgba(255,212,71,0.1)' : 'transparent',
+              border: `1px solid ${gridExpanded ? 'rgba(255,212,71,0.4)' : 'rgba(255,255,255,0.12)'}`,
+              color: gridExpanded ? '#ffd447' : '#b8ccdf',
+            }}
+          >
+            {gridExpanded ? 'Compact ▲' : 'Full Grid ▼'}
+          </button>
           )}
 
-          {/* Suit filter tabs — only shown when grid is visible */}
-          {showGrid && (
+          {/* Suit filter tabs — only shown in full grid mode */}
+          {showFullGrid && (
             <div className="flex gap-1" role="group" aria-label="Filter cards by suit">
               {suitFilters.map(({ key, label, red, ariaLabel }) => (
                 <button
@@ -105,46 +158,8 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
         </div>
       </div>
 
-      {/* Expand prompt for collapsed state */}
-      {!isManualMode && !showGrid && (
-        <button
-          onClick={() => setGridExpanded(true)}
-          className="card-grid-expand-btn"
-        >
-          🃏 Tap to expand 52-card grid for manual entry
-        </button>
-      )}
-
-      {/* ── Deal Engine Active indicator ─────────────────────────────── */}
-      {dealEngineActive && (
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            marginBottom: 8,
-            padding: '6px 10px',
-            borderRadius: 8,
-            background: 'rgba(255, 212, 71, 0.08)',
-            border: '1.5px solid rgba(255, 212, 71, 0.4)',
-          }}
-        >
-          <span style={{ fontSize: 13 }} aria-hidden="true">🎯</span>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#ffd447', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-              Deal Engine Active
-            </div>
-            <div style={{ fontSize: '0.6rem', color: '#b8ccdf', marginTop: 1 }}>
-              Cards → Seats only · Player &amp; Dealer hands isolated · Press <kbd style={{ background: '#212d45', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 3, padding: '0 3px', color: '#ffd447', fontFamily: 'monospace' }}>E</kbd> to switch to Manual
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Dealer must-draw banner */}
-      {dealerMustDraw && showGrid && (
+      {dealerMustDraw && (
         <div
           role="alert"
           className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg text-xs font-semibold"
@@ -161,7 +176,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
       )}
 
       {/* Dealer stands banner */}
-      {dealerStands && showGrid && (
+      {dealerStands && (
         <div
           role="status"
           className="flex items-center gap-2 mb-2 px-3 py-2 rounded-lg text-xs font-semibold"
@@ -176,7 +191,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
         </div>
       )}
 
-      {/* Target selector */}
+      {/* Target selector — CRIT-04: saturated fill colors per target */}
       <div
         className="flex items-center gap-2 mb-2 p-2 rounded-lg"
         style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)' }}
@@ -184,40 +199,33 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
         aria-label="Select deal target"
       >
         <span className="text-[10px] font-semibold" style={{ color: '#b8ccdf', flexShrink: 0 }} aria-hidden="true">To:</span>
-        <div className="flex gap-1 flex-1">
-          {targets.map(({ t, label, ariaLabel, lockedByEngine }) => {
+        <div className="flex gap-2 flex-1">
+          {targets.map(({ t, label, ariaLabel }) => {
             const isDealer = t === 'dealer';
-            const mustDraw = isDealer && dealerMustDraw && !dealEngineActive;
-            const isActive = target === t && !lockedByEngine;
-            const isLocked = lockedByEngine;
+            const mustDraw = isDealer && dealerMustDraw;
+            const isActive = target === t;
+            // CRIT-04: Saturated fill colors per target type
+            const fills = {
+              player: { bg: '#3b82f6', border: '#60a5fa', text: '#ffffff', shadow: 'rgba(59,130,246,0.5)' },
+              dealer: { bg: '#ff9a20', border: '#ffb347', text: '#0a0e18', shadow: 'rgba(255,154,32,0.5)' },
+              seen:   { bg: '#4b5563', border: '#6b7280', text: '#ffffff', shadow: 'rgba(75,85,99,0.4)' },
+            };
+            const fill = fills[t] || fills.player;
             return (
               <button
                 key={t}
-                onClick={() => !isLocked && onTargetChange(t)}
+                onClick={() => onTargetChange(t)}
                 aria-pressed={isActive}
-                aria-label={isLocked ? `${ariaLabel} (locked — Deal Engine active)` : ariaLabel}
-                aria-disabled={isLocked ? 'true' : undefined}
-                title={isLocked ? 'Locked — Deal Engine is routing cards to seats. Press E to switch to Manual mode.' : undefined}
-                className="flex-1 text-xs py-1.5 rounded-md font-semibold transition-all"
+                aria-label={ariaLabel}
+                className="flex-1 text-xs py-2 rounded-lg font-bold transition-all"
                 style={{
-                  background: isLocked
-                    ? 'rgba(255,255,255,0.03)'
-                    : isActive
-                      ? (mustDraw ? '#ff9a20' : '#ffd447')
-                      : (mustDraw ? 'rgba(255,154,32,0.12)' : 'transparent'),
-                  border: `1.5px solid ${
-                    isLocked
-                      ? 'rgba(255,255,255,0.07)'
-                      : isActive
-                        ? (mustDraw ? '#ff9a20' : '#ffd447')
-                        : (mustDraw ? 'rgba(255,154,32,0.5)' : 'rgba(255,255,255,0.15)')
-                  }`,
-                  color: isLocked ? 'rgba(255,255,255,0.2)' : isActive ? '#0a0e18' : (mustDraw ? '#ffb347' : '#ccdaec'),
-                  fontWeight: mustDraw ? 700 : 600,
-                  boxShadow: mustDraw && isActive ? '0 0 10px rgba(255,154,32,0.5)' : 'none',
-                  cursor: isLocked ? 'not-allowed' : 'pointer',
-                  textDecoration: isLocked ? 'line-through' : 'none',
-                  opacity: isLocked ? 0.45 : 1,
+                  background: isActive ? fill.bg : (mustDraw ? 'rgba(255,154,32,0.12)' : 'transparent'),
+                  border: `2px solid ${isActive ? fill.border : (mustDraw ? 'rgba(255,154,32,0.5)' : 'rgba(255,255,255,0.12)')}`,
+                  color: isActive ? fill.text : (mustDraw ? '#ffb347' : '#8fa5be'),
+                  fontWeight: 700,
+                  fontSize: 12,
+                  boxShadow: isActive ? `0 0 12px ${fill.shadow}` : 'none',
+                  letterSpacing: '0.02em',
                 }}
               >
                 {label}
@@ -228,7 +236,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
       </div>
 
       {/* Action buttons row: Split + Undo */}
-      <div className="flex gap-2 mb-3 card-grid-actions">
+      <div className="flex gap-2 mb-2 card-grid-actions">
         {canSplit ? (
           <button
             onClick={onSplit}
@@ -283,54 +291,183 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
         }
       `}</style>
 
-      {/* 13-column card grid */}
-      <div
-        className="card-grid-inner"
-        style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 1fr)', gap: '3px' }}
-        role="group"
-        aria-label="Card selection grid — click to deal a card"
-      >
-        {SUITS.map(suit =>
-          RANKS.map(rank => {
-            const visible = suitFilter === 'all' || suitFilter === suit.name;
-            if (!visible) return null;
+      {/* ══════════════════════════════════════════════════════════
+          COMPACT MODE — 13 rank buttons in a single row (CRIT-03)
+          Clicking a rank opens a 4-suit popover below it.
+          ══════════════════════════════════════════════════════════ */}
+      {showCompact && (
+        <div>
+          <div
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 1fr)', gap: '3px' }}
+            role="group"
+            aria-label="Card rank selection — click to pick suit"
+          >
+            {RANKS.map(rank => {
+              const activeTags = (typeof COUNT_TAGS !== 'undefined' && COUNT_TAGS[countSystem || 'hi_lo']) || HILO_TAG;
+              const hv = activeTags[rank] || 0;
+              const key = rankToKey[rank];
+              const rem = remainingByRank ? (remainingByRank[key] || 0) : 0;
+              const max = maxByKey[key] || 24;
+              const depleted = rem < max * 0.2;
+              const isOpen = suitPopoverRank === rank;
 
-            const activeTags = (typeof COUNT_TAGS !== 'undefined' && COUNT_TAGS[countSystem || 'hi_lo']) || HILO_TAG;
-            const hv       = activeTags[rank] || 0;
-            const key      = rankToKey[rank];
-            const rem      = remainingByRank ? (remainingByRank[key] || 0) : 0;
-            const max      = maxByKey[key] || 24;
-            const depleted = rem < max * 0.2;
-            const sysLabels = { hi_lo: 'Hi-Lo', ko: 'KO', omega_ii: 'Ω-II', zen: 'Zen', wong_halves: 'WH', uston_apc: 'APC' };
-            const sysLabel = sysLabels[countSystem] || 'Hi-Lo';
-            const hvFmt    = hv > 0 ? `+${hv}` : `${hv}`;
-            const countHint = hv !== 0 ? `, ${sysLabel} ${hvFmt}` : '';
-            const suitName  = suitFullName[suit.name] || suit.name;
+              return (
+                <div key={rank} style={{ position: 'relative' }}>
+                  <button
+                    onClick={() => setSuitPopoverRank(isOpen ? null : rank)}
+                    aria-expanded={isOpen}
+                    aria-label={`${rank} — ${rem} remaining. Click to pick suit`}
+                    aria-disabled={depleted ? 'true' : undefined}
+                    className={`card-btn compact-rank-btn ${depleted ? 'depleted' : ''} ${hv > 0 ? 'count-pos' : hv < 0 ? 'count-neg' : ''}`}
+                    style={{
+                      width: '100%',
+                      padding: isSpeed ? '10px 0' : '6px 0',
+                      fontSize: isSpeed ? 18 : 14,
+                      fontWeight: 800,
+                      borderRadius: 7,
+                      border: isOpen ? '2px solid #ffd447' : '1.5px solid rgba(255,255,255,0.15)',
+                      background: isOpen ? 'rgba(255,212,71,0.12)' : '#111827',
+                      color: depleted ? '#4a5568' : '#f0f4ff',
+                      cursor: 'pointer',
+                      position: 'relative',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {rank}
+                    {!isZen && hv !== 0 && (
+                      <span aria-hidden="true" style={{
+                        position: 'absolute', top: '1px', right: '3px',
+                        fontSize: '0.5rem', lineHeight: 1,
+                        color: hv > 0 ? 'var(--jade)' : 'var(--ruby)',
+                      }}>
+                        {hv > 0 ? '+' : '−'}{Math.abs(hv) !== 1 ? Math.abs(hv) : ''}
+                      </span>
+                    )}
+                    {!isZen && (
+                    <span style={{
+                      display: 'block', fontSize: 8, color: depleted ? '#4a5568' : '#6b7f96',
+                      fontWeight: 500, lineHeight: 1, marginTop: 2,
+                    }}>
+                      {rem}
+                    </span>
+                    )}
+                  </button>
 
-            return (
-              <button
-                key={`${rank}-${suit.name}`}
-                onClick={() => onDealCard(rank, suit.name)}
-                aria-label={`Deal ${rank} of ${suitName} to ${target}${countHint}${depleted ? ' (low supply)' : ''}`}
-                aria-disabled={depleted ? 'true' : undefined}
-                className={`card-btn ${suit.isRed ? 'red-card' : ''} ${depleted ? 'depleted' : ''} ${hv > 0 ? 'count-pos' : hv < 0 ? 'count-neg' : ''}`}
-              >
-                <span>{rank}</span>
-                <span className="btn-suit" aria-hidden="true">{suit.icon}</span>
-                {hv !== 0 && (
-                  <span aria-hidden="true" style={{
-                    position: 'absolute', top: '2px', right: '3px',
-                    fontSize: '0.5rem', lineHeight: 1,
-                    color: hv > 0 ? 'var(--jade)' : 'var(--ruby)',
-                  }}>
-                    {hv > 0 ? '+' : '−'}{Math.abs(hv) !== 1 ? Math.abs(hv) : ''}
-                  </span>
-                )}
-              </button>
-            );
-          })
-        )}
-      </div>
+                  {/* Suit popover — opens ABOVE the rank button, horizontal row */}
+                  {isOpen && (
+                    <div style={{
+                      position: 'absolute', bottom: '100%', left: '50%',
+                      transform: 'translateX(-50%)',
+                      marginBottom: 4, zIndex: 50,
+                      display: 'flex', flexDirection: 'row', gap: 2,
+                      background: '#1c2540',
+                      border: '1.5px solid rgba(255,212,71,0.5)',
+                      borderRadius: 8, padding: 4,
+                      boxShadow: '0 -4px 20px rgba(0,0,0,0.5)',
+                      whiteSpace: 'nowrap',
+                    }}>
+                      {SUITS.map(suit => (
+                        <button
+                          key={suit.name}
+                          onClick={() => {
+                            onDealCard(rank, suit.name);
+                            setSuitPopoverRank(null);
+                          }}
+                          aria-label={`Deal ${rank} of ${suitFullName[suit.name]} to ${target}`}
+                          style={{
+                            padding: '6px 8px', fontSize: 18, cursor: 'pointer',
+                            borderRadius: 5, border: 'none',
+                            background: 'transparent',
+                            color: suit.isRed ? '#ff7a7a' : '#f0f4ff',
+                            fontWeight: 700, lineHeight: 1,
+                            transition: 'background 0.1s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.12)'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          {suit.icon}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Click-away handler for popover */}
+          {suitPopoverRank && (
+            <div
+              style={{ position: 'fixed', inset: 0, zIndex: 40 }}
+              onClick={() => setSuitPopoverRank(null)}
+              aria-hidden="true"
+            />
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════════════════════════════════════════════
+          FULL GRID MODE — original 13-column × 4 suit grid
+          ══════════════════════════════════════════════════════════ */}
+      {showFullGrid && (
+        <div
+          className="card-grid-inner"
+          style={{ display: 'grid', gridTemplateColumns: 'repeat(13, 1fr)', gap: '3px' }}
+          role="group"
+          aria-label="Card selection grid — click to deal a card"
+        >
+          {SUITS.map(suit =>
+            RANKS.map(rank => {
+              const visible = suitFilter === 'all' || suitFilter === suit.name;
+              if (!visible) return null;
+
+              const activeTags = (typeof COUNT_TAGS !== 'undefined' && COUNT_TAGS[countSystem || 'hi_lo']) || HILO_TAG;
+              const hv       = activeTags[rank] || 0;
+              const key      = rankToKey[rank];
+              const rem      = remainingByRank ? (remainingByRank[key] || 0) : 0;
+              const max      = maxByKey[key] || 24;
+              const depleted = rem < max * 0.2;
+              const sysLabels = { hi_lo: 'Hi-Lo', ko: 'KO', omega_ii: 'Ω-II', zen: 'Zen', wong_halves: 'WH' };
+              const sysLabel = sysLabels[countSystem] || 'Hi-Lo';
+              const hvFmt    = hv > 0 ? `+${hv}` : `${hv}`;
+              const countHint = hv !== 0 ? `, ${sysLabel} ${hvFmt}` : '';
+              const suitName  = suitFullName[suit.name] || suit.name;
+
+              return (
+                <button
+                  key={`${rank}-${suit.name}`}
+                  onClick={() => onDealCard(rank, suit.name)}
+                  aria-label={`Deal ${rank} of ${suitName} to ${target}${countHint}${depleted ? ' (low supply)' : ''}`}
+                  aria-disabled={depleted ? 'true' : undefined}
+                  className={`card-btn ${suit.isRed ? 'red-card' : ''} ${depleted ? 'depleted' : ''} ${hv > 0 ? 'count-pos' : hv < 0 ? 'count-neg' : ''}`}
+                >
+                  <span>{rank}</span>
+                  <span className="btn-suit" aria-hidden="true">{suit.icon}</span>
+                  {hv !== 0 && (
+                    <span aria-hidden="true" style={{
+                      position: 'absolute', top: '2px', right: '3px',
+                      fontSize: '0.5rem', lineHeight: 1,
+                      color: hv > 0 ? 'var(--jade)' : 'var(--ruby)',
+                    }}>
+                      {hv > 0 ? '+' : '−'}{Math.abs(hv) !== 1 ? Math.abs(hv) : ''}
+                    </span>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* Non-manual mode: show expand prompt when collapsed */}
+      {!isManualMode && !gridExpanded && (
+        <button
+          onClick={() => setGridExpanded(true)}
+          className="card-grid-expand-btn"
+        >
+          🃏 Tap to expand 52-card grid for manual entry
+        </button>
+      )}
     </div>
   );
 }

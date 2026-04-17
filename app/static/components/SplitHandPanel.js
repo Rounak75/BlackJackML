@@ -49,10 +49,8 @@ function SplitHandCard({ cardStr }) {
   );
 }
 
-function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, onComplete, baseBet, currency }) {
+function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, onComplete }) {
   const { useState } = React;
-  const cur = currency || { symbol: '₹', isCrypto: false, decimals: 2 };
-  const fmtBet = (n) => cur.isCrypto ? Number(n).toFixed(cur.decimals || 2) : Number(n).toFixed(2);
 
   if (!hand) return null;
 
@@ -72,8 +70,6 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
       flex: 1, borderRadius: 10, padding: '12px',
       background: isActive ? 'rgba(255,212,71,0.06)' : 'rgba(255,255,255,0.02)',
       border: `2px solid ${isActive ? 'rgba(255,212,71,0.5)' : 'rgba(255,255,255,0.1)'}`,
-      boxShadow: isActive ? '0 0 18px rgba(255,212,71,0.25), inset 0 0 12px rgba(255,212,71,0.05)' : 'none',
-      transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
       position: 'relative', transition: 'all 0.2s',
     }}>
       {/* Header */}
@@ -86,14 +82,7 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
           {isActive && (
             <span style={{ fontSize: 8, fontWeight: 700, color: '#ffd447',
               background: 'rgba(255,212,71,0.15)', border: '1px solid rgba(255,212,71,0.4)',
-              borderRadius: 3, padding: '1px 5px',
-              animation: 'splitActivePulse 1.5s ease-in-out infinite' }}>PLAYING</span>
-          )}
-          {baseBet > 0 && (
-            <span style={{ fontSize: 9, fontWeight: 600, color: '#94a7c4',
-              fontFamily: 'DM Mono, monospace' }}>
-              Bet {cur.symbol}{fmtBet(baseBet)}
-            </span>
+              borderRadius: 3, padding: '1px 5px' }}>ACTIVE</span>
           )}
           {isSplitAce && (
             <span style={{ fontSize: 8, color: '#b99bff',
@@ -148,29 +137,28 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
         </div>
       )}
 
-      {/* Done/Advance button — shown when hand is complete OR busted */}
-      {/* FIX: Previously hidden on bust (isBust guard), leaving player stuck.   */}
-      {/* Now shown on bust too, as a fallback in case server auto-advance races. */}
+      {/* Done/Advance button — CRIT-10: made much more prominent */}
       {isActive && !isBJ && !isSplitAce && hand.cards.length >= 2 && onComplete && (
         <button onClick={onComplete} aria-label={`Done with split hand ${handNumber}`} style={{
-          width: '100%', marginTop: 8, padding: '6px', fontSize: 10, fontWeight: 700,
-          borderRadius: 6, cursor: 'pointer',
+          width: '100%', marginTop: 10, padding: '12px', fontSize: 14, fontWeight: 800,
+          borderRadius: 8, cursor: 'pointer', letterSpacing: '0.02em',
           background: isBust
-            ? 'rgba(255,92,92,0.12)' : 'rgba(106,175,255,0.12)',
+            ? 'rgba(255,92,92,0.15)' : 'rgba(106,175,255,0.15)',
           border: isBust
-            ? '1px solid rgba(255,92,92,0.4)' : '1px solid rgba(106,175,255,0.4)',
+            ? '2px solid rgba(255,92,92,0.6)' : '2px solid rgba(106,175,255,0.6)',
           color: isBust ? '#ff5c5c' : '#6aafff',
+          animation: 'split-advance-pulse 1.5s ease-in-out infinite',
         }}>
           {isBust
-            ? (isLastHand ? `✗ Hand ${handNumber} Busted — Now Deal Dealer` : `✗ Hand ${handNumber} Busted → Next Hand`)
-            : (isLastHand ? `✓ Stand — Done with Hand ${handNumber}` : `✓ Done with Hand ${handNumber} → Next Hand`)}
+            ? (isLastHand ? '→ BUSTED — Deal Dealer' : '→ BUSTED — Next Hand')
+            : (isLastHand ? '✓ STAND — Deal Dealer' : '✓ DONE → Next Hand')}
         </button>
       )}
     </div>
   );
 }
 
-function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, socket, onNextHand, baseBet, currency }) {
+function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, socket, onNextHand }) {
   if (!splitHands || splitHands.length === 0) return null;
 
   const handleComplete = () => {
@@ -231,8 +219,6 @@ function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, socket, onN
             isLastHand={i === splitHands.length - 1}
             dealerUpcard={dealerUpcard}
             onComplete={i === activeHandIndex ? handleComplete : null}
-            baseBet={baseBet || 0}
-            currency={currency}
           />
         ))}
       </div>

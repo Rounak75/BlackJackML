@@ -17,9 +17,11 @@
  *   compDep16      — recommendation.comp_dep_16 object (Issue #8 inline)
  */
 
-function ActionPanel({ recommendation, count, mlModelInfo, compDep16 }) {
+function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode }) {
   const { useState, useRef, useEffect } = React;
   const [showWhy, setShowWhy] = useState(false);
+  const isZen   = uiMode === 'zen';
+  const isSpeed = uiMode === 'speed';
 
   // Track previous action for "last action" label
   const prevActionRef = useRef(null);
@@ -95,38 +97,39 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16 }) {
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 16,
-          padding: '16px 20px',
+          gap: 12,
+          padding: '10px 16px',
           background: bg,
           transition: 'background 0.3s ease',
         }}
       >
 
-        {/* Action word — the hero element at 4rem */}
+        {/* Action word — hero element */}
         <div style={{ flex: 1 }}>
           <div
             className={`action-text-base ${action ? actionClass(action) : ''}`}
             title={action ? `Best play: ${action}` : 'Deal cards to see recommendation'}
             style={{
-              fontSize: '4rem',
+              fontSize: action ? (isZen ? '3rem' : '2.4rem') : '1.6rem',
               lineHeight: 1,
               fontWeight: 900,
               letterSpacing: '-0.02em',
               color: action ? undefined : '#4a5568',
+              opacity: action ? 1 : 0.4,
             }}
           >
             {action || 'DEAL CARDS'}
           </div>
 
-          {/* Last action micro-label — trading-style */}
-          {lastAction && action && (
+          {/* Last action micro-label — hidden in speed mode */}
+          {!isSpeed && lastAction && action && (
             <div style={{ fontSize: 9, color: '#6b7f96', marginTop: 4, letterSpacing: '0.04em' }}>
               prev: <span style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', color: '#8fa5be' }}>{lastAction}</span>
             </div>
           )}
 
-          {/* CompDepAlert inline badge (Issue #8) */}
-          {cdActive && (
+          {/* CompDepAlert inline badge (Issue #8) — hidden in zen/speed */}
+          {!isZen && !isSpeed && cdActive && (
             <div
               style={{
                 display: 'inline-flex',
@@ -151,23 +154,11 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16 }) {
           )}
         </div>
 
-        {/* Right cluster — TC + deviation badge + model dot */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5, flexShrink: 0 }}>
+        {/* Right cluster — hidden in zen, DEV badge only in speed */}
+        {!isZen && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
 
-          {/* True Count */}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
-            <span style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.1em', color: '#8fa5be' }}>
-              TC
-            </span>
-            <span
-              className={`font-mono font-bold ${countClass(count ? count.true : 0)}`}
-              style={{ fontSize: '1.3rem', lineHeight: 1 }}
-            >
-              {count ? (count.true >= 0 ? '+' : '') + count.true.toFixed(1) : '—'}
-            </span>
-          </div>
-
-          {/* Deviation badge — only when count overrides basic strategy */}
+          {/* Deviation badge — kept in speed (decision-critical) */}
           {isDev && (
             <span
               style={{
@@ -183,7 +174,8 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16 }) {
             </span>
           )}
 
-          {/* Model status dot */}
+          {/* Model status dot — hidden in speed */}
+          {!isSpeed && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{
               width: 5, height: 5, borderRadius: '50%', flexShrink: 0,
@@ -193,12 +185,14 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16 }) {
               {modelLoaded ? 'ML' : 'Basic'}
             </span>
           </div>
+          )}
 
         </div>
+        )}
       </div>
 
-      {/* ── Secondary row — basic strategy + why toggle ─────────── */}
-      {recommendation && (
+      {/* ── Secondary row — basic strategy + why toggle (hidden in zen/speed) ── */}
+      {!isZen && !isSpeed && recommendation && (
         <div
           style={{
             display: 'flex',

@@ -91,7 +91,7 @@ function CenterToolbar({ recommendation, count, playerHand, dealerUpcard, sideBe
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
 
-      {/* ── ROW 1: Action + Hand + Bust% + Shortcuts ───── */}
+      {/* ── ROW 1: Hand + Bust% + Dealer Bust% (CRIT-01/08: removed action badge + shortcuts) ── */}
       <div style={{
         background:'#1c2540',
         border:'1.5px solid rgba(255,255,255,0.09)',
@@ -99,24 +99,6 @@ function CenterToolbar({ recommendation, count, playerHand, dealerUpcard, sideBe
         padding:'8px 12px',
         display:'flex', alignItems:'center', gap:0,
       }}>
-
-        {/* Action badge */}
-        <div style={{
-          flexShrink: 0, display:'flex', alignItems:'center', gap:6,
-          background: action ? `${acCol}10` : 'rgba(255,255,255,0.02)',
-          border:`1px solid ${action ? acCol+'40' : 'rgba(255,255,255,0.07)'}`,
-          borderRadius:7, padding:'5px 10px', marginRight:6,
-        }}>
-          <span style={{ fontSize:18, fontWeight:900, color:acCol, fontFamily:'Syne,sans-serif',
-            textShadow: action ? `0 0 12px ${acCol}50` : 'none', lineHeight:1 }}>
-            {action || '—'}
-          </span>
-          {recommendation?.is_deviation && (
-            <span style={{ fontSize:7, fontWeight:800, color:'#b99bff',
-              background:'rgba(185,155,255,0.12)', border:'1px solid rgba(185,155,255,0.3)',
-              borderRadius:3, padding:'1px 4px', letterSpacing:'0.06em' }}>DEV</span>
-          )}
-        </div>
 
         {/* Hand value */}
         {cell(isBJ ? '🎉 BJ' : isBust ? '💀 Bust' : 'Hand',
@@ -131,19 +113,6 @@ function CenterToolbar({ recommendation, count, playerHand, dealerUpcard, sideBe
         {/* Dealer bust % */}
         {cell(upRank ? `Dlr (${upRank})` : 'Dlr Bust',
           dealerBustPct !== null ? `${dealerBustPct.toFixed(0)}%` : '—', dlrBustCol, null, 'Dealer Bust Probability')}
-        {divider()}
-
-        {/* Keyboard shortcuts */}
-        <div style={{ flex:2, display:'flex', gap:6, justifyContent:'flex-end', flexWrap:'wrap' }}>
-          {[['N','New'],['S','Shuffle'],['P','Player'],['D','Dealer']].map(([k,l]) => (
-            <div key={k} style={{ display:'flex', alignItems:'center', gap:2 }}>
-              <span style={{ fontFamily:'DM Mono,monospace', fontSize:8, fontWeight:700,
-                background:'#212d45', border:'1px solid rgba(255,255,255,0.15)',
-                borderRadius:3, padding:'1px 4px', color:'#ffd447' }}>{k}</span>
-              <span style={{ fontSize:8, color:'#b8ccdf' }}>{l}</span>
-            </div>
-          ))}
-        </div>
 
       </div>
 

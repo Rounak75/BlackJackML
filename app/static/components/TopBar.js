@@ -17,7 +17,6 @@ const COUNTING_SYSTEMS = {
   omega_ii:    { label: 'Omega II',     level: '★★★', desc: 'Level 2. More accurate than Hi-Lo, harder to maintain under pressure.' },
   zen:         { label: 'Zen Count',    level: '★★☆', desc: 'Level 2 balanced. Good accuracy vs difficulty trade-off.' },
   wong_halves: { label: 'Wong Halves',  level: '★★★', desc: 'Level 3. Fractional values (±0.5, ±1, ±1.5). Most accurate balanced system.' },
-  uston_apc:   { label: 'Uston APC',   level: '★★★', desc: 'Level 3. Highest betting & insurance correlation. Ace side count. Best for shoe games.' },
 };
 
 /* ── Data: shuffle types with their effect on the ML tracker ─ */
@@ -110,7 +109,8 @@ const STRIPE_CLASS = {
 };
 
 /* ── Main TopBar ─────────────────────────────────────────── */
-function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction }) {
+function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, uiMode, onModeChange }) {
+  const isMinimal = uiMode === 'zen' || uiMode === 'speed';
   const [activeSystem,  setActiveSystem]  = useState('hi_lo');
   const [activeShuffle, setActiveShuffle] = useState('machine');
   const { useRef, useEffect } = React;
@@ -119,24 +119,21 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction }) 
   const rc  = count ? count.running    : 0;
   const adv = count ? count.advantage  : -0.5;
   const etc = count ? count.enhanced_true : 0;
-  // UI/UX fix: use effective_true for KO systems so hero TC starts at 0, not -3.5
-  const effTC = count ? (typeof count.effective_true === 'number' ? count.effective_true : count.true) : 0;
-  const isKO  = count ? (count.is_ko || count.system === 'ko') : false;
 
   const sysMeta  = COUNTING_SYSTEMS[activeSystem]  || COUNTING_SYSTEMS.hi_lo;
   const shufMeta = SHUFFLE_TYPES[activeShuffle] || SHUFFLE_TYPES.machine;
 
   // ── TC flash on threshold crossing ──────────────────────
-  const prevTcRef = useRef(effTC);
+  const prevTcRef = useRef(tc);
   const tcBlockRef = useRef(null);
   useEffect(() => {
     const prev = prevTcRef.current;
-    prevTcRef.current = effTC;
+    prevTcRef.current = tc;
     const thresholds = [-5, -3, 3, 5];
     for (const t of thresholds) {
-      const crossed = (prev < t && effTC >= t) || (prev > t && effTC <= t) ||
-                      (prev >= t && effTC < t) || (prev <= t && effTC > t);
-      if (crossed && prev !== effTC) {
+      const crossed = (prev < t && tc >= t) || (prev > t && tc <= t) ||
+                      (prev >= t && tc < t) || (prev <= t && tc > t);
+      if (crossed && prev !== tc) {
         if (tcBlockRef.current) {
           tcBlockRef.current.classList.remove('tc-flash');
           void tcBlockRef.current.offsetWidth; // force reflow
@@ -185,6 +182,42 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction }) 
           <span className="font-display font-extrabold text-sm tracking-tight" style={{ color: '#f0f4ff' }}>
             BlackJack ML
           </span>
+
+          {/* ── Mode switcher pill ──────────────────────── */}
+          {onModeChange && (
+            <div style={{
+              display: 'flex', gap: 0,
+              background: '#111827',
+              borderRadius: 8,
+              border: '1px solid rgba(255,255,255,0.12)',
+              overflow: 'hidden',
+              marginLeft: 8,
+            }}>
+              {[
+                { key: 'normal', label: 'Normal',  icon: '' },
+                { key: 'zen',    label: 'Zen',     icon: '🧘' },
+                { key: 'speed',  label: 'Speed',   icon: '⚡' },
+              ].map(m => (
+                <button
+                  key={m.key}
+                  onClick={() => onModeChange(m.key)}
+                  aria-label={`Switch to ${m.label} mode`}
+                  aria-pressed={uiMode === m.key}
+                  style={{
+                    padding: '4px 10px', fontSize: 10, fontWeight: 700,
+                    cursor: 'pointer', border: 'none',
+                    background: uiMode === m.key ? 'rgba(255,212,71,0.15)' : 'transparent',
+                    color: uiMode === m.key ? '#ffd447' : '#6b7f96',
+                    borderBottom: uiMode === m.key ? '2px solid #ffd447' : '2px solid transparent',
+                    transition: 'all 0.15s',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {m.icon}{m.icon ? ' ' : ''}{m.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ── Live Count Display (Issue #2 — TC hero) ── */}
@@ -228,13 +261,13 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction }) 
                 color: '#b8ccdf', marginBottom: 3,
               }}
             >
-              {isKO ? 'Effective TC' : 'True Count'}
+              True Count
             </div>
             <div
-              className={`font-mono font-bold leading-none ${countClass(effTC)}`}
+              className={`font-mono font-bold leading-none ${countClass(tc)}`}
               style={{ fontSize: '3rem' }}
             >
-              {effTC.toFixed(1)}
+              {tc.toFixed(1)}
             </div>
           </div>
 
@@ -263,7 +296,8 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction }) 
         {/* ── Controls ───────────────────────────────── */}
         <div className="flex items-center gap-3 flex-shrink-0">
 
-          {/* Counting System */}
+          {/* Counting System — hidden in minimal modes */}
+          {!isMinimal && (
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1 mb-0.5">
               <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: '#b8ccdf' }}>
@@ -296,13 +330,15 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction }) 
               ))}
             </select>
           </div>
+          )}
 
           <button onClick={onNewHand} aria-label="Start a new hand (count continues)" className="topbar-btn" style={{ alignSelf: 'center' }}>
             ⬆ New Hand
           </button>
 
-          {/* Shuffle */}
+          {/* Shuffle — simplified in minimal modes */}
           <div className="flex flex-col gap-0.5">
+            {!isMinimal && (
             <div className="flex items-center gap-1 mb-0.5">
               <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: '#b8ccdf' }}>
                 Shuffle
@@ -324,12 +360,14 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction }) 
                 </div>
               </InfoTooltip>
             </div>
+            )}
             <div className="flex items-center gap-1">
               <button onClick={onShuffle} aria-label="Trigger casino shuffle and reset count" className="topbar-btn danger" style={{ whiteSpace: 'nowrap' }}>
                 ⇄ Shuffle
               </button>
               {/* Hidden select kept for App.js getElementById compat */}
               <select id="shuffle-type" style={{ display: 'none' }} defaultValue="machine" />
+              {!isMinimal && (
               <select
                 value={activeShuffle}
                 onChange={handleShuffleTypeChange}
@@ -340,6 +378,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction }) 
                   <option key={k} value={k}>{v.label}</option>
                 ))}
               </select>
+              )}
             </div>
           </div>
 
