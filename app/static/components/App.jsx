@@ -87,6 +87,11 @@ function App() {
   const dealTargetRef = useRef('player')
   const gameStateRef = useRef(null)
   const dealOrderRef = useRef(null)
+  // FIX CRIT-03: Guard to block all input during undo replay window.
+  // Previously, user actions during the ~1s setTimeout replay would race
+  // with queued replay events, corrupting hand state.
+  const isReplayingRef = useRef(false)
+  const replayTimeoutsRef = useRef([])
 
   const setTarget = (t) => { dealTargetRef.current = t; setDealTarget(t); }
 
@@ -150,6 +155,11 @@ function App() {
 
   // ── HANDLERS ───────────────────────────────────────────────────────────────
   const handleDealCard = useCallback((rank, suit, targetOverride) => {
+    // FIX CRIT-03: Block user-initiated deals during undo replay
+    if (isReplayingRef.current) {
+      showToast('Undo in progress — please wait', 'warning')
+      return
+    }
     const target = targetOverride || dealTargetRef.current
     undoStack.current.push({ rank, suit, target })
     // §2 Debug: track card deal action
@@ -166,15 +176,21 @@ function App() {
   }, [handleDealCard, dealOrderEnabled])
 
   const handleSplit = useCallback(() => {
+    if (isReplayingRef.current) return
     undoStack.current.push({ type: 'split' })
     socketRef.current?.emit('player_split')
   }, [])
 
   const handleNextSplitHand = useCallback(() => {
+    if (isReplayingRef.current) return
     socketRef.current?.emit('next_split_hand')
   }, [])
 
   const handleNewHand = useCallback(() => {
+    if (isReplayingRef.current) {
+      showToast('Undo in progress — please wait', 'warning')
+      return
+    }
     undoStack.current = []
     dealTargetRef.current = 'player'
     setDealTarget('player')
@@ -187,6 +203,10 @@ function App() {
   }, [])
 
   const handleShuffle = useCallback(() => {
+    if (isReplayingRef.current) {
+      showToast('Undo in progress — please wait', 'warning')
+      return
+    }
     const shuffleType = document.getElementById('shuffle-type')?.value || 'machine'
     undoStack.current = []
     // §2 Debug: track shuffle action
@@ -230,6 +250,11 @@ function App() {
   const handleUndo = useCallback(() => {
     // §2 Debug: track undo action
     if (typeof DebugUI !== 'undefined') DebugUI.trackClick('UNDO', { depth: undoStack.current.length })
+    // FIX CRIT-03: Block re-entry during replay
+    if (isReplayingRef.current) {
+      showToast('Undo already in progress', 'warning')
+      return
+    }
     if (undoStack.current.length === 0) {
       showToast('Nothing to undo', 'warning')
       return
@@ -270,12 +295,28 @@ function App() {
       }
     }
 
+    // FIX CRIT-03: Set replay guard. All input handlers check this ref and
+    // refuse to process events while true. Cleared when last timeout fires.
+    if (replay.length > 0) {
+      isReplayingRef.current = true
+      // Clear any lingering timeouts from a prior aborted replay
+      replayTimeoutsRef.current.forEach(id => clearTimeout(id))
+      replayTimeoutsRef.current = []
+    }
+
     // Server replay (cards re-emitted so server hand rebuilds)
     replay.forEach((c, i) => {
-      setTimeout(() => {
+      const isLast = (i === replay.length - 1)
+      const timeoutId = setTimeout(() => {
         undoStack.current.push(c)
         socketRef.current?.emit('deal_card', { rank: c.rank, suit: c.suit, target: c.target })
+        if (isLast) {
+          // Last card of replay dispatched — clear the guard
+          isReplayingRef.current = false
+          replayTimeoutsRef.current = []
+        }
       }, 80 * i + 120)
+      replayTimeoutsRef.current.push(timeoutId)
     })
 
     showToast(`Undid ${removed.rank} → ${removed.target}`, 'info')

@@ -116,7 +116,12 @@ class Simulator:
             # Bet sizing: use counting engine when counting is enabled,
             # otherwise flat minimum bet (for the basic-strategy-only baseline)
             if use_counting:
-                bet = self.betting_engine.get_optimal_bet(self.counter.effective_tc)
+                # FIX CRIT-07: Pass system-normalized advantage so Kelly sizing
+                # is correct for Level-2/3 systems during training simulation.
+                bet = self.betting_engine.get_optimal_bet(
+                    self.counter.effective_tc,
+                    advantage=self.counter.advantage,
+                )
             else:
                 bet = BettingConfig.TABLE_MIN
 
@@ -154,8 +159,15 @@ class Simulator:
 
                     # Get action
                     if use_deviations:
+                        # FIX CRIT-08: Normalize TC to Hi-Lo-equivalent before
+                        # passing to deviation engine. Previously passed raw
+                        # effective_tc, which caused Level-2/3 systems to
+                        # trigger I18/FAB 4 deviations ~2× too early. ML model
+                        # learned the wrong deviations for non-Hi-Lo systems
+                        # as a result — retrain after applying this fix.
+                        _normalized_tc = self.counter.effective_tc / (self._tc_scale / 10.0)
                         action = self.deviation_engine.get_action(
-                            hand, dealer_upcard, self.counter.effective_tc,
+                            hand, dealer_upcard, _normalized_tc,
                             available, num_splits_done)
                     else:
                         action = self.strategy.get_action(

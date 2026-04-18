@@ -87,7 +87,6 @@ PYEOF
   echo "🧪  Smoke testing bundle..."
   SMOKE_FAIL=0
   for global in \
-    'class ErrorBoundary' \
     'class DebugErrorBoundary' \
     'var DebugController' \
     'var DebugUI' \

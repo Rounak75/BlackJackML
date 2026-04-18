@@ -19,7 +19,8 @@ var BetSpreadHelper = (function () {
   var useState = React.useState;
   var useMemo  = React.useMemo;
 
-  // Standard Hi-Lo ramp: TC → unit multiplier
+  // Hi-Lo-calibrated ramp. TC values passed in must already be Hi-Lo-normalized
+  // (see MAJ-06 normalization inside the component below).
   var RAMP = [
     { tc: -2, units: 0,  label: 'Wong Out',  signal: 'OUT'  },
     { tc: -1, units: 0,  label: 'Wong Out',  signal: 'OUT'  },
@@ -68,13 +69,16 @@ var BetSpreadHelper = (function () {
     var systemName = (count.system || 'hi_lo').replace('_', '-').toUpperCase();
 
     // FIX MAJ-06: Normalize TC to Hi-Lo equivalent for ramp lookup.
-    // Level-2/3 systems (Omega II, Zen, Wong Halves) produce raw TC ~2-3x
-    // larger than Hi-Lo, which would make the spread chart show fake-high bets.
-    // Normalization factors: Hi-Lo scalar = 10, Omega II = 20, Zen = 18, etc.
+    // Level-2/3 systems produce raw TC ~2× larger than Hi-Lo for the same shoe.
+    // Scalars MUST match config.py::CountingConfig.COUNT_NORM_SCALARS exactly.
+    // If you change one, change both — drift here causes UI/server disagreement.
     var NORM_SCALARS = {
-      'HI-LO': 10, 'HI-OPT-I': 10, 'HI-OPT-II': 18, 'KO': 10,
-      'OMEGA-II': 20, 'ZEN': 18, 'WONG-HALVES': 10, 'HALVES': 10,
-      'RED-7': 10, 'USTON-APC': 23, 'USTON-SS': 18,
+      'HI-LO':       10,
+      'KO':          10,
+      'OMEGA-II':    20,
+      'ZEN':         20,
+      'WONG-HALVES': 15,
+      'USTON-APC':   20,
     };
     var sysScalar = NORM_SCALARS[systemName] || 10;
     var hiloScalar = 10;

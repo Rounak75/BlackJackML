@@ -182,21 +182,27 @@ class CardCounter:
             effective_tc == true_count  (no adjustment needed)
 
         For KO (UNBALANCED):
-            KO's running count starts at IRC = -4*(N-1) not 0.
-            Using raw TC distorts all EV calculations at the start of the shoe.
-            Example: 8-deck KO, 0 cards dealt:
-              raw TC = -28 / 7.98 = -3.51  → shows -2.2% player edge (wrong!)
-              effective TC = (-28 - (-28)) / 7.98 = 0  → correct: neutral shoe
+            KO's running count has TWO distortions vs a balanced system:
+              1. Starts at IRC = -4*(N-1) not 0 (start-of-shoe offset)
+              2. Expected drift of +4/52 per card dealt (KO per-card average)
 
-            Formula: (running_count - _ko_irc) / decks_remaining
-            This measures how far RC has moved from the IRC baseline,
-            equivalent to a balanced system's TC from 0.
+            The previous formula only corrected (1), not (2). Result: at any
+            mid-shoe balanced composition, it reported false positive advantage.
+            Test: 8-deck, 208 balanced cards dealt → reported +4 TC, +1.58% edge
+                  Correct answer:                       0 TC, -0.43% edge
+
+            Correct formula: subtract both the IRC offset AND the expected drift.
+            This yields "Hi-Lo-equivalent TC" — equivalent to what a balanced
+            system would show under identical shoe composition.
 
         Use effective_tc for: advantage, insurance, wonging, bet ramp.
         Use raw true_count for: display purposes, TC history chart.
         """
         if self.system_name == 'ko':
-            return (self.running_count - self._ko_irc) / self.decks_remaining
+            # KO expected per-card drift: full shoe sums to +4*(N-1) above IRC
+            # across num_decks*52 cards ⇒ per-card expected value ≈ +4/52.
+            expected_drift = self.cards_seen * (4.0 / 52.0)
+            return (self.running_count - self._ko_irc - expected_drift) / self.decks_remaining
         return self.true_count
 
     @property
@@ -247,14 +253,26 @@ class CardCounter:
     def ten_adjustment(self) -> float:
         """
         How many extra/fewer 10-value cards remain vs expectation per deck.
-        Positive = Ten-rich shoe. Negative = Ten-poor.
-        Each extra 10 per deck ≈ +0.1 TC units (less impactful than Aces).
+
+        FIX MAJ-09: Returns 0.0 for all currently-supported counting systems.
+        Every system in use (Hi-Lo, KO, Omega II, Zen, Wong Halves, Uston APC)
+        already assigns a negative tag to 10-value cards (−1, −1, −2, −2, −1,
+        −3 respectively), so the running count ALREADY captures ten-richness.
+        Adding a separate 0.1×(extra_tens/decks) term double-counts the effect.
+
+        If a future system is added where 10s are tagged 0 (neutral), re-enable
+        the calculation below conditionally on self.system_name.
+
+        Kept as a property (not removed) so get_side_count_state() and any
+        external consumer continue to work — the method still exists, it just
+        returns zero contribution now.
         """
-        decks_left = self.decks_remaining
-        if decks_left <= 0:
-            return 0.0
-        extra_tens = self.tens_remaining - self.tens_expected
-        return round(extra_tens / decks_left * 0.1, 2)
+        # Legacy computation (retained for reference / optional future use):
+        # decks_left = self.decks_remaining
+        # if decks_left <= 0: return 0.0
+        # extra_tens = self.tens_remaining - self.tens_expected
+        # return round(extra_tens / decks_left * 0.1, 2)
+        return 0.0
 
     @property
     def ace_adjusted_tc(self) -> float:

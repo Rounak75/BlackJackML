@@ -213,16 +213,22 @@ class _CountKey:
     so replays via _CountKey see key=10 for all ten-value cards.  The side count
     (tens_seen) is therefore correctly replayed.
 
-    The genuine bug was that count_history[:hist_len] slicing on a deque works
-    differently — see reset() fix in counting.py.
+    FIX MAJ-04: Added __repr__ so count_history entries display "K", "7", "A"
+    after a system switch. Previously showed "<server._CountKey object at 0x...>"
+    because count_card calls str(card) for the history entry.
     """
     __slots__ = ('count_key', 'is_ace', 'is_ten')
+
+    _NAMES = {2:'2', 3:'3', 4:'4', 5:'5', 6:'6', 7:'7', 8:'8', 9:'9', 10:'10', 11:'A'}
 
     def __init__(self, key: int):
         self.count_key = key
         self.is_ace    = (key == 11)
         # key==10 correctly covers 10, J, Q, K — all stored as count_key=10 in _card_log
         self.is_ten    = (key == 10)
+
+    def __repr__(self) -> str:
+        return self._NAMES.get(self.count_key, '?')
 
 
 # ══════════════════════════════════════════════════════════════
@@ -441,6 +447,84 @@ def with_session(fn):
                 _save_session_globals()
     return _wrapper
 
+
+# ══════════════════════════════════════════════════════════════
+# CRIT-02: REST session binding
+# ══════════════════════════════════════════════════════════════
+# REST endpoints have no request.sid. Without binding, they mutated module
+# globals that belong to whichever WebSocket session ran last — silent
+# cross-session state leakage.
+#
+# Clients must pass ?sid=<socket_id> (or X-Session-Sid header). If missing
+# or invalid, the endpoint returns 400 instead of corrupting state.
+# ══════════════════════════════════════════════════════════════
+
+def _resolve_rest_sid():
+    """Extract sid from request (query param or header). Returns sid or None."""
+    sid = request.args.get('sid') or request.headers.get('X-Session-Sid')
+    if sid and sid in sessions:
+        return sid
+    return None
+
+
+def rest_session_bound(fn):
+    """Decorator for REST endpoints: bind to a session via ?sid=xxx.
+
+    Loads that session's state into globals under its lock, runs the handler,
+    saves state back. Returns 400 if sid is missing or unknown.
+    """
+    @_functools.wraps(fn)
+    def _wrapper(*args, **kwargs):
+        sid = _resolve_rest_sid()
+        if sid is None:
+            return jsonify({
+                'error': 'session_required',
+                'message': 'REST endpoints require ?sid=<socket_id> or X-Session-Sid header',
+            }), 400
+        s = sessions[sid]
+        with s.lock:
+            # Manually load/save (can't use _load/_save_session_globals which
+            # read request.sid — REST requests don't have a socket sid there)
+            global shoe, counter, betting_engine, shuffle_tracker
+            global current_player_hand, current_dealer_hand
+            global split_hands, active_hand_index, num_splits_done, session_history
+            global _seen_cards_this_hand, _hand_start_counter_snapshot
+            global _wonging_mode, _confirmation_mode, _zone_config
+            shoe                         = s.shoe
+            counter                      = s.counter
+            betting_engine               = s.betting_engine
+            shuffle_tracker              = s.shuffle_tracker
+            current_player_hand          = s.player_hand
+            current_dealer_hand          = s.dealer_hand
+            split_hands                  = s.split_hands
+            active_hand_index            = s.active_hand_index
+            num_splits_done              = s.num_splits_done
+            session_history              = s.session_history
+            _seen_cards_this_hand        = s.seen_cards_this_hand
+            _wonging_mode                = s.wonging_mode
+            _confirmation_mode           = s.confirmation_mode
+            _zone_config                 = s.zone_config
+            _hand_start_counter_snapshot = s.hand_start_counter_snapshot
+            try:
+                return fn(*args, **kwargs)
+            finally:
+                s.shoe                         = shoe
+                s.counter                      = counter
+                s.betting_engine               = betting_engine
+                s.shuffle_tracker              = shuffle_tracker
+                s.player_hand                  = current_player_hand
+                s.dealer_hand                  = current_dealer_hand
+                s.split_hands                  = split_hands
+                s.active_hand_index            = active_hand_index
+                s.num_splits_done              = num_splits_done
+                s.session_history              = session_history
+                s.seen_cards_this_hand         = _seen_cards_this_hand
+                s.wonging_mode                 = _wonging_mode
+                s.confirmation_mode            = _confirmation_mode
+                s.zone_config                  = _zone_config
+                s.hand_start_counter_snapshot  = _hand_start_counter_snapshot
+    return _wrapper
+
 # ══════════════════════════════════════════════════════════════
 # CARD MAPPING
 # ══════════════════════════════════════════════════════════════
@@ -504,6 +588,13 @@ def _process_card_entry(card: Card, target: str, suit_str: str):
     function instead, eliminating the risk of one path gaining a new tracking
     call that the other silently misses.
 
+    FIX MAJ-02: Over-removal guard. If the card can't be found in the shoe
+    (e.g. a 33rd ten in an 8-deck shoe has only 32 tens), skip the count/track
+    updates entirely. Previously the counter incremented even when the shoe
+    rejected the card, causing counter._seen_counts and shoe.remaining_by_rank()
+    to diverge permanently — the frontend showed one value, the ML model saw
+    another. Now both stay consistent by refusing impossible cards at the gate.
+
     Args:
         card:     The Card object to process.
         target:   TARGET_PLAYER, TARGET_DEALER, or TARGET_SEEN.
@@ -511,6 +602,22 @@ def _process_card_entry(card: Card, target: str, suit_str: str):
                   the shuffle tracker's suit-index lookup.
     """
     global current_player_hand, active_hand_index
+
+    # MAJ-02: Pre-check shoe availability BEFORE counting.
+    # If this exact rank+suit no longer exists in the shoe, the user has
+    # entered more copies than physically possible. Reject the card and
+    # notify — never count a phantom card.
+    _shoe_has_card = any(c.rank == card.rank and c.suit == card.suit for c in shoe.cards)
+    if not _shoe_has_card:
+        _safe_emit('notification', {
+            'type': 'error',
+            'message': (
+                f'Cannot add {card}: no copies remain in the shoe '
+                f'(over-removal prevented).'
+            )
+        })
+        print(f"[WARN] Rejected {card} — not in shoe (over-removal guard)")
+        return
 
     # Always count every card that comes out of the shoe
     counter.count_card(card)
@@ -523,16 +630,12 @@ def _process_card_entry(card: Card, target: str, suit_str: str):
     # Update ML shuffle tracker
     shuffle_tracker.observe_card(card.count_key, card.is_ace, SUIT_IDX.get(suit_str, 0))
 
-    # Remove from shoe tracking (manual entry — just remove first matching card)
-    _card_removed = False
+    # Remove from shoe tracking (guaranteed to succeed — we pre-checked above)
     for i, c in enumerate(shoe.cards):
         if c.rank == card.rank and c.suit == card.suit:
             shoe.cards.pop(i)
             shoe.dealt.append(c)
-            _card_removed = True
             break
-    if not _card_removed:
-        print(f"[WARN] Card {card} not found in shoe — possible over-removal (seen more copies than exist)")
 
     # Route card to correct hand
     if target == TARGET_PLAYER:
@@ -898,6 +1001,8 @@ def _build_split_data(dealer_upcard_card, tc: float) -> list:
     Build the split_hands list for the state payload.
     Returns [] when no split is in progress.
     Computes an independent recommendation for each split hand.
+
+    FIX CRIT-04: `tc` must be Hi-Lo-normalized (see caller in get_full_state).
     """
     if not split_hands:
         return []
@@ -975,6 +1080,14 @@ def get_full_state():
     """
     tc          = counter.true_count
     eff_tc      = counter.effective_tc          # C1/C5 fix: balanced-equivalent TC for deviations
+    # FIX CRIT-04: Normalize TC to Hi-Lo-equivalent units before passing to
+    # deviation engine. I18 and FAB 4 thresholds (Stand 16 vs 9 at TC ≥ +5,
+    # etc.) are calibrated in Hi-Lo units. For Level-2 systems (Omega II, Zen)
+    # with ±2 tag values, their raw TC is ~2× Hi-Lo for the same shoe. Without
+    # this normalization, deviations fire ~2× too early for non-Hi-Lo users.
+    from config import CountingConfig as _CC
+    _tc_scalar = _CC.COUNT_NORM_SCALARS.get(counter.system_name, (10.0,))[0]
+    normalized_tc = eff_tc / (_tc_scalar / 10.0)   # 10.0 Hi-Lo baseline
     enhanced_tc = shuffle_tracker.get_enhanced_true_count(tc)
     penetration = counter.penetration
 
@@ -986,7 +1099,7 @@ def get_full_state():
     if current_player_hand.cards and dealer_upcard_card:
         available   = current_player_hand.available_actions(game_config, num_splits_done)
         action_info = deviation_engine.get_action_with_info(
-            current_player_hand, dealer_upcard_card, eff_tc, available,
+            current_player_hand, dealer_upcard_card, normalized_tc, available,
             num_splits=num_splits_done
         )
         recommendation = {
@@ -1050,9 +1163,15 @@ def get_full_state():
         dealer_upcard_card,
     )
 
-    # Use Ace-adjusted TC for bet sizing — more accurate than plain TC
+    # Use Ace-adjusted TC for bet sizing — more accurate than plain TC.
+    # FIX CRIT-07: Pass counter.advantage (system-normalized) so Kelly sizing
+    # is correct for Level-2/3 systems. Without this, Omega II/Zen/Wong Halves/
+    # Uston APC users were Kelly-overbetting by ~2× because the un-normalized
+    # Hi-Lo advantage formula was applied to their larger TC values.
     ace_adj_tc = counter.ace_adjusted_tc
-    bet_rec = betting_engine.get_bet_recommendation(ace_adj_tc, penetration=penetration)
+    bet_rec = betting_engine.get_bet_recommendation(
+        ace_adj_tc, penetration=penetration, advantage=counter.advantage
+    )
 
     return {
         "count": {
@@ -1092,7 +1211,7 @@ def get_full_state():
         "count_history":     list(counter.count_history)[-60:],
         "side_counts":       counter.get_side_count_state(),
         "casino_risk":       _get_casino_risk(),
-        "split_hands":       _build_split_data(dealer_upcard_card, eff_tc),
+        "split_hands":       _build_split_data(dealer_upcard_card, normalized_tc),
         "active_hand_index": active_hand_index,
         "num_splits_done":   num_splits_done,
         # insurance: separate from side_bets — it is a game mechanic.
@@ -1189,7 +1308,18 @@ def handle_connect(*args, **kwargs):
 
 @socketio.on('disconnect')
 def handle_disconnect():
+    global _scanner_owner_sid
     sessions.pop(request.sid, None)
+    # CRIT-01: If the scanner owner disconnects, stop the scanner and release
+    # ownership. Without this, a refreshed tab would be unable to start the
+    # scanner (permanent lockout until server restart).
+    with _scanner_owner_lock:
+        if _scanner_owner_sid == request.sid:
+            _scanner_owner_sid = None
+            try:
+                live_scanner.stop()
+            except Exception:
+                pass
 
 
 @socketio.on('deal_card')
@@ -1316,7 +1446,15 @@ def handle_player_surrender(data=None):
 @with_session
 @debug_timed('player_insurance')
 def handle_player_insurance(data=None):
-    """Insurance side bet — half the main bet, pays 2:1 if dealer has blackjack."""
+    """Insurance side bet — half the main bet, pays 2:1 if dealer has blackjack.
+
+    FIX MAJ-08: Insurance in real blackjack is offered EXACTLY ONCE, immediately
+    after the initial deal when the dealer shows an Ace, BEFORE any player
+    action. The previous handler only checked dealer-ace + not-already-insured,
+    so a buggy client could let the player double first, then insure at
+    (2 × original_bet)/2 = 2× the legal insurance amount — an instant overbet.
+    Now guards: exactly 2 cards, no double, no surrender, not already insured.
+    """
     global current_player_hand
 
     dealer_upcard_card = (
@@ -1325,8 +1463,20 @@ def handle_player_insurance(data=None):
     if dealer_upcard_card is None or not dealer_upcard_card.is_ace:
         emit('error', {'message': 'Insurance only when dealer shows an Ace'})
         return
+    if len(current_player_hand.cards) != 2:
+        emit('error', {'message': 'Insurance only allowed on initial 2-card hand'})
+        return
+    if current_player_hand.is_doubled:
+        emit('error', {'message': 'Cannot insure after doubling'})
+        return
+    if current_player_hand.is_surrendered:
+        emit('error', {'message': 'Cannot insure a surrendered hand'})
+        return
     if current_player_hand.is_insured:
         emit('notification', {'type': 'warning', 'message': 'Insurance already taken'})
+        return
+    if split_hands:
+        emit('error', {'message': 'Insurance not allowed after a split'})
         return
 
     current_player_hand.is_insured = True
@@ -1558,7 +1708,10 @@ def handle_new_hand(data=None):
         'card_log':         list(counter._card_log),
         'aces_seen':        counter.aces_seen,
         'tens_seen':        counter.tens_seen,
-        'count_history_len': len(counter.count_history),
+        # FIX MAJ-05: Save FULL history (not just length). deque(maxlen=500) may
+        # have silently dropped old entries since snapshot time; trimming by
+        # length alone would leave stale entries from other hands.
+        'count_history':    list(counter.count_history),
         # Shoe snapshot: save cards/dealt lists so undo can restore them.
         # Without this, replayed cards get double-removed from the shoe.
         'shoe_cards':       list(shoe.cards),
@@ -1566,6 +1719,8 @@ def handle_new_hand(data=None):
         # FIX M16: include burned pile so undo restores full shoe state.
         # Previously shoe.burned was stale after undo — minor tracking inaccuracy.
         'shoe_burned':      list(shoe.burned),
+        # FIX MAJ-01: Snapshot ShuffleTracker so undo unwinds ML state too.
+        'shuffle_tracker':  shuffle_tracker.snapshot(),
     }
     _reset_hand_state()
     # counter and shoe are intentionally NOT touched here
@@ -1606,20 +1761,29 @@ def handle_undo_hand(data=None):
             counter._seen_counts[_k] = counter._seen_counts.get(_k, 0) + 1
         counter.aces_seen     = snap['aces_seen']
         counter.tens_seen     = snap['tens_seen']
-        # Trim count_history to the length it had at hand start.
-        # The per-card entries beyond this point belong to the hand being undone.
-        hist_len = snap['count_history_len']
-        if len(counter.count_history) > hist_len:
-            # Trim deque to snapshot length (deque has no slice support)
-            _hist = list(counter.count_history)[:hist_len]
-            from collections import deque as _deque
-            counter.count_history = _deque(_hist, maxlen=500)
+        # FIX MAJ-05: Restore the FULL count_history deque, not just trim by
+        # length. A bounded deque that dropped entries between snapshot and
+        # undo cannot be recovered by length-trim alone.
+        from collections import deque as _deque
+        if 'count_history' in snap:
+            counter.count_history = _deque(list(snap['count_history']), maxlen=500)
+        elif 'count_history_len' in snap:
+            # Backward compat: old snapshot format with length only
+            hist_len = snap['count_history_len']
+            if len(counter.count_history) > hist_len:
+                _hist = list(counter.count_history)[:hist_len]
+                counter.count_history = _deque(_hist, maxlen=500)
         # Restore shoe state so replayed cards don't get double-removed.
         # Without this, shoe.remaining_by_rank goes negative and display corrupts.
         if 'shoe_cards' in snap:
             shoe.cards  = list(snap['shoe_cards'])
             shoe.dealt  = list(snap['shoe_dealt'])
             shoe.burned = list(snap.get('shoe_burned', shoe.burned))  # FIX M16
+        # FIX MAJ-01: Restore ShuffleTracker state.
+        # Without this, Bayesian confidence, ace sequences, and LSTM card
+        # sequence accumulated observations from the undone hand forever.
+        if 'shuffle_tracker' in snap:
+            shuffle_tracker.restore(snap['shuffle_tracker'])
     else:
         # No snapshot: first hand of the session — counter should already be at
         # zero (or IRC for KO), but reset explicitly for safety.
@@ -1633,6 +1797,8 @@ def handle_undo_hand(data=None):
         # Also reset shoe to fresh state for first-hand undo
         shoe.cards = list(shoe.cards) + list(shoe.dealt)
         shoe.dealt = []
+        # FIX MAJ-01: Also reset ShuffleTracker on no-snapshot fallback
+        shuffle_tracker.reset()
 
     _safe_emit('state_update', get_full_state())
 
@@ -1655,6 +1821,13 @@ def handle_shuffle(data=None):
     shoe.reshuffle(ShuffleType(shuffle_type))
     counter.reset()           # ← Correct: new shoe = fresh count
     _reset_hand_state()       # ← Shared helper: clears hand display
+
+    # FIX MAJ-07: Clear the hand-start snapshot. Without this, an undo issued
+    # after a shuffle would restore the PRE-shuffle counter + shoe state,
+    # overwriting the freshly-reset shoe with stale card data. This resulted
+    # in impossible shoe compositions and corrupted running count.
+    global _hand_start_counter_snapshot
+    _hand_start_counter_snapshot = None
 
     shuffle_tracker.on_shuffle(shuffle_type)
 
@@ -1722,18 +1895,55 @@ def handle_record_result(data):
     """
     Record financial result of a completed hand.
     Does NOT clear hands or count. Call 'new_hand' separately after this.
+
+    FIX MED-06/07: Server now:
+      1. Auto-detects if hand was doubled and adjusts effective bet server-side,
+         overriding any client-supplied bet that doesn't match (prevents bet
+         desync when client state is stale).
+      2. Resolves insurance independently: if player insured AND dealer has BJ,
+         add insurance_bet × 2 to profit; otherwise subtract insurance_bet.
+         Previously insurance P&L was invisible in session stats because the
+         server only recorded the client-supplied main-hand profit.
     """
     bet = data.get('bet', BettingConfig.TABLE_MIN)
     profit = data.get('profit', 0)
+
+    # ── MED-07: Server-side bet validation for doubled hands ─────────────
+    # If the current hand was doubled but the client sent the pre-double bet,
+    # correct it. Doubled hands always have bet = 2 × original.
+    if current_player_hand.is_doubled and current_player_hand.bet > 0:
+        expected = current_player_hand.bet
+        if abs(bet - expected) > 0.01 and abs(bet * 2 - expected) < 0.01:
+            # Client sent pre-double bet — correct silently
+            bet = expected
+
+    # ── MED-06: Insurance resolution ─────────────────────────────────────
+    insurance_pnl = 0.0
+    if current_player_hand.is_insured and current_player_hand.insurance_bet > 0:
+        dealer_has_bj = (current_dealer_hand.cards
+                         and len(current_dealer_hand.cards) >= 2
+                         and current_dealer_hand.is_blackjack)
+        if dealer_has_bj:
+            # Insurance pays 2:1 on the half-bet
+            insurance_pnl = current_player_hand.insurance_bet * game_config.INSURANCE_PAYS
+        else:
+            insurance_pnl = -current_player_hand.insurance_bet
+        # Adjust profit to include insurance outcome
+        profit = profit + insurance_pnl
+
     betting_engine.record_result(bet, profit)
-    session_history.append({'bet': bet, 'profit': profit})
+    session_history.append({
+        'bet': bet, 'profit': profit,
+        'doubled': current_player_hand.is_doubled,
+        'insurance_pnl': insurance_pnl,
+    })
 
     # ── Stop-loss / stop-win logging ──────────────────────────────────────
     stats = betting_engine.get_session_stats()
     total_profit = stats['total_profit']
     _slog = _log.getLogger('session.stops')
-    _slog.info("[RESULT] bet=%.2f profit=%.2f  session_profit=%.2f  bankroll=%.2f  should_leave=%s  stop_reason=%s",
-               bet, profit, total_profit, stats['bankroll'],
+    _slog.info("[RESULT] bet=%.2f profit=%.2f ins_pnl=%+.2f  session_profit=%.2f  bankroll=%.2f  should_leave=%s  stop_reason=%s",
+               bet, profit, insurance_pnl, total_profit, stats['bankroll'],
                stats['should_leave'], stats['stop_reason'])
 
     _safe_emit('state_update', get_full_state())
@@ -1798,9 +2008,9 @@ def handle_set_seat_preset(data=None):
 
 
 @app.route('/api/zones', methods=['GET', 'POST'])
+@rest_session_bound
 def api_zones():
-    """REST fallback for zone config get/set."""
-    # global _zone_config (unused)
+    """REST fallback for zone config get/set. CRIT-02: session-bound."""
     if request.method == 'POST':
         data = request.get_json(force=True) or {}
         pe = float(data.get('player_end', _zone_config['player_end']))
@@ -1813,9 +2023,9 @@ def api_zones():
 
 
 @app.route('/api/seat_preset', methods=['POST'])
+@rest_session_bound
 def api_seat_preset():
-    """REST: apply a seat preset by seat number (1–7)."""
-    # global _zone_config (unused)
+    """REST: apply a seat preset by seat number (1–7). CRIT-02: session-bound."""
     data  = request.get_json(force=True) or {}
     seat  = int(data.get('seat', 4)) - 1
     seat  = max(0, min(6, seat))
@@ -1830,8 +2040,10 @@ def api_seat_preset():
 # ══════════════════════════════════════════════════════════════
 
 @socketio.on('set_confirmation_mode')
+@with_session
 def handle_set_confirmation_mode(data=None):
-    """Enable / disable card confirmation mode (human-in-the-loop)."""
+    """Enable / disable card confirmation mode (human-in-the-loop).
+    CRIT-02: now @with_session so _confirmation_mode writes to the right session."""
     global _confirmation_mode
     enabled = bool((data or {}).get('enabled', False))
     _confirmation_mode = enabled
@@ -1882,8 +2094,9 @@ def handle_reject_card(data=None):
 
 
 @app.route('/api/confirmation_mode', methods=['GET', 'POST'])
+@rest_session_bound
 def api_confirmation_mode():
-    """REST: get or set confirmation mode."""
+    """REST: get or set confirmation mode. CRIT-02: session-bound."""
     global _confirmation_mode
     if request.method == 'POST':
         data = request.get_json(force=True) or {}
@@ -1895,8 +2108,9 @@ def api_confirmation_mode():
 
 
 @app.route('/api/pending_cards')
+@rest_session_bound
 def api_pending_cards():
-    """REST: list currently pending cards awaiting confirmation."""
+    """REST: list currently pending cards awaiting confirmation. CRIT-02: session-bound."""
     return jsonify({'pending': list(_pending_cards)})
 
 
@@ -1921,8 +2135,9 @@ def handle_set_wonging_mode(data=None):
 
 
 @app.route('/api/wonging', methods=['GET', 'POST'])
+@rest_session_bound
 def api_wonging():
-    """REST: get or toggle wonging mode."""
+    """REST: get or toggle wonging mode. CRIT-02: session-bound."""
     global _wonging_mode
     if request.method == 'POST':
         data = request.get_json(force=True) or {}
@@ -1938,60 +2153,151 @@ def api_wonging():
 
 from app.live_scanner import LiveScanner as _LiveScanner
 
+# ──────────────────────────────────────────────────────────────────────────
+# CRIT-01: Scanner-to-session binding
+# ──────────────────────────────────────────────────────────────────────────
+# The scanner runs in a background thread that predates Flask's request
+# context, so request.sid is not available when it calls _apply_card /
+# _reset_hand. We capture the owning session's sid when live_start fires
+# and use THAT sid for every scanner-driven mutation.
+#
+# Without this, the scanner would mutate whatever session happened to have
+# just run a handler, corrupting state across tabs.
+# ──────────────────────────────────────────────────────────────────────────
+# Owning sid for the live-scanner thread. Set in handle_live_start /
+# api_live_start; cleared in handle_live_stop / api_live_stop and on
+# disconnect of the owning session.
+_scanner_owner_sid = None   # type: str | None
+_scanner_owner_lock = _threading.Lock()
+
+
+def _scanner_session_context(fn):
+    """
+    Execute `fn(session)` under the scanner-owner session's lock, with that
+    session's state loaded into module globals. Save state back before return.
+
+    If no scanner owner is set (shouldn't happen during scanner-driven calls
+    but possible in tests), falls back to the global lock and leaves globals
+    untouched.
+    """
+    with _scanner_owner_lock:
+        sid = _scanner_owner_sid
+    if sid is None or sid not in sessions:
+        with _session_lock:
+            return fn(None)
+    s = sessions[sid]
+    with s.lock:
+        # Hand-roll _load/_save because request.sid is unavailable here
+        global shoe, counter, betting_engine, shuffle_tracker
+        global current_player_hand, current_dealer_hand
+        global split_hands, active_hand_index, num_splits_done, session_history
+        global _seen_cards_this_hand, _hand_start_counter_snapshot
+        global _wonging_mode, _confirmation_mode, _zone_config
+        # Load
+        shoe                         = s.shoe
+        counter                      = s.counter
+        betting_engine               = s.betting_engine
+        shuffle_tracker              = s.shuffle_tracker
+        current_player_hand          = s.player_hand
+        current_dealer_hand          = s.dealer_hand
+        split_hands                  = s.split_hands
+        active_hand_index            = s.active_hand_index
+        num_splits_done              = s.num_splits_done
+        session_history              = s.session_history
+        _seen_cards_this_hand        = s.seen_cards_this_hand
+        _wonging_mode                = s.wonging_mode
+        _confirmation_mode           = s.confirmation_mode
+        _zone_config                 = s.zone_config
+        _hand_start_counter_snapshot = s.hand_start_counter_snapshot
+        try:
+            return fn(s)
+        finally:
+            # Save
+            s.shoe                           = shoe
+            s.counter                        = counter
+            s.betting_engine                 = betting_engine
+            s.shuffle_tracker                = shuffle_tracker
+            s.player_hand                    = current_player_hand
+            s.dealer_hand                    = current_dealer_hand
+            s.split_hands                    = split_hands
+            s.active_hand_index              = active_hand_index
+            s.num_splits_done                = num_splits_done
+            s.session_history                = session_history
+            s.seen_cards_this_hand           = _seen_cards_this_hand
+            s.wonging_mode                   = _wonging_mode
+            s.confirmation_mode              = _confirmation_mode
+            s.zone_config                    = _zone_config
+            s.hand_start_counter_snapshot    = _hand_start_counter_snapshot
+
+
 def _apply_card(rank, suit, target=TARGET_SEEN):
     """Bridge: scanner thread → deal_card handler (thread-safe).
 
     Feature 4: If confirmation mode is ON, queue instead of applying.
     Feature 5: If wonging mode is ON, redirect all cards to 'seen'.
-    Uses _process_card_entry so card tracking logic stays in one place.
+
+    FIX CRIT-01: Runs under the scanner-owner session's lock with that
+    session's state loaded into globals. Without this, the scanner
+    mutated whatever session ran the most recent @with_session handler,
+    causing silent cross-tab state corruption.
     """
     global _pending_id_counter
 
-    # Feature 5: wonging overrides target — everything goes to 'seen'
-    if _wonging_mode:
-        target = TARGET_SEEN
+    def _do(session):
+        # Feature 5: wonging overrides target — everything goes to 'seen'
+        tgt = target
+        if _wonging_mode:
+            tgt = TARGET_SEEN
 
-    # Feature 4: queue card for human confirmation
-    if _confirmation_mode:
+        # Feature 4: queue card for human confirmation
+        if _confirmation_mode:
+            with _pending_lock:
+                nonlocal_id = _apply_card._bump_pending_id()
+                card_entry = {
+                    'id':     nonlocal_id,
+                    'rank':   str(rank).upper(),
+                    'suit':   str(suit).lower(),
+                    'target': tgt,
+                }
+                already = any(
+                    c['rank'] == card_entry['rank'] and
+                    c['suit'] == card_entry['suit'] and
+                    c['target'] == card_entry['target']
+                    for c in _pending_cards
+                )
+                if not already:
+                    _pending_cards.append(card_entry)
+            socketio.emit('pending_cards_update', {'pending': list(_pending_cards)})
+            return
 
-        with _pending_lock:
-            _pending_id_counter += 1
-            card_entry = {
-                'id':     _pending_id_counter,
-                'rank':   str(rank).upper(),
-                'suit':   str(suit).lower(),
-                'target': target,
-            }
-            # Deduplicate: don't queue the same rank+suit+target twice
-            already = any(
-                c['rank'] == card_entry['rank'] and
-                c['suit'] == card_entry['suit'] and
-                c['target'] == card_entry['target']
-                for c in _pending_cards
-            )
-            if not already:
-                _pending_cards.append(card_entry)
-        socketio.emit('pending_cards_update', {'pending': list(_pending_cards)})
-        return
+        try:
+            r = RANK_MAP.get(str(rank).upper())
+            s_ = SUIT_MAP.get(str(suit).lower())
+            if r and s_:
+                suit_str = str(suit).lower()
+                card = Card(r, s_)
+                _process_card_entry(card, tgt, suit_str)
+                socketio.emit('state_update', _json.loads(_json.dumps(get_full_state(), cls=_SafeEncoder)))
+        except Exception as e:
+            print("[WARNING]", f'[Live] apply_card error: {e}')
 
-    try:
-        r = RANK_MAP.get(str(rank).upper())
-        s = SUIT_MAP.get(str(suit).lower())
-        if r and s:
-            suit_str = str(suit).lower()
-            card = Card(r, s)
+    _scanner_session_context(_do)
 
-            # Delegate to shared helper — same logic as handle_deal_card
-            _process_card_entry(card, target, suit_str)
 
-            socketio.emit('state_update', _json.loads(_json.dumps(get_full_state(), cls=_SafeEncoder)))
-    except Exception as e:
-        print("[WARNING]", f'[Live] apply_card error: {e}')
+def _apply_card_bump_id():
+    """Thread-safe monotonic counter for pending card IDs."""
+    global _pending_id_counter
+    _pending_id_counter += 1
+    return _pending_id_counter
+_apply_card._bump_pending_id = _apply_card_bump_id
+
 
 def _reset_hand():
-    """Bridge: scanner new-hand signal. Uses shared _reset_hand_state()."""
-    _reset_hand_state()
-    socketio.emit('state_update', _json.loads(_json.dumps(get_full_state(), cls=_SafeEncoder)))
+    """Bridge: scanner new-hand signal. Runs under scanner-owner session."""
+    def _do(session):
+        _reset_hand_state()
+        socketio.emit('state_update', _json.loads(_json.dumps(get_full_state(), cls=_SafeEncoder)))
+    _scanner_session_context(_do)
 
 live_scanner = _LiveScanner(
     socketio=socketio,
@@ -2004,6 +2310,7 @@ live_scanner = _LiveScanner(
 
 @socketio.on('live_start')
 def handle_live_start(data=None):
+    global _scanner_owner_sid
     data = data or {}
     fps    = int(data.get('fps', 5))
     region = data.get('region', None)
@@ -2015,7 +2322,30 @@ def handle_live_start(data=None):
     else:
         live_scanner._roi = None
 
+    # CRIT-01: Bind the scanner to THIS session. The scanner thread has no
+    # Flask request context, so without this, _apply_card / _reset_hand would
+    # mutate whichever session happened to run the last @with_session handler.
+    # Reject start if another session already owns the scanner — prevents
+    # silent takeover from a second tab.
+    with _scanner_owner_lock:
+        if _scanner_owner_sid is not None and _scanner_owner_sid != request.sid:
+            emit('live_status', {
+                'running':   live_scanner.is_running,
+                'available': live_scanner.is_available,
+                'message':   'Scanner already owned by another session — stop it there first',
+            })
+            return
+        _scanner_owner_sid = request.sid
+
     ok = live_scanner.start()
+    if not ok:
+        # Release ownership if the scanner failed to start so another session
+        # can retry. Without this, a failed start would leave the owner set
+        # and block everyone until server restart.
+        with _scanner_owner_lock:
+            if _scanner_owner_sid == request.sid:
+                _scanner_owner_sid = None
+
     emit('live_status', {
         'running':   live_scanner.is_running,
         'available': live_scanner.is_available,
@@ -2027,7 +2357,12 @@ def handle_live_start(data=None):
 
 @socketio.on('live_stop')
 def handle_live_stop(data=None):
+    global _scanner_owner_sid
     live_scanner.stop()
+    # CRIT-01: Clear owner so another session can take over
+    with _scanner_owner_lock:
+        if _scanner_owner_sid == request.sid:
+            _scanner_owner_sid = None
     emit('live_status', {
         'running':   False,
         'available': live_scanner.is_available,
@@ -2064,6 +2399,14 @@ def api_live_status():
 
 @app.route('/api/live/start', methods=['POST'])
 def api_live_start():
+    """REST: start live scanner. CRIT-02: requires ?sid= to bind scanner owner."""
+    global _scanner_owner_sid
+    sid = _resolve_rest_sid()
+    if sid is None:
+        return jsonify({
+            'error': 'session_required',
+            'message': 'Pass ?sid=<socket_id> or X-Session-Sid header',
+        }), 400
     data   = request.get_json(force=True) or {}
     fps    = int(data.get('fps', 5))
     region = data.get('region', None)
@@ -2073,7 +2416,22 @@ def api_live_start():
         live_scanner._roi = {'left': x, 'top': y, 'width': w, 'height': h}
     else:
         live_scanner._roi = None
+
+    # CRIT-01: Bind scanner to this session
+    with _scanner_owner_lock:
+        if _scanner_owner_sid is not None and _scanner_owner_sid != sid:
+            return jsonify({
+                'error': 'scanner_busy',
+                'message': 'Scanner already owned by another session',
+            }), 409
+        _scanner_owner_sid = sid
+
     ok = live_scanner.start()
+    if not ok:
+        with _scanner_owner_lock:
+            if _scanner_owner_sid == sid:
+                _scanner_owner_sid = None
+
     return jsonify({
         'running':   live_scanner.is_running,
         'available': live_scanner.is_available,
@@ -2083,7 +2441,17 @@ def api_live_start():
 
 @app.route('/api/live/stop', methods=['POST'])
 def api_live_stop():
-    live_scanner.stop()
+    """REST: stop live scanner. CRIT-02: requires ?sid= (only owner can stop)."""
+    global _scanner_owner_sid
+    sid = _resolve_rest_sid()
+    if sid is None:
+        return jsonify({'error': 'session_required'}), 400
+    with _scanner_owner_lock:
+        if _scanner_owner_sid is not None and _scanner_owner_sid != sid:
+            return jsonify({'error': 'not_owner', 'message': 'Only the owning session can stop the scanner'}), 403
+        live_scanner.stop()
+        if _scanner_owner_sid == sid:
+            _scanner_owner_sid = None
     return jsonify({'running': False})
 
 

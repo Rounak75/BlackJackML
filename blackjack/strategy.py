@@ -98,7 +98,7 @@ SOFT_TABLE = {
     15:  [       H,   H,   D,   D,   D,   H,   H,   H,   H,   H],  # A,4
     16:  [       H,   H,   D,   D,   D,   H,   H,   H,   H,   H],  # A,5
     17:  [       H,   D,   D,   D,   D,   H,   H,   H,   H,   H],  # A,6
-    18:  [      Ds,  Ds,  Ds,  Ds,  Ds,   S,   S,   H,   H,   H],  # A,7 — S17: Ds vs 2-6
+    18:  [       S,  Ds,  Ds,  Ds,  Ds,   S,   S,   H,   H,   H],  # A,7 — 8-deck S17 strict: S vs 2, Ds vs 3-6
     19:  [       S,   S,   S,   S,   S,   S,   S,   S,   S,   S],  # A,8 — always Stand (8-deck S17)
     20:  [       S,   S,   S,   S,   S,   S,   S,   S,   S,   S],  # A,9
 }

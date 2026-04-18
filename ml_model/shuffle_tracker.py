@@ -455,3 +455,64 @@ class ShuffleTracker:
         self.bayesian.reset_full()
         self.shuffle_count = 0
         self.total_confidence = 0.0
+
+    # ──────────────────────────────────────────────────────────────────────
+    # FIX MAJ-01: Snapshot / Restore for undo support
+    # ──────────────────────────────────────────────────────────────────────
+    # Without these, an undo_hand event in server.py correctly rolled back
+    # counter + shoe but left ShuffleTracker permanently polluted with the
+    # undone cards. Bayesian confidence drifted, ace sequencer held stale
+    # key→ace mappings, and card_sequence accumulated forever. Every undo
+    # made the enhanced TC less reliable.
+    # ──────────────────────────────────────────────────────────────────────
+
+    def snapshot(self) -> Dict:
+        """
+        Capture enough state to restore this tracker later via restore().
+        Called by server.py before a new hand starts.
+
+        Note: The LSTM hidden state is NOT snapshotted because (a) CRIT-05
+        prevents it from mutating between observations anyway, and (b)
+        deep-copying torch tensors is expensive. Card sequence IS captured
+        so the next LSTM forward pass replays from the correct history.
+        """
+        from copy import deepcopy
+        return {
+            "card_sequence": [arr.copy() for arr in self.card_sequence],
+            "shuffle_count": self.shuffle_count,
+            "total_confidence": self.total_confidence,
+            # Bayesian state
+            "bayes_alpha": dict(self.bayesian.alpha),
+            "bayes_observed": dict(self.bayesian.observed),
+            "bayes_total_observed": self.bayesian.total_observed,
+            "bayes_confidence": self.bayesian.confidence,
+            # Ace sequencer state
+            "ace_sequences": deepcopy(list(self.ace_sequencer.sequences)),
+            "ace_active_key": self.ace_sequencer.active_key,
+            "ace_post_keys": list(self.ace_sequencer.post_shuffle_keys_seen),
+            "ace_predicted": self.ace_sequencer.predicted_ace_probability,
+        }
+
+    def restore(self, snap: Dict):
+        """Restore state from a snapshot produced by snapshot()."""
+        if not snap:
+            return
+        from collections import deque
+        self.card_sequence = [arr.copy() for arr in snap.get("card_sequence", [])]
+        self.shuffle_count = snap.get("shuffle_count", 0)
+        self.total_confidence = snap.get("total_confidence", 0.0)
+        # Bayesian
+        self.bayesian.alpha = dict(snap.get("bayes_alpha", self.bayesian.alpha))
+        self.bayesian.observed = dict(snap.get("bayes_observed", self.bayesian.observed))
+        self.bayesian.total_observed = snap.get("bayes_total_observed", 0)
+        self.bayesian.confidence = snap.get("bayes_confidence", 1.0)
+        # Ace sequencer
+        self.ace_sequencer.sequences = deque(
+            snap.get("ace_sequences", []),
+            maxlen=self.ace_sequencer.memory_size,
+        )
+        self.ace_sequencer.active_key = snap.get("ace_active_key")
+        self.ace_sequencer.post_shuffle_keys_seen = list(snap.get("ace_post_keys", []))
+        self.ace_sequencer.predicted_ace_probability = snap.get("ace_predicted", 0.0)
+        # LSTM hidden: reset to None so next forward pass rebuilds from card_sequence
+        self.lstm_hidden = None

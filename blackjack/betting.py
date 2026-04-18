@@ -426,11 +426,20 @@ class BettingEngine:
             "stop_win_at":  self.stop_win,
         }
 
-    def get_bet_recommendation(self, true_count: float, penetration: float = 0.75) -> Dict:
-        """Get a full bet recommendation with reasoning."""
-        # 8-deck S17 base house edge = 0.43%
-        # Each +1 true count = +0.5% player advantage
-        advantage = -0.0043 + (true_count * 0.005)
+    def get_bet_recommendation(self, true_count: float, penetration: float = 0.75,
+                               advantage: float = None) -> Dict:
+        """Get a full bet recommendation with reasoning.
+
+        FIX CRIT-07: If `advantage` is provided (from counter.advantage, which
+        is already system-normalized via COUNT_NORM_SCALARS), use it directly
+        instead of the un-normalized Hi-Lo formula. This eliminates the ~2×
+        Kelly overbet that was occurring for Level-2/3 counting systems
+        (Omega II, Zen, Wong Halves, Uston APC).
+        """
+        if advantage is None:
+            # Fallback: Hi-Lo-calibrated formula. Correct only for Hi-Lo/KO.
+            # For other systems, callers must pass counter.advantage explicitly.
+            advantage = -0.0043 + (true_count * 0.005)
         optimal = self.get_optimal_bet(true_count, advantage, penetration)
 
         return {
@@ -451,15 +460,28 @@ class BettingEngine:
         }
 
     def _bet_action_text(self, tc: float, advantage: float) -> str:
-        """Human-readable bet action."""
+        """Human-readable bet action.
+
+        FIX MAJ-10: Key off `advantage` (system-normalized edge) rather than
+        raw TC. Previously used TC thresholds calibrated for Hi-Lo, so Level-2/3
+        users saw "MAXIMUM BET" fire at Omega II TC=5 (Hi-Lo-equiv ~2.5, modest
+        edge). Advantage is a direct %-of-bet edge, identical across systems.
+
+        Edge mapping used:
+          advantage <= -0.005  → Wong out threshold (same as -1 Hi-Lo TC)
+          advantage <= 0       → Minimum bet
+          advantage >= 0.025   → Max bet (Hi-Lo TC ≈ 5)
+          advantage >= 0.015   → Big bet (Hi-Lo TC ≈ 3)
+          advantage >= 0.005   → Increase bet (Hi-Lo TC ≈ 1)
+        """
         if self.should_wong_out(tc):
             return "🚫 WONG OUT — Leave the table"
-        if tc <= 0:
+        if advantage <= 0:
             return "⬇️ MINIMUM BET — Count is negative/neutral"
-        if tc >= 5:
+        if advantage >= 0.025:
             return "🔥 MAXIMUM BET — Very favorable count!"
-        if tc >= 3:
+        if advantage >= 0.015:
             return "⬆️ BIG BET — Strong positive count"
-        if tc >= 1:
+        if advantage >= 0.005:
             return "📈 INCREASE BET — Slight advantage"
         return "➡️ TABLE MINIMUM"
