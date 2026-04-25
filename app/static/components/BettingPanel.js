@@ -212,6 +212,109 @@ function BettingPanel({
           PRE-HAND PHASE — bet input + Kelly prominent
           ═══════════════════════════════════════════════════ */}
 
+      {/* PHASE 3: Bet ramp pill — current units vs spread cap. Glance value:
+          "you're at 4u of 12u max" tells a pro instantly whether they're spreading. */}
+      {phase === 'pre' && (() => {
+        const minB = betting?.min_bet ?? 1;
+        const recBet = betting?.recommended_bet ?? betting?.units ?? minB;
+        const maxBet = betting?.max_bet ?? Math.max(recBet * 4, minB * 12);
+        const baseUnit = Math.max(minB, 1);
+        const curUnits = Math.max(1, Math.round((customBet || recBet) / baseUnit));
+        const maxUnits = Math.max(1, Math.round(maxBet / baseUnit));
+        const ratio = Math.min(1, curUnits / maxUnits);
+        const overSpread = curUnits >= 12; // PHASE 8 hook — flag heavy spread
+        const rampCol = overSpread ? '#ff5c5c' : ratio >= 0.6 ? '#ffd447' : '#88a8c8';
+        return (
+          <div style={{
+            display:'flex', alignItems:'center', justifyContent:'space-between',
+            marginBottom: 8, padding:'4px 10px',
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.08)',
+            borderRadius: 8,
+            fontSize: 10,
+          }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{
+                fontSize: 8, fontWeight: 700, color: '#6b7f96',
+                textTransform: 'uppercase', letterSpacing: '0.1em',
+              }}>Ramp</span>
+              <span style={{
+                fontFamily: 'DM Mono, monospace', fontWeight: 800,
+                color: rampCol, fontVariantNumeric: 'tabular-nums',
+                fontSize: 12,
+              }}>
+                {curUnits}u / {maxUnits}u
+              </span>
+              {overSpread && (
+                <span style={{
+                  fontSize: 8, fontWeight: 800, padding: '1px 5px',
+                  borderRadius: 4, background: 'rgba(255,92,92,0.15)',
+                  border: '1px solid rgba(255,92,92,0.4)', color: '#ff8888',
+                  textTransform: 'uppercase', letterSpacing: '0.05em',
+                }}>HEAVY</span>
+              )}
+            </div>
+            {/* Mini ramp bar */}
+            <div style={{
+              flex: 1, marginLeft: 10, marginRight: 4,
+              height: 4, borderRadius: 2,
+              background: 'rgba(255,255,255,0.08)',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                width: `${ratio * 100}%`, height: '100%',
+                background: rampCol,
+                transition: 'width 0.3s, background 0.3s',
+              }} />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* P3.6 (FEAT-01): Pre-hand BET LOCK chip — large, color-coded by Kelly tier.
+          Shown only when no cards are dealt; tapping a chip writes that bet into
+          customBet. Visible reminder of the right bet for the current TC. */}
+      {phase === 'pre' && (() => {
+        const rec  = betting?.recommended_bet ?? betting?.units ?? 0;
+        const minB = betting?.min_bet ?? 1;
+        const maxB = betting?.max_bet ?? Math.max(rec * 4, minB * 12);
+        const chips = [
+          { label: 'MIN',  amt: Math.round(minB),                tier: 'min'  },
+          { label: '½K',   amt: Math.max(minB, Math.round(rec/2)), tier: 'half' },
+          { label: 'KELLY',amt: Math.max(minB, Math.round(rec)),   tier: 'kelly'},
+          { label: '2×',   amt: Math.max(minB, Math.round(Math.min(rec*2, maxB))), tier: 'aggr' },
+          { label: 'MAX',  amt: Math.round(maxB),                tier: 'max'  },
+        ];
+        const tierColor = { min:'#6b7fa3', half:'#6aafff', kelly:'#44e882', aggr:'#ffd447', max:'#ff5c5c' };
+        return (
+          <div style={{
+            display:'flex', gap:6, marginBottom:10,
+            padding:'8px', background:'rgba(255,255,255,0.04)',
+            border:'1px solid rgba(255,255,255,0.08)', borderRadius:10,
+          }}>
+            {chips.map(c => (
+              <button key={c.label}
+                onClick={() => onCustomBetChange && onCustomBetChange(c.amt)}
+                title={`Set bet to ${cur.symbol}${c.amt}`}
+                style={{
+                  flex:1, padding:'8px 4px', borderRadius:8,
+                  background: customBet === c.amt ? tierColor[c.tier] : 'transparent',
+                  color:     customBet === c.amt ? '#0a0e18' : tierColor[c.tier],
+                  border:`1.5px solid ${tierColor[c.tier]}`,
+                  fontWeight:800, cursor:'pointer',
+                  display:'flex', flexDirection:'column', alignItems:'center', gap:2,
+                  transition:'all 0.15s ease',
+                }}>
+                <span style={{ fontSize:9, letterSpacing:'0.08em' }}>{c.label}</span>
+                <span style={{ fontSize:11, fontFamily:'DM Mono,monospace' }}>
+                  {cur.symbol}{c.amt}
+                </span>
+              </button>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* Currency selector — compact button with ⚙ icon */}
       <div className="relative mb-2">
         <button
@@ -482,69 +585,72 @@ function BettingPanel({
       )}
 
       {/* ═══════════════════════════════════════════════════
-          MANUAL RESULT BUTTONS — always available as override
-          Prominent in mid-hand, secondary in pre-hand
+          PRE-HAND MANUAL OVERRIDE — only visible before any cards
+          are dealt. Once a hand starts, OutcomeStrip below the
+          CardGrid is the canonical result surface.
           ═══════════════════════════════════════════════════ */}
-      <div style={{
-        borderTop: '1px solid rgba(255,255,255,0.1)',
-        paddingTop: phase === 'mid' ? 10 : 8,
-        marginTop: phase === 'mid' ? 0 : 10,
-      }}>
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[11px] uppercase tracking-widest font-display font-bold" style={{ color: '#ccdaec' }}>
-            {phase === 'mid' ? 'Record Result:' : 'Manual override:'}
+      {pCards === 0 && (
+        <div style={{
+          borderTop: '1px solid rgba(255,255,255,0.1)',
+          paddingTop: 8,
+          marginTop: 10,
+        }}>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[11px] uppercase tracking-widest font-display font-bold" style={{ color: '#ccdaec' }}>
+              Manual override:
+            </div>
+            <div className="text-[9px]" style={{ color: '#ccdaec' }}>
+              Log a result without dealing cards
+            </div>
           </div>
-          <div className="text-[9px]" style={{ color: '#ccdaec' }}>
-            Auto-resolves when outcome is known
+          <div className="flex gap-2">
+            {[
+              { label: '🏆 WIN',  result: 'win',       color: '#44e882', bg: 'rgba(68,232,130,0.1)',  border: 'rgba(68,232,130,0.4)' },
+              { label: '🤝 PUSH', result: 'push',      color: '#6aafff', bg: 'rgba(106,175,255,0.1)', border: 'rgba(106,175,255,0.4)' },
+              { label: '💀 LOSS', result: 'loss',      color: '#ff5c5c', bg: 'rgba(255,92,92,0.1)',   border: 'rgba(255,92,92,0.4)' },
+              { label: '🏳 SURR', result: 'surrender', color: '#ff9a20', bg: 'rgba(255,154,32,0.1)',  border: 'rgba(255,154,32,0.4)' },
+            ].map(({ label, result, color, bg, border }) => (
+              <button
+                key={result}
+                aria-label={`Record hand result as ${result}`}
+                onClick={() => {
+                  let profit;
+                  if (result === 'win') profit = effectiveBet;
+                  else if (result === 'push') profit = 0;
+                  else if (result === 'loss') profit = -effectiveBet;
+                  else if (result === 'surrender') profit = -(activeBet * 0.5);
+                  if (tookInsurance && insurance?.available) {
+                    const halfBet = activeBet * 0.5;
+                    const dealerBj = dealerHand?.is_blackjack;
+                    profit += dealerBj ? halfBet * 2 : -halfBet;
+                  }
+                  onRecordResult(result === 'surrender' ? 'loss' : result, effectiveBet, profit);
+                }}
+                className="flex-1 rounded-lg py-2 text-[11px] font-mono font-bold transition-all"
+                style={{
+                  color, background: bg,
+                  border: `1.5px solid ${border}`,
+                  fontSize: 11,
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = bg.replace('0.1', '0.2'); }}
+                onMouseLeave={e => { e.currentTarget.style.background = bg; }}
+              >
+                {label}
+              </button>
+            ))}
           </div>
-        </div>
-        <div className="flex gap-2">
-          {[
-            { label: '🏆 WIN', result: 'win', color: '#44e882', bg: 'rgba(68,232,130,0.1)', border: 'rgba(68,232,130,0.4)' },
-            { label: '🤝 PUSH', result: 'push', color: '#6aafff', bg: 'rgba(106,175,255,0.1)', border: 'rgba(106,175,255,0.4)' },
-            { label: '💀 LOSS', result: 'loss', color: '#ff5c5c', bg: 'rgba(255,92,92,0.1)', border: 'rgba(255,92,92,0.4)' },
-            { label: '🏳 SURR', result: 'surrender', color: '#ff9a20', bg: 'rgba(255,154,32,0.1)', border: 'rgba(255,154,32,0.4)' },
-          ].map(({ label, result, color, bg, border }) => (
-            <button
-              key={result}
-              aria-label={`Record hand result as ${result}`}
-              onClick={() => {
-                let profit;
-                if (result === 'win') profit = effectiveBet;
-                else if (result === 'push') profit = 0;
-                else if (result === 'loss') profit = -effectiveBet;
-                else if (result === 'surrender') profit = -(activeBet * 0.5);
-                if (tookInsurance && insurance?.available) {
-                  const halfBet = activeBet * 0.5;
-                  const dealerBj = dealerHand?.is_blackjack;
-                  profit += dealerBj ? halfBet * 2 : -halfBet;
-                }
-                onRecordResult(result === 'surrender' ? 'loss' : result, effectiveBet, profit);
-              }}
-              className={`flex-1 rounded-lg py-2 text-[11px] font-mono font-bold transition-all`}
-              style={{
-                color, background: bg,
-                border: `1.5px solid ${border}`,
-                fontSize: phase === 'mid' ? 12 : 11,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background = bg.replace('0.1', '0.2'); }}
-              onMouseLeave={e => { e.currentTarget.style.background = bg; }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
 
-        {/* Bet preview — compact */}
-        <div className="mt-2 text-center text-[10px] font-mono" style={{ color: '#c8d4e8', lineHeight: 1.8 }}>
-          <div>
-            {cur.symbol}{fmtBet(activeBet)}
-            {isDoubled && <span style={{ color: '#ffd447' }}> → ×2 {cur.symbol}{fmtBet(effectiveBet)}</span>}
-            {' '}· win = <span style={{ color: '#44e882' }}>+{cur.symbol}{fmtBet(effectiveBet)}</span>
-            {' '}· loss = <span style={{ color: '#ff5c5c' }}>-{cur.symbol}{fmtBet(effectiveBet)}</span>
+          {/* Bet preview — compact */}
+          <div className="mt-2 text-center text-[10px] font-mono" style={{ color: '#c8d4e8', lineHeight: 1.8 }}>
+            <div>
+              {cur.symbol}{fmtBet(activeBet)}
+              {isDoubled && <span style={{ color: '#ffd447' }}> → ×2 {cur.symbol}{fmtBet(effectiveBet)}</span>}
+              {' '}· win = <span style={{ color: '#44e882' }}>+{cur.symbol}{fmtBet(effectiveBet)}</span>
+              {' '}· loss = <span style={{ color: '#ff5c5c' }}>-{cur.symbol}{fmtBet(effectiveBet)}</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </Widget>
   );
 }
