@@ -43,9 +43,9 @@ build() {
               CountHistory I18Panel AnalyticsPanel LiveOverlayPanel CenterToolBar \
               DealOrderEngine \
               SplitHandPanel SideCountPanel CasinoRiskMeter StopAlerts \
-              SeenCardsPanel ZoneConfigPanel ConfirmationPanel WongPanel \
-              AccordionPanel BettingRampPanel BetSpreadHelper MultiSystemPanel \
-              OutcomeStrip DragLayoutEditor App; do
+              SeenCardsPanel ZoneConfigPanel ConfirmationPanel WongPanel ScannerHub \
+              BettingRampPanel BetSpreadHelper MultiSystemPanel \
+              OutcomeStrip DragLayoutEditor TabStrip DeviationBanner StatusBar HotkeyOverlay App; do
       echo "/* ── $f ── */"
       cat "$OUT_DIR/$f.js"
       echo ""
@@ -59,7 +59,9 @@ build() {
   python3 - "$BUNDLE" << 'PYEOF'
 import re, sys
 bundle = sys.argv[1]
-with open(bundle) as f:
+# UTF-8 explicit — bundle includes emoji and box-drawing chars that crash the
+# default cp1252 decoder on Windows.
+with open(bundle, encoding='utf-8') as f:
     src = f.read()
 src = re.sub(
     r'const \{ ([\w,\s]+) \} = React;',
@@ -68,9 +70,7 @@ src = re.sub(
     ) + ';',
     src
 )
-# Also fix any regex literals that might look like comments to naive minifiers
-# by converting /^https?:\/\// style patterns to string replacements in source
-with open(bundle, 'w') as f:
+with open(bundle, 'w', encoding='utf-8', newline='\n') as f:
     f.write(src)
 print("  Hook declarations fixed")
 PYEOF
@@ -101,6 +101,7 @@ PYEOF
     'function HandDisplay(' \
     'function CardGrid(' \
     'function LiveOverlayPanel(' \
+    'function ScannerHub(' \
     'function CompDepAlert(' \
     'function AnalyticsPanel(' \
     'var BettingRampPanel'; do
