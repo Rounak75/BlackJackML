@@ -38,7 +38,35 @@ function App() {
   const [isDoubled, setIsDoubled] = useState(false)
   const [tookInsurance, setTookInsurance] = useState(false)
   const [scanMode, setScanMode] = useState('manual')
-  const [showFloatingHud, setShowFloatingHud] = useState(true)
+  // PHASE 2: floating TC HUD demoted to opt-in. TopBar already owns the canonical
+  // TC reading — the HUD is reserved for overlay/screenshot scanning sessions.
+  const [showFloatingHud, setShowFloatingHud] = useState(() => {
+    try { return localStorage.getItem('bjml_floating_hud') === '1' } catch(e) { return false }
+  })
+  useEffect(() => {
+    try { localStorage.setItem('bjml_floating_hud', showFloatingHud ? '1' : '0') } catch(e) {}
+  }, [showFloatingHud])
+
+  // PHASE 2: responsive column widths — degrade narrow side columns on small screens.
+  const [colWidths, setColWidths] = useState(() => {
+    if (typeof window === 'undefined') return { left: 280, right: 320 }
+    const w = window.innerWidth
+    return w >= 1440 ? { left: 300, right: 360 }
+         : w >= 1280 ? { left: 280, right: 320 }
+         :             { left: 240, right: 240 }
+  })
+  useEffect(() => {
+    const onResize = () => {
+      const w = window.innerWidth
+      setColWidths(
+        w >= 1440 ? { left: 300, right: 360 }
+      : w >= 1280 ? { left: 280, right: 320 }
+      :             { left: 240, right: 240 }
+      )
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
   // ── UI MODE: normal | zen | speed ─────────────────────────────────────────
   const [uiMode, setUiMode] = useState(() => {
@@ -63,6 +91,8 @@ function App() {
 
   // P3: Layout editor
   const [showLayoutEditor, setShowLayoutEditor] = useState(false)
+  // PHASE 4: Hotkey overlay
+  const [showHotkeys, setShowHotkeys] = useState(false)
 
   // P3: Layout order from localStorage
   const [layoutOrder, setLayoutOrder] = useState(() => {
@@ -222,6 +252,11 @@ function App() {
   }, [])
 
   const handleRecordResult = useCallback((result, bet, precalcProfit) => {
+    // PHASE 1: block result entry while undo replay is in flight
+    if (isReplayingRef.current) {
+      showToast('Undo in progress — please wait', 'warning')
+      return
+    }
     const profit = precalcProfit !== undefined
       ? precalcProfit
       : result === 'win'  ?  bet
@@ -323,27 +358,10 @@ function App() {
   }, [dealOrderEnabled])
 
 
-  // ── KEYBOARD SHORTCUTS ─────────────────────────────────────────────────────
-  useEffect(() => {
-    const handler = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return
-
-      if (e.key === 'n' || e.key === 'N') handleNewHand()
-      if (e.key === 's' || e.key === 'S') handleShuffle()
-      if (e.key === 'p' || e.key === 'P') setTarget('player')
-      if (e.key === 'd' || e.key === 'D') setTarget('dealer')
-      if (e.key === 'e' || e.key === 'E') setDealOrderEnabled(prev => !prev)
-      if (e.key === 't' || e.key === 'T') setShowFloatingHud(prev => !prev)
-      if (e.key === 'm' || e.key === 'M') cycleMode()
-      if (e.key === 'l' || e.key === 'L') setShowLayoutEditor(prev => !prev)
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
-        e.preventDefault()
-        handleUndo()
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [lastBet, handleNewHand, handleShuffle, handleUndo, cycleMode])
+  // PHASE 4: shuffleHoldRef declared here (refs are TDZ-safe regardless of order);
+  // the actual keydown effect is mounted below, after derived state, so its deps
+  // can safely reference splitHands / dealerStandsFlag without TDZ errors.
+  const shuffleHoldRef = useRef({ timer: null, holding: false })
 
 
   // ── DERIVED STATE ──────────────────────────────────────────────────────────
@@ -383,14 +401,181 @@ function App() {
          && dealerHand.value >= 17)
   ))
 
+  // ── KEYBOARD SHORTCUTS ─────────────────────────────────────────────────────
+  // PHASE 4: Full keymap rewrite. CardGrid owns rank/suit keys (digits + J/Q/K
+  // and Shift+rank for suit popover); App.jsx owns everything else.
+  //
+  //   Actions:    H  Hit (target → player)   X  Stand (target → dealer)
+  //               B  Double                  P  Split        R  Surrender
+  //   Results:    W  Win                     L  Loss         U  Push
+  //   Targets:    ,  player                  .  dealer       /  seen
+  //   Session:    N  New hand                ⇧+S (hold)  Shuffle
+  //               Ctrl+Z  Undo
+  //   UI:         M  Mode cycle              T  HUD toggle
+  //               ⇧+L  Layout editor         ⇧+E  Deal-order engine
+  //               ?  Hotkey overlay          Esc  Close overlay/popover
+  //   Bet ramp:   [  −1u   ]  +1u   =  Kelly
+  useEffect(() => {
+    const handler = (e) => {
+      // Esc and Ctrl+Z are global — work even when focus is in inputs.
+      const t = e.target
+      const inEditable = t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA' || t.isContentEditable)
+
+      // ── Esc — close overlays in priority order (works in inputs too) ─
+      if (e.key === 'Escape') {
+        let consumed = false
+        setShowHotkeys(prev => { if (prev) { consumed = true; return false } return prev })
+        if (consumed) return
+        setShowLayoutEditor(prev => { if (prev) { consumed = true; return false } return prev })
+        return
+      }
+
+      // ── Ctrl/Cmd+Z — undo (global, works in inputs too) ─────────────
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault()
+        handleUndo()
+        return
+      }
+
+      // From here on: bail if focus is inside an input/select/textarea so
+      // typing isn't interpreted as an action/result/rank shortcut.
+      if (inEditable) return
+
+      // ── Hotkey overlay (Shift+/) ────────────────────────────────────
+      if (e.key === '?' || (e.shiftKey && e.key === '/')) {
+        e.preventDefault()
+        setShowHotkeys(prev => !prev)
+        return
+      }
+
+      // ── Shift+S (hold) — shuffle ────────────────────────────────────
+      if (e.shiftKey && (e.key === 'S' || e.key === 's')) {
+        if (!shuffleHoldRef.current.holding) {
+          shuffleHoldRef.current.holding = true
+          showToast('Hold Shift+S to shuffle…', 'warning')
+          shuffleHoldRef.current.timer = setTimeout(() => {
+            handleShuffle()
+            shuffleHoldRef.current.holding = false
+            shuffleHoldRef.current.timer = null
+          }, 400)
+        }
+        return
+      }
+
+      // ── Shift+L — layout editor (since plain L is now Loss) ─────────
+      if (e.shiftKey && (e.key === 'L' || e.key === 'l')) {
+        e.preventDefault()
+        setShowLayoutEditor(prev => !prev)
+        return
+      }
+      // ── Shift+E — toggle deal-order engine ──────────────────────────
+      if (e.shiftKey && (e.key === 'E' || e.key === 'e')) {
+        e.preventDefault()
+        setDealOrderEnabled(prev => !prev)
+        return
+      }
+
+      // Any other Shift+key: defer to CardGrid (rank popover) — don't claim.
+      if (e.shiftKey) return
+      // Plain Ctrl/Alt/Meta — defer.
+      if (e.ctrlKey || e.altKey || e.metaKey) return
+
+      // ── Plain N — new hand ──────────────────────────────────────────
+      if (e.key === 'n' || e.key === 'N') { handleNewHand(); return }
+
+      // ── Player actions ──────────────────────────────────────────────
+      if (e.key === 'h' || e.key === 'H') { setTarget('player'); return }
+      if (e.key === 'x' || e.key === 'X') { setTarget('dealer'); return }
+      if (e.key === 'b' || e.key === 'B') {
+        if (isReplayingRef.current) { showToast('Undo in progress', 'warning'); return }
+        socketRef.current?.emit('player_double')
+        setIsDoubled(true)
+        return
+      }
+      if (e.key === 'p' || e.key === 'P') { handleSplit(); return }
+      if (e.key === 'r' || e.key === 'R') {
+        if (isReplayingRef.current) return
+        socketRef.current?.emit('player_surrender')
+        showToast('Surrender', 'info')
+        return
+      }
+
+      // ── Results — gated on resolution + replay guard ────────────────
+      if (e.key === 'w' || e.key === 'W'
+       || e.key === 'l' || e.key === 'L'
+       || e.key === 'u' || e.key === 'U') {
+        const pCards = playerHand?.cards?.length ?? 0
+        const dCards = dealerHand?.card_count ?? 0
+        const isResolved = splitHands.length === 0
+          && pCards >= 2 && dCards >= 2
+          && (playerHand?.is_bust || dealerHand?.is_bust
+              || playerHand?.is_blackjack || dealerHand?.is_blackjack
+              || dealerStandsFlag)
+        if (!isResolved) {
+          showToast('Result locked — finish the hand first', 'warning')
+          return
+        }
+        const k = e.key.toLowerCase()
+        const result = k === 'w' ? 'win' : k === 'l' ? 'loss' : 'push'
+        handleRecordResult(result, customBet)
+        return
+      }
+
+      // ── Targets ─────────────────────────────────────────────────────
+      if (e.key === ',') { setTarget('player'); return }
+      if (e.key === '.') { setTarget('dealer'); return }
+      if (e.key === '/') { setTarget('seen'); return }
+
+      // ── UI ──────────────────────────────────────────────────────────
+      if (e.key === 't' || e.key === 'T') { setShowFloatingHud(prev => !prev); return }
+      if (e.key === 'm' || e.key === 'M') { cycleMode(); return }
+
+      // ── Bet ramp ────────────────────────────────────────────────────
+      if (e.key === '[' || e.key === ']' || e.key === '=') {
+        const minB = betting?.min_bet ?? 1
+        const recBet = betting?.recommended_bet ?? minB
+        const units = Math.max(1, betting?.units ?? 1)
+        const baseUnit = Math.max(1, Math.round(recBet / units))
+        if (e.key === '=') {
+          setCustomBet(Math.max(minB, Math.round(recBet)))
+        } else if (e.key === '[') {
+          setCustomBet(prev => Math.max(minB, (prev ?? recBet) - baseUnit))
+        } else {
+          setCustomBet(prev => (prev ?? recBet) + baseUnit)
+        }
+        return
+      }
+    }
+
+    const upHandler = (e) => {
+      if (e.key === 'S' || e.key === 's' || e.key === 'Shift') {
+        if (shuffleHoldRef.current.timer) {
+          clearTimeout(shuffleHoldRef.current.timer)
+          shuffleHoldRef.current.timer = null
+          shuffleHoldRef.current.holding = false
+        }
+      }
+    }
+    window.addEventListener('keydown', handler)
+    window.addEventListener('keyup', upHandler)
+    return () => {
+      window.removeEventListener('keydown', handler)
+      window.removeEventListener('keyup', upHandler)
+    }
+  }, [
+    handleNewHand, handleShuffle, handleUndo, handleSplit, handleRecordResult,
+    cycleMode, customBet, betting, playerHand, dealerHand, splitHands.length, dealerStandsFlag
+  ])
+
   useEffect(() => {
     if (dealerMustDraw) setTarget('dealer')
   }, [dealerMustDraw])
 
-  // ── SPEED MODE: Auto-target switching ──────────────────────────────────────
+  // ── PHASE 1: Auto-target switching (all modes, was Speed-only) ────────────
   // After 2 player cards → switch to dealer. After 2 dealer cards → back to player.
+  // User can still override manually by clicking the target button — the effect
+  // only re-fires when card counts change.
   useEffect(() => {
-    if (!isSpeed) return
     const pCards = playerHand?.cards?.length ?? 0
     const dCards = dealerHand?.card_count ?? 0
     if (splitHands.length > 0) return // don't auto-switch during splits
@@ -399,7 +584,7 @@ function App() {
     } else if (pCards >= 2 && dCards === 2 && dealTargetRef.current === 'dealer' && !dealerMustDraw) {
       setTarget('player')
     }
-  }, [isSpeed, playerHand?.cards?.length, dealerHand?.card_count, splitHands.length, dealerMustDraw])
+  }, [playerHand?.cards?.length, dealerHand?.card_count, splitHands.length, dealerMustDraw])
 
   // ── SPEED MODE: Auto-new-hand on resolved outcome ─────────────────────────
   const autoNewHandTimer = useRef(null)
@@ -469,11 +654,10 @@ function App() {
   const handsPlayed = session?.hands_played ?? 0
   const lastUpdateAgo = lastUpdateTime ? Math.round((Date.now() - lastUpdateTime) / 1000) : null
 
-  // ── PANEL REGISTRY for DragLayoutEditor ─────────────────────────────────
-  // Maps each draggable key to its rendered JSX element.
-  // Used by layoutOrder to dynamically reorder panels.
+  // ── PHASE 2: trimmed registry — only left-column panels remain.
+  // Right-column panels are now rendered directly inside the right-column JSX
+  // (fixed slots + TabStrip) so they don't need registry entries.
   const _panelRegistry = {
-    // Left column defaults
     betting: (
       <BettingPanel
         betting={betting} count={count} lastBet={lastBet}
@@ -487,50 +671,13 @@ function App() {
     ),
     strategy: <StrategyRefTable playerHand={playerHand} dealerUpcard={dealerUp} />,
     sidecount: <SideCountPanel sideCounts={sideCounts} count={count} />,
-
-    // Right column — Tier 1 (always visible)
-    scanner: (
-      <LiveOverlayPanel
-        socket={socketRef.current} count={gameState?.count}
-        scanMode={scanMode} onSetMode={setScanMode}
-        onDealCard={handleDealCardWrapped} dealTarget={dealTarget}
-      />
-    ),
-    edge: <EdgeMeter count={count} />,
-    shoe: <ShoePanel shoe={shoe} />,
-    session: <SessionStats session={session} currency={currency} />,
-
-    // Right column — Tier 2 (accordion-wrapped)
-    sidebet: (<AccordionPanel label="Side Bet EV"><SideBetPanel sideBets={sideBets} /></AccordionPanel>),
-    casinorisk: (<AccordionPanel label="Casino Risk Meter"><CasinoRiskMeter casinoRisk={casinoRisk} /></AccordionPanel>),
-    history: (<AccordionPanel label="Count History"><CountHistoryPanel history={history} /></AccordionPanel>),
-    i18: (<AccordionPanel label="Illustrious 18 & Fab 4"><I18Panel count={count} /></AccordionPanel>),
-    shuffle: (<AccordionPanel label="Shuffle Tracker (ML)"><ShuffleTrackerPanel tracker={tracker} /></AccordionPanel>),
-    analytics: (<AccordionPanel label="Analytics"><AnalyticsPanel analytics={gameState?.analytics} /></AccordionPanel>),
-    stopalerts: (<AccordionPanel label="Stop Alerts ⚙"><StopAlertsConfig session={session} currency={currency} socket={socketRef.current} /></AccordionPanel>),
-    multisystem: typeof MultiSystemPanel !== 'undefined'
-      ? (<AccordionPanel label="Multi-System Compare"><MultiSystemPanel socket={socketRef.current} count={count} shoe={shoe} /></AccordionPanel>)
-      : null,
-    betspread: typeof BetSpreadHelper !== 'undefined'
-      ? (<AccordionPanel label="Bet Spread Helper"><BetSpreadHelper count={count} betting={betting} currency={currency} shoe={shoe} /></AccordionPanel>)
-      : null,
   }
 
-  const _DEFAULT_LEFT  = ['betting', 'strategy', 'sidecount']
-  const _DEFAULT_RIGHT = ['scanner', 'edge', 'shoe', 'session', 'sidebet', 'casinorisk', 'history', 'i18', 'shuffle', 'analytics', 'stopalerts', 'multisystem', 'betspread']
+  // PHASE 2: left column keeps the DragLayoutEditor for power users; right column
+  // is now a fixed structure (2 slots + TabStrip) so we no longer compute _rightKeys.
+  const _DEFAULT_LEFT  = ['betting', 'sidecount', 'strategy']
 
-  // Resolve ordered keys — use saved layout if valid, else defaults.
-  // Filter out any keys whose component is null/undefined (guard for missing globals).
   const _leftKeys  = (layoutOrder?.left  || _DEFAULT_LEFT).filter(k => _panelRegistry[k] != null)
-  const _rightKeys = (layoutOrder?.right || _DEFAULT_RIGHT).filter(k => _panelRegistry[k] != null)
-
-  // Safety: append any registry keys missing from both lists (prevents panels vanishing
-  // if the layout was saved before a new panel was added to the codebase).
-  const _allUsed = new Set([..._leftKeys, ..._rightKeys])
-  const _DEFAULT_ALL = [..._DEFAULT_LEFT, ..._DEFAULT_RIGHT]
-  _DEFAULT_ALL.forEach(k => {
-    if (!_allUsed.has(k) && _panelRegistry[k] != null) _rightKeys.push(k)
-  })
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
@@ -545,14 +692,28 @@ function App() {
         currentAction={rec?.action}
         uiMode={uiMode}
         onModeChange={setUiMode}
+        sideCounts={sideCounts}
+        onShowLayoutEditor={() => setShowLayoutEditor(true)}
       />
+
+      {/* ── PHASE 2/3: Deviation Banner — full-width, conditional ── */}
+      {!isMinimal && (
+        <DeviationBanner
+          recommendation={rec}
+          count={count}
+          playerHand={playerHand}
+          dealerUpcard={dealerUp}
+        />
+      )}
 
       {/* ── LAYOUT: 3-column (normal) or single centered column (zen/speed) ── */}
       {isMinimal ? (
         /* ═══ ZEN / SPEED: single centered column ═══════════════════════ */
         <div style={{
           maxWidth: isZen ? 780 : 800,
-          margin: '0 auto', padding: isZen ? 20 : 10,
+          margin: '0 auto',
+          padding: isZen ? 20 : 10,
+          paddingBottom: 38, // PHASE 2: clear room for StatusBar
           width: '100%', flex: 1,
           display: 'flex', flexDirection: 'column', gap: isZen ? 14 : 8,
           ...(isSpeed ? {
@@ -576,7 +737,7 @@ function App() {
                 <span style={{ fontSize: 12 }}>⚡</span>
                 SPEED MODE
                 <span style={{ color: '#6b7f96', fontWeight: 500, letterSpacing: '0.05em' }}>
-                  — keys: 1-9,0=rank · 1-4=suit · N=new · S=shuffle
+                  — keys: 2-9 J Q K A=suit prompt · ⇧+rank=spades · 1-4 picks suit · H/X/B/P/R · W/L/U · N · ⇧+S=shuffle · ?=help
                 </span>
               </div>
             </div>
@@ -599,6 +760,7 @@ function App() {
             mlModelInfo={gameState?.ml_model_info}
             compDep16={rec?.comp_dep_16}
             uiMode={uiMode}
+            insurance={insurance}
           />
 
           {/* Deal-Order Engine — included in all modes */}
@@ -634,7 +796,7 @@ function App() {
               activeHandIndex={activeHandIdx}
               dealerUpcard={dealerUp}
               socket={socketRef.current}
-              onNextHand={() => {}}
+              onNextHand={handleNextSplitHand}
             />
           )}
 
@@ -662,6 +824,7 @@ function App() {
               dealerUpcard={dealerUp}
               sideBets={sideBets}
               analytics={gameState?.analytics}
+              shoe={shoe}
             />
           )}
         </div>
@@ -669,9 +832,9 @@ function App() {
         /* ═══ NORMAL: 3-column grid ═════════════════════════════════════ */
         <div className="dashboard-grid" style={{
           display: 'grid',
-          gridTemplateColumns: '260px 1fr 260px',
+          gridTemplateColumns: `${colWidths.left}px 1fr ${colWidths.right}px`,
           gap: 10, padding: 10, alignItems: 'start',
-          flex: 1,
+          flex: 1, paddingBottom: 38, // PHASE 2: clear room for StatusBar
         }}>
 
         {/* ── LEFT COLUMN (dynamic order from DragLayoutEditor) ──── */}
@@ -692,6 +855,7 @@ function App() {
             mlModelInfo={gameState?.ml_model_info}
             compDep16={rec?.comp_dep_16}
             uiMode={uiMode}
+            insurance={insurance}
           />
 
           {/* CompDepAlert removed as standalone (Issue #8) —
@@ -731,9 +895,20 @@ function App() {
               activeHandIndex={activeHandIdx}
               dealerUpcard={dealerUp}
               socket={socketRef.current}
-              onNextHand={() => {}}
+              onNextHand={handleNextSplitHand}
             />
           )}
+
+          {/* CenterToolbar — row-1 only (PHASE 2: row-2 stripped) */}
+          <CenterToolbar
+            recommendation={rec}
+            count={count}
+            playerHand={playerHand}
+            dealerUpcard={dealerUp}
+            sideBets={sideBets}
+            analytics={gameState?.analytics}
+            shoe={shoe}
+          />
 
           {/* Seen cards */}
           {seenCards && seenCards.length > 0 && (
@@ -756,17 +931,8 @@ function App() {
             uiMode={uiMode}
           />
 
-          {/* CenterToolbar — stripped to unique data only (Issue #4) */}
-          <CenterToolbar
-            recommendation={rec}
-            count={count}
-            playerHand={playerHand}
-            dealerUpcard={dealerUp}
-            sideBets={sideBets}
-            analytics={gameState?.analytics}
-          />
-
-          {/* CRIT-03: Outcome Strip — fills center column dead space */}
+          {/* OutcomeStrip — placed below CardGrid so it never pushes the grid
+              below the fold. Self-hides until ≥2 player cards are dealt. */}
           <OutcomeStrip
             onRecordResult={handleRecordResult}
             activeBet={customBet}
@@ -777,102 +943,138 @@ function App() {
             dealerHand={dealerHand}
             currency={currency}
             playerHand={playerHand}
+            splitHandsActive={splitHands.length > 0}
           />
         </div>
 
 
-        {/* ── RIGHT COLUMN (dynamic order from DragLayoutEditor) ─── */}
+        {/* ── PHASE 2: RIGHT COLUMN — fixed structure (2 slots + TabStrip) ─── */}
         <div className="panel-right flex flex-col gap-2.5">
 
-          {/* Fixed conditional panels — not in drag editor, mode-dependent */}
-          {(scanMode === 'live' || scanMode === 'screenshot') && (
-            <ZoneConfigPanel
-              socket={socketRef.current}
-              zoneConfig={zoneConfig}
-              onApply={(msg) => showToast(msg, 'info')}
-            />
-          )}
-          {scanMode === 'live' && (
-            <ConfirmationPanel
-              socket={socketRef.current}
-              confirmationMode={confirmationMode}
-              pendingCards={pendingCards}
-            />
-          )}
-          {scanMode === 'live' && (
-            <WongPanel
-              socket={socketRef.current}
-              wonging={wongingData}
-              count={gameState?.count}
-            />
-          )}
+          {/* PHASE 5: live-scan widgets (Zone / Confirmation / Wong) moved
+              into ScannerHub inside the TabStrip's Scanner tab. */}
 
-          {/* Dynamic panels — ordered by DragLayoutEditor */}
-          {_rightKeys.map(key => (
-            <div key={key}>{_panelRegistry[key]}</div>
-          ))}
+          {/* Slot 1 — Shoe & Edge */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <EdgeMeter count={count} />
+            <ShoePanel shoe={shoe} />
+          </div>
+
+          {/* Slot 2 — Bet Reference */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {typeof BettingRampPanel !== 'undefined' && (
+              <BettingRampPanel count={count} betting={betting} currency={currency} />
+            )}
+            {typeof BetSpreadHelper !== 'undefined' && (
+              <BetSpreadHelper count={count} betting={betting} currency={currency} shoe={shoe} />
+            )}
+          </div>
+
+          {/* Slot 3 — TabStrip: reference + analytics, one body at a time.
+              Order is editable through the Layout Editor (PHASE 5). */}
+          {(() => {
+            const _allTabs = [
+              { key: 'i18',       label: 'I18 · Fab4',  render: () => <I18Panel count={count} /> },
+              { key: 'session',   label: 'Session',     render: () => <SessionStats session={session} currency={currency} /> },
+              { key: 'sidebet',   label: 'Side EV',     render: () => <SideBetPanel sideBets={sideBets} /> },
+              { key: 'analytics', label: 'Analytics',   render: () => <AnalyticsPanel analytics={gameState?.analytics} /> },
+              { key: 'shuffle',   label: 'Shuffle ML',  render: () => <ShuffleTrackerPanel tracker={tracker} /> },
+              { key: 'risk',      label: 'Casino Risk', render: () => <CasinoRiskMeter casinoRisk={casinoRisk} /> },
+              { key: 'history',   label: 'History',     render: () => <CountHistoryPanel history={history} /> },
+              { key: 'multi',     label: 'Multi-Sys',
+                render: () => typeof MultiSystemPanel !== 'undefined'
+                  ? <MultiSystemPanel socket={socketRef.current} count={count} shoe={shoe} />
+                  : null
+              },
+              { key: 'stops',     label: 'Stops',
+                render: () => <StopAlertsConfig session={session} currency={currency} socket={socketRef.current} />
+              },
+              { key: 'scanner',   label: 'Scanner',
+                render: () => <ScannerHub
+                                socket={socketRef.current}
+                                count={gameState?.count}
+                                scanMode={scanMode}
+                                onSetMode={setScanMode}
+                                onDealCard={handleDealCardWrapped}
+                                dealTarget={dealTarget}
+                                zoneConfig={zoneConfig}
+                                confirmationMode={confirmationMode}
+                                pendingCards={pendingCards}
+                                wonging={wongingData}
+                              />
+              },
+            ];
+            const _byKey = Object.fromEntries(_allTabs.map(t => [t.key, t]));
+            const _userOrder = layoutOrder?.rightTabs || []
+            const _ordered = [
+              ..._userOrder.map(k => _byKey[k]).filter(Boolean),
+              ..._allTabs.filter(t => !_userOrder.includes(t.key)),
+            ]
+            return (
+              <TabStrip
+                ariaLabel="Reference panels"
+                defaultKey={_ordered[0]?.key || 'i18'}
+                tabs={_ordered}
+              />
+            )
+          })()}
 
         </div>
 
-      {/* P3: Layout Editor button — floating in bottom-right area */}
-      {!isMinimal && (
-        <button
-          onClick={() => setShowLayoutEditor(true)}
-          aria-label="Open layout editor"
-          title="Customize panel layout (L key)"
-          style={{
-            position: 'fixed', bottom: 60, right: 16, zIndex: 999,
-            width: 40, height: 40, borderRadius: '50%',
-            background: '#1c2540', border: '1.5px solid rgba(255,255,255,0.15)',
-            color: '#8fa5be', fontSize: 16, fontWeight: 700,
-            cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
-            transition: 'all 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#263257'; e.currentTarget.style.color = '#ffd447'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#1c2540'; e.currentTarget.style.color = '#8fa5be'; }}
-        >
-          🎯
-        </button>
-      )}
-
-      {/* P3: Layout Editor Overlay */}
+      {/* PHASE 5: Layout Editor — left panels reorder, right TabStrip tabs reorder.
+          The two right-column fixed slots (Edge & Shoe / Bet Reference) are
+          shown as locked rows for context but cannot be moved. */}
       {typeof DragLayoutEditor !== 'undefined' && (
         <DragLayoutEditor
           isOpen={showLayoutEditor}
           onClose={() => setShowLayoutEditor(false)}
           leftPanels={[
-            { key: 'betting', label: 'Bet Sizing (Kelly)', icon: '💰' },
-            { key: 'strategy', label: 'Basic Strategy Grid', icon: '📊' },
-            { key: 'sidecount', label: 'Ace & Ten Side Counts', icon: '🎴' },
+            { key: 'betting',   label: 'Bet Sizing (Kelly)',     icon: '💰' },
+            { key: 'sidecount', label: 'Ace & Ten Side Counts',  icon: '🎴' },
+            { key: 'strategy',  label: 'Basic Strategy Grid',    icon: '📊' },
           ]}
-          rightPanels={[
-            { key: 'scanner', label: 'Card Scanner', icon: '📷' },
-            { key: 'edge', label: 'Edge Meter', icon: '📈' },
-            { key: 'shoe', label: 'Shoe Composition', icon: '👟' },
-            { key: 'session', label: 'Session Statistics', icon: '📋' },
-            { key: 'sidebet', label: 'Side Bet EV', icon: '🎰' },
-            { key: 'casinorisk', label: 'Casino Risk Meter', icon: '🏦' },
-            { key: 'history', label: 'Count History', icon: '📉' },
-            { key: 'i18', label: 'Illustrious 18 & Fab 4', icon: '🃏' },
-            { key: 'shuffle', label: 'Shuffle Tracker (ML)', icon: '🔀' },
-            { key: 'analytics', label: 'Analytics', icon: '🔬' },
-            { key: 'stopalerts', label: 'Stop Alerts', icon: '⚠️' },
-            { key: 'multisystem', label: 'Multi-System Compare', icon: '🔄' },
-            { key: 'betspread', label: 'Bet Spread Helper', icon: '📐' },
+          lockedSlots={[
+            { key: 'edgeshoe',     label: 'Edge & Shoe (fixed)',     icon: '📈' },
+            { key: 'betreference', label: 'Bet Reference (fixed)',   icon: '📐' },
           ]}
-          onLayoutChange={(layout) => {
-            setLayoutOrder(layout)
-          }}
+          rightTabs={[
+            { key: 'i18',       label: 'I18 · Fab 4',          icon: '🃏' },
+            { key: 'session',   label: 'Session Stats',        icon: '📋' },
+            { key: 'sidebet',   label: 'Side Bet EV',          icon: '🎰' },
+            { key: 'analytics', label: 'Analytics',            icon: '🔬' },
+            { key: 'shuffle',   label: 'Shuffle ML',           icon: '🔀' },
+            { key: 'risk',      label: 'Casino Risk',          icon: '🏦' },
+            { key: 'history',   label: 'Count History',        icon: '📉' },
+            { key: 'multi',     label: 'Multi-System',         icon: '🔄' },
+            { key: 'stops',     label: 'Stop Alerts',          icon: '⚠️' },
+            { key: 'scanner',   label: 'Live Scanner',         icon: '📷' },
+          ]}
+          onLayoutChange={(layout) => setLayoutOrder(layout)}
         />
       )}
 
         </div>
       )}{/* end normal/minimal layout conditional */}
 
-      {/* ── StopAlerts floating overlay ───────────────────────────── */}
+      {/* ── PHASE 2: Status Bar — sticky at bottom (one row, glanceable) ── */}
+      <StatusBar
+        session={session}
+        count={count}
+        wonging={wongingData}
+        mlModelInfo={gameState?.ml_model_info}
+        lastUpdateAgo={lastUpdateAgo}
+        onShowHelp={() => setShowHotkeys(true)}
+      />
+
+      {/* ── PHASE 4: Hotkey overlay (modal) ─────────────────────────── */}
+      <HotkeyOverlay
+        isOpen={showHotkeys}
+        onClose={() => setShowHotkeys(false)}
+      />
+
+      {/* ── StopAlerts floating overlay (lifted above StatusBar) ───────── */}
       <div style={{
-        position: 'fixed', bottom: 16, right: 16,
+        position: 'fixed', bottom: 36, right: 16,
         zIndex: 1000, pointerEvents: 'none',
       }}>
         <div style={{ pointerEvents: 'auto' }}>
@@ -880,12 +1082,12 @@ function App() {
         </div>
       </div>
 
-      {/* ── CRIT-05: Floating TC HUD — always visible, toggle with T key ─── */}
+      {/* ── Floating TC HUD — opt-in via T key (PHASE 2: default off, lifted above StatusBar) ─── */}
       {showFloatingHud && count && (
         <div
           aria-label="Floating True Count HUD"
           style={{
-            position: 'fixed', bottom: 16, left: 16, zIndex: 999,
+            position: 'fixed', bottom: 36, left: 16, zIndex: 999,
             background: 'rgba(12,17,30,0.92)',
             backdropFilter: 'blur(12px)',
             border: `1.5px solid ${(count?.true ?? 0) >= 2 ? 'rgba(68,232,130,0.5)' : (count?.true ?? 0) <= -1 ? 'rgba(255,92,92,0.5)' : 'rgba(255,255,255,0.15)'}`,
