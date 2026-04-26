@@ -53,7 +53,31 @@ class Simulator:
     Monte Carlo blackjack simulator for ML training and strategy validation.
     """
 
-    def __init__(self, config: GameConfig = None, system: str = None):
+    def __init__(self, config: GameConfig = None, system: str = None,
+                 seed: int = None):
+        """
+        ML-04: optional `seed` parameter makes data generation reproducible.
+        Seeds Python's `random`, NumPy's default RNG, and torch (if loaded).
+        Two runs with the same seed + same num_hands produce identical
+        training data — required for clean A/B model comparisons.
+        """
+        if seed is not None:
+            import random as _random
+            _random.seed(seed)
+            try:
+                import numpy as _np
+                _np.random.seed(seed)
+            except Exception:
+                pass
+            try:
+                import torch as _t
+                _t.manual_seed(seed)
+                if _t.cuda.is_available():
+                    _t.cuda.manual_seed_all(seed)
+            except Exception:
+                pass
+        self._seed = seed
+
         self.config = config or GameConfig()
         self.table = BlackjackTable(self.config)
 

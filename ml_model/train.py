@@ -268,7 +268,9 @@ class Trainer:
 
         def _run_sim(system_name: str, n: int) -> Tuple[np.ndarray, np.ndarray]:
             print(f"🎲  Simulating {n:,} hands  [{system_name}]…")
-            sim = Simulator(system=system_name)
+            # ML-04: deterministic data — pass seed=42 by default so two
+            # training runs with the same num_hands produce identical data.
+            sim = Simulator(system=system_name, seed=42)
             data = sim.simulate_hands(n, use_counting=True,
                                       use_deviations=True, verbose=True)
             td = data["training_data"]
@@ -324,7 +326,8 @@ class Trainer:
             return 0, 0.0, 0
 
         print(f"    ↺  Resuming from last_checkpoint.pt")
-        ckpt = torch.load(last_path, map_location=device)
+        # SEC-04: weights_only=True closes the pickle RCE channel.
+        ckpt = torch.load(last_path, map_location=device, weights_only=True)
         model.load_state_dict(ckpt["model_state"])
         optimizer.load_state_dict(ckpt["optimizer_state"])
         scheduler.load_state_dict(ckpt["scheduler_state"])
@@ -337,7 +340,7 @@ class Trainer:
         best_acc  = last_acc
         best_epoch_in_file = ckpt["epoch"]
         if os.path.exists(best_path):
-            b = torch.load(best_path, map_location="cpu")
+            b = torch.load(best_path, map_location="cpu", weights_only=True)
             best_acc          = max(last_acc, b.get("accuracy", 0.0))
             best_epoch_in_file = b.get("epoch", ckpt["epoch"])
 
@@ -394,13 +397,43 @@ class Trainer:
         states, actions = self.generate_training_data(num_hands)
         N = len(states)
 
-        split      = int(N * (1 - self.config.TRAIN_TEST_SPLIT))
-        X_tr, X_te = states[:split],  states[split:]
-        y_tr, y_te = actions[:split], actions[split:]
+        # ML-01: Always shuffle BEFORE splitting to break temporal/shoe order.
+        # Prior code used sequential head/tail split which leaked late-shoe
+        # context into the validation set and produced inflated accuracy.
+        rng = np.random.default_rng(seed=42)
+        idx = rng.permutation(N)
+        states, actions = states[idx], actions[idx]
+
+        # ML-03: 3-way 70/15/15 split — train / val / test.
+        # `val` is used for early stopping and best_model.pt selection.
+        # `test` is reserved for a single final unbiased evaluation.
+        train_frac, val_frac = 0.70, 0.15
+        n_train = int(N * train_frac)
+        n_val   = int(N * val_frac)
+        X_tr, y_tr = states[:n_train],            actions[:n_train]
+        X_val, y_val = states[n_train:n_train+n_val], actions[n_train:n_train+n_val]
+        X_te,  y_te  = states[n_train+n_val:],         actions[n_train+n_val:]
+
+        # ML-02: class-weighted loss for surrender/split underrepresentation.
+        try:
+            from sklearn.utils.class_weight import compute_class_weight
+            present = np.unique(y_tr)
+            raw_w = compute_class_weight('balanced', classes=present, y=y_tr)
+            cw = np.ones(5, dtype=np.float32)
+            for cls, w in zip(present, raw_w):
+                cw[int(cls)] = float(w)
+        except Exception as _exc:
+            print(f"    [WARN] class weights unavailable ({_exc}); falling back to uniform")
+            cw = np.ones(5, dtype=np.float32)
+        self._class_weights = cw  # picked up below when constructing criterion
 
         train_loader = DataLoader(
             TensorDataset(torch.FloatTensor(X_tr), torch.LongTensor(y_tr)),
             batch_size=self.config.BATCH_SIZE, shuffle=True, num_workers=0,
+        )
+        val_loader = DataLoader(
+            TensorDataset(torch.FloatTensor(X_val), torch.LongTensor(y_val)),
+            batch_size=self.config.BATCH_SIZE, num_workers=0,
         )
         test_loader = DataLoader(
             TensorDataset(torch.FloatTensor(X_te), torch.LongTensor(y_te)),
@@ -413,10 +446,13 @@ class Trainer:
         device    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         model.to(device)
 
-        criterion = nn.CrossEntropyLoss()
+        # ML-02: weighted CE loss
+        cw_t = torch.from_numpy(self._class_weights).to(device)
+        criterion = nn.CrossEntropyLoss(weight=cw_t)
         optimizer = optim.AdamW(model.parameters(), lr=self.config.LEARNING_RATE, weight_decay=1e-4)
+        # ML-06: align scheduler patience (was 7) with early-stop (10)
         scheduler = optim.lr_scheduler.ReduceLROnPlateau(
-            optimizer, mode='min', patience=7, factor=0.5
+            optimizer, mode='min', patience=4, factor=0.5
         )
 
         # ── Optionally resume ─────────────────────────────────────────────
@@ -430,7 +466,9 @@ class Trainer:
         print(f"    Input features : {input_dim}")
         print(f"    Counting system: {self.system}")
         print(f"    Train samples  : {len(X_tr):,}")
+        print(f"    Val   samples  : {len(X_val):,}")
         print(f"    Test  samples  : {len(X_te):,}")
+        print(f"    Class weights  : {dict(enumerate(self._class_weights.round(3).tolist()))}")
         print(f"    Epochs         : {start_epoch + 1} → {epochs}")
         print(f"    Early stop     : {EARLY_STOPPING_PATIENCE} epochs patience")
         print(f"    Checkpoint dir : {save_path}")
@@ -460,13 +498,13 @@ class Trainer:
                 train_loss_sum += loss.item()
             avg_train_loss = train_loss_sum / len(train_loader)
 
-            # ── Validate ──────────────────────────────────────────────────
+            # ── Validate (val set, NOT test set — ML-03) ─────────────────
             model.eval()
             test_loss_sum = 0.0
             correct = 0
             total   = 0
             with torch.no_grad():
-                for bx, by in test_loader:
+                for bx, by in val_loader:
                     bx, by = bx.to(device), by.to(device)
                     out    = model(bx)
                     test_loss_sum += criterion(out, by).item()
@@ -474,7 +512,7 @@ class Trainer:
                     total   += by.size(0)
                     correct += (pred == by).sum().item()
 
-            avg_test_loss = test_loss_sum / len(test_loader)
+            avg_test_loss = test_loss_sum / len(val_loader)
             accuracy      = correct / total
             current_lr    = optimizer.param_groups[0]["lr"]
 
@@ -491,8 +529,8 @@ class Trainer:
 
             # ── Save best_model.pt if accuracy improved ───────────────────
             if accuracy > best_acc:
-                # Per-action breakdown (one extra forward pass, only on improvement)
-                per_action_acc = _compute_per_action_accuracy(model, test_loader, device)
+                # Per-action breakdown computed on val set (used for selection)
+                per_action_acc = _compute_per_action_accuracy(model, val_loader, device)
 
                 _save_checkpoint(
                     path           = P["best"],
@@ -579,8 +617,29 @@ class Trainer:
         total_time = time.time() - run_start
 
         # ── Load per-action breakdown from the saved best model ───────────
-        best_ckpt      = torch.load(P["best"], map_location="cpu")
+        # SEC-04: weights_only=True closes the pickle RCE channel.
+        best_ckpt      = torch.load(P["best"], map_location="cpu", weights_only=True)
         per_action_acc = best_ckpt.get("per_action_acc", {})
+
+        # ── ML-03: final unbiased test-set evaluation (best model only) ──
+        try:
+            model.load_state_dict(best_ckpt["model_state"])
+            model.to(device)
+            model.eval()
+            t_correct, t_total = 0, 0
+            with torch.no_grad():
+                for bx, by in test_loader:
+                    bx, by = bx.to(device), by.to(device)
+                    _, pred = torch.max(model(bx), 1)
+                    t_total += by.size(0)
+                    t_correct += (pred == by).sum().item()
+            test_accuracy = (t_correct / t_total) if t_total else 0.0
+            test_per_action = _compute_per_action_accuracy(model, test_loader, device)
+            print(f"  Test  accuracy: {test_accuracy:.4f}  (held-out, single eval)")
+        except Exception as _exc:
+            test_accuracy = None
+            test_per_action = {}
+            print(f"  [WARN] test-set evaluation failed: {_exc}")
 
         # ── Final summary printed to console ─────────────────────────────
         print(f"\n{'═' * 60}")
@@ -602,15 +661,20 @@ class Trainer:
 
         # ── Write JSON summary ────────────────────────────────────────────
         summary = {
-            "best_accuracy":    round(best_acc, 6),
-            "best_epoch":       best_epoch + 1,
-            "total_epochs_run": (epoch + 1) - start_epoch,
-            "stopped_early":    stopped_early,
-            "num_hands":        N,
-            "training_time_s":  round(total_time, 1),
-            "device":           str(device),
-            "per_action_acc":   per_action_acc,
-            "saved_at":         datetime.utcnow().isoformat() + "Z",
+            "best_val_accuracy":  round(best_acc, 6),
+            "test_accuracy":      round(test_accuracy, 6) if test_accuracy is not None else None,
+            "best_epoch":         best_epoch + 1,
+            "total_epochs_run":   (epoch + 1) - start_epoch,
+            "stopped_early":      stopped_early,
+            "num_hands":          N,
+            "training_time_s":    round(total_time, 1),
+            "device":             str(device),
+            "val_per_action_acc": per_action_acc,
+            "test_per_action_acc": test_per_action,
+            "class_weights":      [round(float(w), 4) for w in self._class_weights],
+            "split":              {"train": n_train, "val": n_val, "test": N - n_train - n_val},
+            "shuffle_seed":       42,
+            "saved_at":           datetime.utcnow().isoformat() + "Z",
         }
         with open(P["summary"], "w") as fh:
             json.dump(summary, fh, indent=2)

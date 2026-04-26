@@ -29,7 +29,7 @@ const AC = {
   SPLIT:'#b99bff', SURRENDER:'#ff9944',
 };
 
-function CenterToolbar({ recommendation, count, playerHand, dealerUpcard, sideBets, analytics }) {
+function CenterToolbar({ recommendation, count, playerHand, dealerUpcard, sideBets, analytics, shoe }) {
 
   const action  = recommendation?.action;
   const tc      = count?.true      ?? 0;
@@ -42,11 +42,32 @@ function CenterToolbar({ recommendation, count, playerHand, dealerUpcard, sideBe
   const upRank        = dealerUpcard ? String(dealerUpcard).replace(/[♠♥♦♣]/g,'').trim().toUpperCase() : null;
   const dealerBustPct = upRank ? (DEALER_BUST_PCT[upRank] ?? null) : null;
 
+  // P3.4 (MED-01): bust% computed from LIVE shoe composition when available.
+  // Falls back to static base frequencies + TC-adjustment if shoe.remaining_by_rank
+  // is not present yet (initial render).
   const bustPct = (() => {
     if (!hasCards || isBust || isBJ || pv === 0) return null;
     const safe = 21 - pv;
     if (safe >= 11) return 0;
     if (safe <= 0)  return 100;
+
+    const remByRank = shoe && shoe.remaining_by_rank;
+    if (remByRank) {
+      // remByRank: { 2..10: count, 11: count } — total cards left
+      let total = 0;
+      for (let k = 2; k <= 11; k++) total += (remByRank[k] || remByRank[String(k)] || 0);
+      if (total > 0) {
+        let b = 0;
+        for (let v = safe + 1; v <= 10; v++) {
+          const n = (remByRank[v] || remByRank[String(v)] || 0);
+          b += n / total;
+        }
+        // Aces: count as 1 only if 11 would bust (it always does when safe<11 here).
+        // Treat A as a 1, so it never busts — skip from bust sum.
+        return Math.round(Math.min(99, Math.max(1, b * 100)));
+      }
+    }
+    // Fallback: static frequencies + TC tilt
     const base = {2:4/52,3:4/52,4:4/52,5:4/52,6:4/52,7:4/52,8:4/52,9:4/52,10:16/52};
     let b = 0;
     for (let v = safe + 1; v <= 10; v++) b += (base[v] || 0);
@@ -74,158 +95,37 @@ function CenterToolbar({ recommendation, count, playerHand, dealerUpcard, sideBe
     <div style={{ width:1, background:'rgba(255,255,255,0.08)', alignSelf:'stretch', margin:'0 4px' }} />
   );
 
-  /* ── Side bet EV data ─────────────────────────────────── */
-  const sideBetItems = [
-    { key: 'perfect_pairs',    icon: '👯', short: 'PP',   data: sideBets?.perfect_pairs,    color: '#b99bff' },
-    { key: 'twenty_one_plus_3',icon: '🃏', short: '21+3', data: sideBets?.twenty_one_plus_3, color: '#ffd447' },
-    { key: 'lucky_ladies',     icon: '👑', short: 'LL',   data: sideBets?.lucky_ladies,     color: '#ff9a20' },
-  ];
-
-  /* ── Shoe quality data ────────────────────────────────── */
-  const shoeQuality = analytics?.shoe_quality ?? null;
-  const sqLabel = shoeQuality === null ? null
-    : shoeQuality >= 70 ? 'Strong' : shoeQuality >= 40 ? 'Neutral' : 'Bad';
-  const sqColor = shoeQuality === null ? '#6b7fa3'
-    : shoeQuality >= 70 ? '#44e882' : shoeQuality >= 40 ? '#ffd447' : '#ff5c5c';
-
   return (
-    <div style={{ display:'flex', flexDirection:'column', gap:0 }}>
+    <div style={{
+      background:'#1c2540',
+      border:'1.5px solid rgba(255,255,255,0.09)',
+      borderRadius: 10,
+      padding:'8px 12px',
+      display:'flex', alignItems:'center', gap:0,
+    }}>
 
-      {/* ── ROW 1: Hand + Bust% + Dealer Bust% (CRIT-01/08: removed action badge + shortcuts) ── */}
-      <div style={{
-        background:'#1c2540',
-        border:'1.5px solid rgba(255,255,255,0.09)',
-        borderRadius: '10px 10px 0 0',
-        padding:'8px 12px',
-        display:'flex', alignItems:'center', gap:0,
-      }}>
+      {/* Hand value */}
+      {cell(isBJ ? '🎉 BJ' : isBust ? '💀 Bust' : 'Hand',
+        hasCards ? (isSoft && !isBust ? `S${pv}` : pv) : '—',
+        isBust ? '#ff5c5c' : isBJ ? '#ffd447' : '#f0f4ff')}
+      {divider()}
 
-        {/* Hand value */}
-        {cell(isBJ ? '🎉 BJ' : isBust ? '💀 Bust' : 'Hand',
-          hasCards ? (isSoft && !isBust ? `S${pv}` : pv) : '—',
-          isBust ? '#ff5c5c' : isBJ ? '#ffd447' : '#f0f4ff')}
-        {divider()}
+      {/* Player bust % */}
+      {cell('Bust/Hit', bustPct === null ? '—' : `${bustPct}%`, bustCol, null, 'Probability of player busting if hitting')}
+      {divider()}
 
-        {/* Player bust % */}
-        {cell('Bust/Hit', bustPct === null ? '—' : `${bustPct}%`, bustCol, null, 'Probability of player busting if hitting')}
-        {divider()}
-
-        {/* Dealer bust % */}
-        {cell(upRank ? `Dlr (${upRank})` : 'Dlr Bust',
-          dealerBustPct !== null ? `${dealerBustPct.toFixed(0)}%` : '—', dlrBustCol, null, 'Dealer Bust Probability')}
-
-      </div>
-
-      {/* ── ROW 2: Side Bet EV pills + Shoe Quality ────── */}
-      <div style={{
-        background:'#171e30',
-        border:'1.5px solid rgba(255,255,255,0.09)',
-        borderTop:'none',
-        borderRadius: '0 0 10px 10px',
-        padding:'5px 12px',
-        display:'flex', alignItems:'center', gap:8,
-      }}>
-
-        {/* Side Bets label */}
-        <div style={{
-          fontSize:8, fontWeight:700, color:'#6b7fa3',
-          textTransform:'uppercase', letterSpacing:'0.08em',
-          flexShrink:0,
-        }}>
-          Side Bets
-        </div>
-
-        {/* Side bet pills */}
-        <div style={{ display:'flex', gap:6, flex:1 }}>
-          {sideBetItems.map(({ key, icon, short, data, color }) => {
-            const ev  = data ? (data.ev || 0) : null;
-            const rec = data && data.recommended;
-            const isPos = ev !== null && ev >= 0;
-            const pillBg   = rec ? `${color}18` : 'rgba(255,255,255,0.03)';
-            const pillBdr  = rec ? `${color}50` : 'rgba(255,255,255,0.08)';
-            const evColor  = ev === null ? '#6b7fa3' : isPos ? '#44e882' : '#ff5c5c';
-            return (
-              <div key={key} style={{
-                display:'flex', alignItems:'center', gap:5,
-                background: pillBg,
-                border:`1px solid ${pillBdr}`,
-                borderRadius:6, padding:'3px 8px',
-                transition:'all 0.3s ease',
-              }}>
-                <span style={{ fontSize:10 }}>{icon}</span>
-                <span style={{ fontSize:9, fontWeight:700, color: rec ? color : '#94a7c4' }}>
-                  {short}
-                </span>
-                <span style={{
-                  fontSize:10, fontWeight:800,
-                  fontFamily:'DM Mono,monospace',
-                  color: evColor,
-                }}>
-                  {ev !== null ? `${ev >= 0 ? '+' : ''}${ev.toFixed(1)}%` : '—'}
-                </span>
-                {rec
-                  ? <span style={{
-                      fontSize:7, fontWeight:800, color,
-                      background:`${color}20`, border:`1px solid ${color}40`,
-                      borderRadius:3, padding:'0px 4px', lineHeight:'14px',
-                    }}>BET</span>
-                  : <span style={{ fontSize:7, color:'#4a5568' }}>skip</span>
-                }
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Separator */}
-        <div style={{ width:1, height:18, background:'rgba(255,255,255,0.08)', flexShrink:0 }} />
-
-        {/* Shoe Quality gauge */}
-        <div style={{
-          display:'flex', alignItems:'center', gap:6,
-          flexShrink:0,
-        }}>
-          <div style={{
-            fontSize:8, fontWeight:700, color:'#6b7fa3',
-            textTransform:'uppercase', letterSpacing:'0.08em',
-          }}>
-            Shoe
-          </div>
-          <div style={{
-            width:40, height:4, borderRadius:2,
-            background:'rgba(255,255,255,0.06)',
-            position:'relative', overflow:'hidden',
-          }}>
-            <div style={{
-              position:'absolute', top:0, left:0,
-              height:'100%', borderRadius:2,
-              width: shoeQuality !== null ? `${Math.min(100, Math.max(0, shoeQuality))}%` : '0%',
-              background: sqColor,
-              transition:'width 0.4s ease, background 0.3s ease',
-            }} />
-          </div>
-          <span style={{
-            fontSize:11, fontWeight:800,
-            fontFamily:'DM Mono,monospace',
-            color: sqColor,
-          }}>
-            {shoeQuality !== null ? shoeQuality : '—'}
-          </span>
-          {sqLabel && (
-            <span style={{
-              fontSize:7, fontWeight:700,
-              color: sqColor,
-              background: `${sqColor}15`,
-              border: `1px solid ${sqColor}30`,
-              borderRadius:3, padding:'0px 4px', lineHeight:'14px',
-              textTransform:'uppercase',
-            }}>
-              {sqLabel}
-            </span>
-          )}
-        </div>
-
-      </div>
+      {/* Dealer bust % */}
+      {cell(upRank ? `Dlr (${upRank})` : 'Dlr Bust',
+        dealerBustPct !== null ? `${dealerBustPct.toFixed(0)}%` : '—', dlrBustCol, null, 'Dealer Bust Probability')}
 
     </div>
   );
+}
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function CenterToolbar(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  CenterToolbar = React.memo(CenterToolbar);
 }

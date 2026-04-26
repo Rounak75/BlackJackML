@@ -106,9 +106,13 @@ class ResidualBlock(nn.Module):
     def __init__(self, in_dim: int, out_dim: int, dropout: float = 0.15):
         super().__init__()
         self.linear1  = nn.Linear(in_dim, out_dim)
-        self.bn1      = nn.BatchNorm1d(out_dim)
+        # PERF-04: LayerNorm in place of BatchNorm1d. LN is identical at
+        # batch-size 1 (live inference) and batch-size N (training), and is
+        # not sensitive to running-statistics drift between simulator
+        # distribution and real-casino distribution.
+        self.bn1      = nn.LayerNorm(out_dim)
         self.linear2  = nn.Linear(out_dim, out_dim)
-        self.bn2      = nn.BatchNorm1d(out_dim)
+        self.bn2      = nn.LayerNorm(out_dim)
         self.dropout  = nn.Dropout(dropout)
         self.relu     = nn.ReLU(inplace=True)
 
@@ -116,7 +120,7 @@ class ResidualBlock(nn.Module):
         if in_dim != out_dim:
             self.skip = nn.Sequential(
                 nn.Linear(in_dim, out_dim, bias=False),
-                nn.BatchNorm1d(out_dim),
+                nn.LayerNorm(out_dim),
             )
         else:
             self.skip = nn.Identity()
@@ -202,13 +206,14 @@ class DecisionHead(nn.Module):
 
         in_dim = trunk_dim + len(feature_idxs)   # trunk + raw feature skip
 
+        # PERF-04: LayerNorm — distribution-insensitive at inference
         self.net = nn.Sequential(
             nn.Linear(in_dim, hidden_dim),
-            nn.BatchNorm1d(hidden_dim),
+            nn.LayerNorm(hidden_dim),
             nn.ReLU(inplace=True),
             nn.Dropout(0.10),
             nn.Linear(hidden_dim, hidden_dim // 2),
-            nn.BatchNorm1d(hidden_dim // 2),
+            nn.LayerNorm(hidden_dim // 2),
             nn.ReLU(inplace=True),
             nn.Dropout(0.10),
             nn.Linear(hidden_dim // 2, len(action_idxs)),
@@ -293,9 +298,10 @@ class BlackjackNet(nn.Module):
         self.attention = FeatureAttention(input_dim, reduction=2)
 
         # ── 2. Input projection (attended features → trunk width) ─────
+        # PERF-04: LayerNorm
         self.input_proj = nn.Sequential(
             nn.Linear(input_dim, trunk_dim),
-            nn.BatchNorm1d(trunk_dim),
+            nn.LayerNorm(trunk_dim),
             nn.ReLU(inplace=True),
         )
 
@@ -436,9 +442,38 @@ class BlackjackDecisionModel:
         stay in sync with the training simulator automatically.
         """
         from config import CountingConfig
-        tc_scale, rc_scale, adv_scale = CountingConfig.COUNT_NORM_SCALARS.get(
-            system, (10.0, 20.0, 0.10)
+        # INF-01 / INT-01: assert system has a normalisation scalar.
+        # Silent fallback to default would corrupt features for new systems.
+        assert system in CountingConfig.COUNT_NORM_SCALARS, (
+            f"System {system!r} missing from CountingConfig.COUNT_NORM_SCALARS"
         )
+        tc_scale, rc_scale, adv_scale = CountingConfig.COUNT_NORM_SCALARS[system]
+
+        # INF-01: clamp inputs so NaN/Inf or end-of-shoe explosions can't
+        # propagate into the model. true_count = rc / decks_remaining can
+        # blow up as decks_remaining → 0.
+        import math as _math
+        def _safe(x, lo, hi, default=0.0):
+            try:
+                fx = float(x)
+            except (TypeError, ValueError):
+                return default
+            if _math.isnan(fx) or _math.isinf(fx):
+                return default
+            return max(lo, min(hi, fx))
+
+        true_count        = _safe(true_count, -15.0, 15.0)
+        running_count     = _safe(running_count, -200.0, 200.0)
+        advantage         = _safe(advantage, -0.50, 0.50)
+        shuffle_adjustment= _safe(shuffle_adjustment, -5.0, 5.0)
+        penetration       = _safe(penetration, 0.0, 1.0)
+        bankroll_ratio    = _safe(bankroll_ratio, 0.0, 10.0)
+        decks_remaining   = _safe(decks_remaining, 0.0, 8.0)
+        hand_value        = int(_safe(hand_value, 0, 31))
+        pair_value        = int(_safe(pair_value, 0, 11))
+        dealer_upcard     = int(_safe(dealer_upcard, 2, 11))
+        num_cards         = int(_safe(num_cards, 0, 21))
+        num_hands         = int(_safe(num_hands, 1, 8))
 
         features = [
             hand_value / 21.0,
@@ -463,7 +498,10 @@ class BlackjackDecisionModel:
             decks_remaining / 8.0,
             float(is_split),
         ])
-        return np.array(features, dtype=np.float32)
+        arr = np.array(features, dtype=np.float32)
+        # Final defence: any residual NaN/Inf → 0
+        arr = np.nan_to_num(arr, nan=0.0, posinf=1.0, neginf=-1.0)
+        return arr
 
     # ── Inference ─────────────────────────────────────────────────────
 

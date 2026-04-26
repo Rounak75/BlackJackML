@@ -326,11 +326,14 @@ class ShuffleTracker:
         self.card_sequence: List[np.ndarray] = []
         self.max_sequence_len = MLConfig.SHUFFLE_SEQUENCE_LEN
 
-        # Ensemble weights
+        # ML-05: LSTM is initialised with random weights and there is no
+        # training pipeline yet — its output is noise. Disable it from the
+        # ensemble until a proper training routine ships. Re-balance the
+        # remaining weights so the rest still sum to 1.0.
         self.weights = {
-            "lstm": 0.3,
-            "ace_seq": 0.2,
-            "bayesian": 0.5,
+            "lstm":     0.0,   # was 0.3 — see ML-05
+            "ace_seq":  0.3,   # was 0.2
+            "bayesian": 0.7,   # was 0.5
         }
 
         # Tracking
@@ -396,23 +399,19 @@ class ShuffleTracker:
         # Bayesian adjustment
         bayes_adj = self.bayesian.get_count_adjustment()
 
-        # LSTM prediction (if we have enough data)
+        # ML-05: skip the LSTM entirely while its weight is 0. This avoids
+        # the per-tick forward pass cost of an untrained network whose
+        # output is multiplied by zero anyway.
         lstm_adj = 0.0
-        if len(self.card_sequence) > 5:
+        if self.weights.get("lstm", 0.0) > 0.0 and len(self.card_sequence) > 5:
             with torch.no_grad():
                 seq = np.array(self.card_sequence[-self.max_sequence_len:])
                 x = torch.FloatTensor(seq).unsqueeze(0)
                 # FIX CRIT-05: Discard hidden state on read-only pass.
-                # Previously this wrote back to self.lstm_hidden, causing
-                # progressive drift every time get_full_state() was called
-                # (multiple times per tick). Only on_shuffle() should
-                # advance the LSTM hidden state.
                 dist, _discarded_hidden = self.lstm(x, self.lstm_hidden)
                 dist = dist.numpy()[0]
-
-                # Compare LSTM prediction to uniform
-                base_10_prob = 16.0 / 52.0  # ~30.8% for 10-value cards
-                base_ace_prob = 4.0 / 52.0  # ~7.7% for aces
+                base_10_prob = 16.0 / 52.0
+                base_ace_prob = 4.0 / 52.0
                 high_excess = (dist[8] - base_10_prob) + (dist[9] - base_ace_prob)
                 lstm_adj = high_excess * 10 * self.bayesian.confidence
 

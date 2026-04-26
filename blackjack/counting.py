@@ -100,6 +100,9 @@ class CardCounter:
         # FIX M10: deque(maxlen) drops oldest entry O(1) vs list slice O(N)
         self.count_history: deque = deque(maxlen=_MAX_HISTORY)
         self._card_log: List[int] = []  # Rank keys of every card seen
+        # GAP-03: parallel list of original rank labels ("J","Q","K","10",...)
+        # so count_history preserves rank identity after a system switch.
+        self._card_log_labels: List[str] = []
         # M3+Y10 perf fix: incremental rank frequency counts — avoids O(n) iteration
         self._seen_counts: Dict[int, int] = {i: 0 for i in range(2, 12)}
 
@@ -110,6 +113,10 @@ class CardCounter:
         # lets us compute an "Ace-adjusted TC" for betting decisions.
         self.aces_seen = 0          # How many Aces have been dealt
         self.tens_seen = 0          # How many 10/J/Q/K have been dealt
+        # P3.3: Five count — fives are the most damaging card to remove from a
+        # neutral deck (every fives-rich shoe is heavily player-positive).
+        # Pro players track them as a tertiary side count to refine bet sizing.
+        self.fives_seen = 0
 
         # ── Pre-computed rank totals ────────────────────────────────────────
         # PERF: Previously rebuilt inside get_remaining_estimate() on every
@@ -133,12 +140,19 @@ class CardCounter:
         self.running_count += val
         self.cards_seen += 1
         self._card_log.append(card.count_key)
+        # GAP-03: capture the original rank label too
+        try:
+            self._card_log_labels.append(str(card))
+        except Exception:
+            self._card_log_labels.append('?')
         self._seen_counts[card.count_key] = self._seen_counts.get(card.count_key, 0) + 1
         # Side counts — tracked independently of main counting system
         if card.is_ace:
             self.aces_seen += 1
         if card.is_ten:
             self.tens_seen += 1
+        if card.count_key == 5:  # P3.3: five count
+            self.fives_seen += 1
         self.count_history.append({
             "card": str(card),
             "count_value": val,
@@ -220,6 +234,17 @@ class CardCounter:
     def tens_remaining(self) -> int:
         """How many 10-value cards (10/J/Q/K) are still in the shoe."""
         return max(0, self.num_decks * 16 - self.tens_seen)
+
+    @property
+    def fives_remaining(self) -> int:
+        """P3.3: how many 5s are still in the shoe."""
+        return max(0, self.num_decks * 4 - self.fives_seen)
+
+    @property
+    def fives_expected(self) -> float:
+        """Expected fives remaining if shoe were dealt uniformly."""
+        decks_left = self.decks_remaining
+        return max(0.0, decks_left * 4)
 
     @property
     def aces_expected(self) -> float:
@@ -325,6 +350,11 @@ class CardCounter:
             "ten_rich":        self.tens_remaining > self.tens_expected,
             "ten_adjustment":  self.ten_adjustment,
             "ace_adjusted_tc": self.ace_adjusted_tc,
+            # P3.3: fives — most-damaging-card side count
+            "fives_seen":      self.fives_seen,
+            "fives_remaining": self.fives_remaining,
+            "fives_expected":  round(self.fives_expected, 1),
+            "five_rich":       self.fives_remaining < self.fives_expected,  # FEW fives = good
         }
 
     @property
@@ -386,9 +416,11 @@ class CardCounter:
         self.cards_seen = 0
         self.count_history = deque(maxlen=_MAX_HISTORY)
         self._card_log = []
+        self._card_log_labels = []  # GAP-03
         self._seen_counts = {i: 0 for i in range(2, 12)}
         self.aces_seen = 0
         self.tens_seen = 0
+        self.fives_seen = 0  # P3.3
 
     def get_remaining_estimate(self) -> Dict[int, float]:
         """

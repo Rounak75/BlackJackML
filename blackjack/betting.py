@@ -83,6 +83,13 @@ class BettingEngine:
         self.aggressive_mode = aggressive_mode  # Fix #1: default off
         self.stealth_mode = stealth_mode        # Fix #5: default off
         self._last_bet: float = self.config.TABLE_MIN  # for stealth smoothing
+        # P3.8: runtime-configurable fractional Kelly multiplier (0.10..1.00).
+        # Lets a player dial back from full Kelly when bankroll is fragile or
+        # session variance is high. Defaults to the config setting.
+        self._kelly_fraction_runtime: float = float(getattr(self.config, 'KELLY_FRACTION', 0.5))
+        # P3.8: bankroll-aware bet cap — never bet more than 10% of bankroll
+        # on a single hand regardless of what Kelly says.
+        self._bet_cap_fraction: float = 0.10
 
         # ── Session stop thresholds ────────────────────────────────────────
         # Configurable server-side limits. The frontend JS mirrors these for
@@ -242,20 +249,32 @@ class BettingEngine:
 
         return units * self.config.BASE_UNIT
 
+    def set_kelly_fraction(self, frac: float) -> float:
+        """P3.8: runtime setter (0.10..1.00). Returns the clamped value."""
+        try:
+            f = float(frac)
+        except (TypeError, ValueError):
+            f = self._kelly_fraction_runtime
+        self._kelly_fraction_runtime = max(0.10, min(1.00, f))
+        return self._kelly_fraction_runtime
+
     def _kelly_bet(self, advantage: float) -> float:
         """
         Kelly Criterion optimal bet sizing.
 
         Full Kelly: f* = advantage / odds
-        We use fractional Kelly (default 75%) for safety.
+        We use fractional Kelly (runtime configurable via set_kelly_fraction).
+        Result is bankroll-capped to ``_bet_cap_fraction × bankroll`` so a
+        single misread shoe cannot blow the bankroll.
         """
         if advantage <= 0:
             return self.config.TABLE_MIN
 
-        # For even-money bets: f = edge / 1 = edge
-        kelly_fraction = advantage * self.config.KELLY_FRACTION
+        kelly_fraction = advantage * self._kelly_fraction_runtime
         optimal = self.bankroll * kelly_fraction
-
+        # P3.8: hard bankroll cap
+        cap = self.bankroll * self._bet_cap_fraction
+        optimal = min(optimal, cap)
         return max(optimal, self.config.TABLE_MIN)
 
     def should_wong_in(self, true_count: float) -> bool:

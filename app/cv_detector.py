@@ -10,6 +10,7 @@ import base64
 import logging
 import os
 import re
+import threading as _threading
 from typing import Dict, List, Optional, Tuple
 
 import cv2
@@ -35,24 +36,39 @@ YOLO_CONF         = 0.30
 
 _yolo_model = None
 _yolo_init  = False
+_yolo_lock  = _threading.Lock()  # GAP-04: prevent double-init race
 
 def _load_yolo() -> bool:
+    """Thread-safe lazy YOLO loader (GAP-04).
+
+    Two concurrent detect_from_base64() calls used to both pass the
+    `_yolo_init=False` check and each allocate a model (~25MB leak).
+    The lock collapses concurrent loads to a single allocation.
+    """
     global _yolo_model, _yolo_init
+    # Fast-path: avoid acquiring the lock once initialisation is finalised.
     if _yolo_init:
         return _yolo_model is not None
-    _yolo_init = True
-    if not os.path.exists(YOLO_PATH):
-        log.info(f'[CV] YOLO not found at {YOLO_PATH} — using OCR fallback')
-        return False
-    try:
-        from ultralytics import YOLO
-        _yolo_model = YOLO(YOLO_PATH)
-        _yolo_model.fuse()
-        print(f'  ✅  YOLO card detector loaded')
-        return True
-    except Exception as e:
-        log.error(f'[CV] YOLO load failed: {e}')
-        return False
+    with _yolo_lock:
+        # Re-check inside the lock (another thread may have completed init).
+        if _yolo_init:
+            return _yolo_model is not None
+        if not os.path.exists(YOLO_PATH):
+            log.info(f'[CV] YOLO not found at {YOLO_PATH} — using OCR fallback')
+            _yolo_init = True
+            return False
+        try:
+            from ultralytics import YOLO
+            _yolo_model = YOLO(YOLO_PATH)
+            _yolo_model.fuse()
+            log.info('[CV] YOLO card detector loaded')
+            _yolo_init = True
+            return True
+        except Exception as e:
+            log.error(f'[CV] YOLO load failed: {e}')
+            _yolo_model = None
+            _yolo_init = True
+            return False
 
 def _detect_yolo(frame):
     results = _yolo_model(frame, conf=YOLO_CONF, verbose=False, iou=0.45)
@@ -116,7 +132,9 @@ def _ocr_rank(corner):
             if len(t)>=1 and t[0] in '23456789': return t[0],0.65
             if len(t)>=2 and t[0]=='1' and t[1] in '0O': return '10',0.70
         return None,0.0
-    except: return None,0.0
+    except Exception as e:
+        log.warning(f'[CV] OCR rank detection failed: {e}')
+        return None,0.0
 
 def _suit(roi, is_red):
     if roi is None or roi.size==0: return 'hearts' if is_red else 'spades'

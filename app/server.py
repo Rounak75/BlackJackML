@@ -217,18 +217,23 @@ class _CountKey:
     after a system switch. Previously showed "<server._CountKey object at 0x...>"
     because count_card calls str(card) for the history entry.
     """
-    __slots__ = ('count_key', 'is_ace', 'is_ten')
+    __slots__ = ('count_key', 'is_ace', 'is_ten', 'label')
 
     _NAMES = {2:'2', 3:'3', 4:'4', 5:'5', 6:'6', 7:'7', 8:'8', 9:'9', 10:'10', 11:'A'}
 
-    def __init__(self, key: int):
+    def __init__(self, key: int, label: str = None):
+        """key is the count_key (2..11). label is the original rank string
+        ('J','Q','K','10', etc.) so count_history preserves rank identity
+        after a system switch (GAP-03)."""
         self.count_key = key
         self.is_ace    = (key == 11)
         # key==10 correctly covers 10, J, Q, K — all stored as count_key=10 in _card_log
         self.is_ten    = (key == 10)
+        self.label     = label if label is not None else self._NAMES.get(key, '?')
 
     def __repr__(self) -> str:
-        return self._NAMES.get(self.count_key, '?')
+        # GAP-03: prefer original rank label so J/Q/K do not collapse to "10"
+        return self.label or self._NAMES.get(self.count_key, '?')
 
 
 # ══════════════════════════════════════════════════════════════
@@ -269,6 +274,69 @@ if _ml_available:
         del _ckpt, _torch_tmp
     except Exception:
         _ml_model_info = {"loaded": True, "accuracy": None, "epoch": None}
+
+# ── P2.9: Lightweight ML inference stats (rolling, always-on) ────────────────
+# Tracks call count, total latency, fallback count, and last-N confidence.
+# Surfaces via /api/model/health.
+class _MLStatsTracker:
+    __slots__ = ('count', 'total_ms', 'fallbacks', 'low_conf', 'last_conf', 'lock')
+    def __init__(self):
+        from collections import deque as _dq
+        self.count       = 0
+        self.total_ms    = 0.0
+        self.fallbacks   = 0
+        self.low_conf    = 0
+        self.last_conf   = _dq(maxlen=200)
+        self.lock        = _threading.Lock()
+    def record(self, ms: float, confidence: float, fallback: bool, low_conf: bool):
+        with self.lock:
+            self.count    += 1
+            self.total_ms += float(ms)
+            if fallback:
+                self.fallbacks += 1
+            if low_conf:
+                self.low_conf += 1
+            self.last_conf.append(float(confidence))
+    def snapshot(self) -> dict:
+        with self.lock:
+            avg_ms   = (self.total_ms / self.count) if self.count else 0.0
+            fb_rate  = (self.fallbacks / self.count) if self.count else 0.0
+            lc_rate  = (self.low_conf  / self.count) if self.count else 0.0
+            avg_conf = (sum(self.last_conf) / len(self.last_conf)) if self.last_conf else 0.0
+            return {
+                "calls":              self.count,
+                "avg_inference_ms":   round(avg_ms, 3),
+                "fallback_rate":      round(fb_rate, 4),
+                "low_confidence_rate": round(lc_rate, 4),
+                "avg_confidence":     round(avg_conf, 4),
+            }
+ml_stats = _MLStatsTracker()
+
+# ── P2.9: Sanity probe — hard 16 vs dealer 10 at TC>=+3 must STAND ────────
+def _ml_sanity_check() -> dict:
+    """Returns {'status': 'ok'|'degraded'|'unavailable', 'detail': str}."""
+    if not _ml_available:
+        return {"status": "unavailable", "detail": "ML model not loaded"}
+    try:
+        feats = ml_decision_model.extract_features(
+            hand_value=16, is_soft=False, is_pair=False, pair_value=0,
+            dealer_upcard=10, true_count=3.5, shuffle_adjustment=0.0,
+            penetration=0.5, remaining_probs=[0.07]*10, num_cards=2,
+            can_double=False, can_split=False, can_surrender=False,
+            num_hands=1, bankroll_ratio=1.0, advantage=0.02,
+            running_count=14, decks_remaining=4.0, is_split=False,
+            system='hi_lo',
+        )
+        pred = ml_decision_model.predict(feats, ['hit', 'stand'])
+        action = (pred or {}).get('action', '').lower()
+        ok = action == 'stand'
+        return {
+            "status": "ok" if ok else "degraded",
+            "detail": f"hard16 vs 10 @ TC+3.5 → {action!r}; expected 'stand'",
+            "prediction": pred,
+        }
+    except Exception as e:
+        return {"status": "degraded", "detail": f"sanity probe error: {e}"}
 
 # FIX BUG 1: dealer now has a full Hand, not just a single upcard Card.
 current_player_hand  = Hand()
@@ -355,6 +423,10 @@ class GameSession:
         # that serialized ALL sessions through one mutex.  Now each tab only
         # blocks itself, allowing N concurrent players with no contention.
         'lock',
+        # SEC-06: pending-card queue for confirmation mode is now per-session
+        # to prevent cross-tab leakage. Old module-level _pending_cards
+        # global is kept ONLY as a thin shim that mirrors the active session.
+        'pending_cards', 'pending_id_counter',
     )
     def __init__(self):
         self.shoe                        = Shoe(game_config.NUM_DECKS, game_config.PENETRATION)
@@ -376,6 +448,9 @@ class GameSession:
         }
         self.hand_start_counter_snapshot = None   # set by handle_new_hand
         self.lock                        = _threading.Lock()  # FIX M3
+        # SEC-06: per-session pending-cards state
+        self.pending_cards: list         = []
+        self.pending_id_counter: int     = 0
 
 sessions = {}   # sid -> GameSession
 _session_lock = _threading.Lock()  # kept as fallback for sessions not yet in dict
@@ -386,6 +461,7 @@ def _load_session_globals():
     global split_hands, active_hand_index, num_splits_done, session_history
     global _seen_cards_this_hand, _hand_start_counter_snapshot
     global _wonging_mode, _confirmation_mode, _zone_config
+    global _pending_cards, _pending_id_counter  # SEC-06
     s = sessions.get(request.sid)
     if s is None:
         return
@@ -404,6 +480,9 @@ def _load_session_globals():
     _confirmation_mode            = s.confirmation_mode
     _zone_config                  = s.zone_config
     _hand_start_counter_snapshot  = s.hand_start_counter_snapshot
+    # SEC-06: load per-session pending-cards into module shim
+    _pending_cards                = s.pending_cards
+    _pending_id_counter           = s.pending_id_counter
 def _save_session_globals():
     """Copy module globals back into the session object."""
     s = sessions.get(request.sid)
@@ -424,6 +503,9 @@ def _save_session_globals():
     s.confirmation_mode              = _confirmation_mode
     s.zone_config                    = _zone_config
     s.hand_start_counter_snapshot    = _hand_start_counter_snapshot
+    # SEC-06: write per-session pending-cards back from module shim
+    s.pending_cards                  = _pending_cards
+    s.pending_id_counter             = _pending_id_counter
 def with_session(fn):
     """Decorator: load session state before handler, save after.
 
@@ -490,6 +572,7 @@ def rest_session_bound(fn):
             global split_hands, active_hand_index, num_splits_done, session_history
             global _seen_cards_this_hand, _hand_start_counter_snapshot
             global _wonging_mode, _confirmation_mode, _zone_config
+            global _pending_cards, _pending_id_counter  # SEC-06
             shoe                         = s.shoe
             counter                      = s.counter
             betting_engine               = s.betting_engine
@@ -505,6 +588,9 @@ def rest_session_bound(fn):
             _confirmation_mode           = s.confirmation_mode
             _zone_config                 = s.zone_config
             _hand_start_counter_snapshot = s.hand_start_counter_snapshot
+            # SEC-06
+            _pending_cards               = s.pending_cards
+            _pending_id_counter          = s.pending_id_counter
             try:
                 return fn(*args, **kwargs)
             finally:
@@ -523,6 +609,9 @@ def rest_session_bound(fn):
                 s.confirmation_mode            = _confirmation_mode
                 s.zone_config                  = _zone_config
                 s.hand_start_counter_snapshot  = _hand_start_counter_snapshot
+                # SEC-06
+                s.pending_cards                = _pending_cards
+                s.pending_id_counter           = _pending_id_counter
     return _wrapper
 
 # ══════════════════════════════════════════════════════════════
@@ -731,13 +820,26 @@ def _get_insurance_data(dealer_upcard_card):
         }
 
     tc = counter.effective_tc
+    # P3.5 (MED-03): use LIVE shoe ten density when available — more
+    # accurate than the counter's smoothed estimate, especially deep in shoe.
+    try:
+        rem = shoe.remaining_by_rank()
+        total = sum(rem.values())
+        ten_prob_live = rem.get(10, 0) / total if total > 0 else 0.0
+    except Exception:
+        ten_prob_live = None
     remaining = counter.get_remaining_estimate()
-    ten_prob = remaining.get(10, 0.0)
+    ten_prob_est = remaining.get(10, 0.0)
+    # Prefer live shoe density when shoe data is sane.
+    ten_prob = ten_prob_live if (ten_prob_live and ten_prob_live > 0) else ten_prob_est
 
     # Insurance EV formula: pays 2:1 on a half-bet
     # EV = P(ten) × 2 − P(not ten) × 1 = 3 × P(ten) − 1
     ev = round((3 * ten_prob - 1) * 100, 2)
-    recommended = tc >= 3.0  # Standard card-counting threshold
+    # P3.5: take insurance whenever EV is positive — live shoe may flip
+    # before TC threshold (e.g. early-shoe ten clump). Threshold path is
+    # kept as the safe default.
+    recommended = (ev > 0) or (tc >= 3.0)
 
     return {
         "available":       True,
@@ -810,6 +912,17 @@ def _get_ml_recommendation(player_hand, dealer_upcard_card, num_splits_done=0):
         prediction = ml_decision_model.predict(features, available_names)
         _inf_ms = (time.time() - _inf_start) * 1000
 
+        # P2.9: always-on rolling stats (used by /api/model/health)
+        try:
+            ml_stats.record(
+                ms=_inf_ms,
+                confidence=float(prediction.get('confidence', 0.0) or 0.0),
+                fallback=False,
+                low_conf=not bool(prediction.get('is_confident', True)),
+            )
+        except Exception:
+            pass
+
         if _DBG:
             debug_logger.log_ml_inference(
                 system=counter.system_name,
@@ -829,6 +942,10 @@ def _get_ml_recommendation(player_hand, dealer_upcard_card, num_splits_done=0):
         }
 
     except Exception as e:
+        try:
+            ml_stats.record(ms=0.0, confidence=0.0, fallback=True, low_conf=True)
+        except Exception:
+            pass
         print(f"[ML] prediction failed: {e}")
         return None
 
@@ -1184,6 +1301,8 @@ def get_full_state():
             "shuffle_adjustment": round(shuffle_tracker.get_count_adjustment(), 2),
             "system":             counter.system_name,
             "is_ko":              counter.system_name == "ko",
+            # P3.2 (CRIT-06): KO pivot — RC crosses 0 at ~Hi-Lo TC +1.
+            "ko_pivot":           0,
             "advantage":          round(counter.advantage * 100, 2),
             "is_favorable":       counter.is_favorable,
             "penetration":        round(counter.penetration * 100, 1),
@@ -1253,8 +1372,39 @@ def index():
 
 
 @app.route('/api/state')
+@rest_session_bound
 def api_state():
+    """REST snapshot of game state. P1.9: now session-bound to prevent
+    cross-tab data leakage via the global-relay pattern."""
     return jsonify(get_full_state())
+
+
+@app.route('/api/model/health')
+def api_model_health():
+    """P2.9: ML model health endpoint. Returns sanity-probe result + rolling
+    inference stats. Safe to poll: probe is one forward pass, stats are O(1).
+    """
+    sanity = _ml_sanity_check()
+    stats  = ml_stats.snapshot()
+    overall = sanity["status"]
+    if overall == "ok" and stats.get("fallback_rate", 0) > 0.20:
+        overall = "degraded"
+    return jsonify({
+        "status":   overall,
+        "sanity":   sanity,
+        "stats":    stats,
+        "info":     _ml_model_info,
+    })
+
+
+@app.route('/api/server/metrics')
+def api_server_metrics():
+    """Lightweight runtime metrics — active sessions, ML stats."""
+    return jsonify({
+        "active_sessions": len(sessions),
+        "ml": ml_stats.snapshot(),
+        "ml_loaded": _ml_available,
+    })
 
 @app.route('/debug/status')
 def debug_status():
@@ -1653,12 +1803,18 @@ def handle_undo_split_card(data=None):
     counter.cards_seen    -= 1
     if counter._card_log:
         counter._card_log.pop()
+    # GAP-03: keep parallel rank-label log in lockstep
+    if getattr(counter, '_card_log_labels', None):
+        counter._card_log_labels.pop()
     if counter.count_history:
         counter.count_history.pop()
     if removed_card.is_ace and counter.aces_seen > 0:
         counter.aces_seen -= 1
     if removed_card.is_ten and counter.tens_seen > 0:
         counter.tens_seen -= 1
+    # P3.3: keep five count in lockstep on undo
+    if removed_card.count_key == 5 and getattr(counter, 'fives_seen', 0) > 0:
+        counter.fives_seen -= 1
 
     # Return card to shoe
     shoe.cards.append(removed_card)
@@ -1703,9 +1859,14 @@ def handle_new_hand(data=None):
     # Save counter state NOW — this is the baseline for the upcoming hand.
     # Any undo during the new hand will restore to exactly this point.
     _hand_start_counter_snapshot = {
+        # GAP-02: tag snapshot with the active counting system so undo after
+        # a system switch can detect the mismatch and re-replay correctly.
+        'system_name':      getattr(counter, 'system', None),
         'running_count':    counter.running_count,
         'cards_seen':       counter.cards_seen,
         'card_log':         list(counter._card_log),
+        # GAP-03: persist parallel rank-label log
+        'card_log_labels':  list(getattr(counter, '_card_log_labels', [])),
         'aces_seen':        counter.aces_seen,
         'tens_seen':        counter.tens_seen,
         # FIX MAJ-05: Save FULL history (not just length). deque(maxlen=500) may
@@ -1751,16 +1912,34 @@ def handle_undo_hand(data=None):
 
     snap = _hand_start_counter_snapshot
     if snap:
-        # Restore the counter to exactly where it was at the start of this hand
-        counter.running_count = snap['running_count']
-        counter.cards_seen    = snap['cards_seen']
-        counter._card_log     = list(snap['card_log'])
+        # GAP-02: detect system switch since the snapshot was taken.
+        # If the active counting system has changed, the snapshot's
+        # running_count is for a *different* system and must be rebuilt
+        # by replaying the snapshot's card_log through the current system.
+        snap_sys    = snap.get('system_name')
+        current_sys = getattr(counter, 'system', None)
+        system_changed = (snap_sys is not None
+                          and current_sys is not None
+                          and snap_sys != current_sys)
+
+        counter._card_log         = list(snap['card_log'])
+        counter._card_log_labels  = list(snap.get('card_log_labels', []))  # GAP-03
+        counter.cards_seen        = snap['cards_seen']
+        counter.aces_seen         = snap['aces_seen']
+        counter.tens_seen         = snap['tens_seen']
+
+        if system_changed:
+            # Re-derive running_count for the CURRENT system from the
+            # raw card-key log; the snapshot's value is wrong-system stale.
+            counter.running_count = getattr(counter, '_ko_irc', 0) \
+                + sum(counter.values.get(k, 0) for k in counter._card_log)
+        else:
+            counter.running_count = snap['running_count']
+
         # Rebuild incremental seen_counts from restored card_log
         counter._seen_counts = {i: 0 for i in range(2, 12)}
         for _k in counter._card_log:
             counter._seen_counts[_k] = counter._seen_counts.get(_k, 0) + 1
-        counter.aces_seen     = snap['aces_seen']
-        counter.tens_seen     = snap['tens_seen']
         # FIX MAJ-05: Restore the FULL count_history deque, not just trim by
         # length. A bounded deque that dropped entries between snapshot and
         # undo cannot be recovered by length-trim alone.
@@ -1790,6 +1969,7 @@ def handle_undo_hand(data=None):
         counter.running_count = getattr(counter, '_ko_irc', 0)
         counter.cards_seen    = 0
         counter._card_log     = []
+        counter._card_log_labels = []  # GAP-03
         counter._seen_counts  = {i: 0 for i in range(2, 12)}
         counter.count_history = []
         counter.aces_seen     = 0
@@ -1851,17 +2031,21 @@ def handle_change_system(data):
 
     if system in CountingConfig.SYSTEMS:
         # Save the rank-key log from the old counter so we can replay it
-        old_log = list(counter._card_log)
+        old_log    = list(counter._card_log)
+        # GAP-03: also preserve original rank labels for the replay so
+        # count_history shows J/Q/K instead of collapsing to "10".
+        old_labels = list(getattr(counter, '_card_log_labels', []))
 
         # Create a fresh counter with the new system.
         # FIX M4: pass burn_cards so _total_cards is correct after switch.
         # Previously missing, causing a systematic TC error if BURN_CARDS != 1.
         counter = CardCounter(system, game_config.NUM_DECKS, game_config.BURN_CARDS)
 
-        # Replay every card seen so far through the new system's tag values.
-        # Uses module-level _CountKey instead of a re-created inner class.
-        for key in old_log:
-            counter.count_card(_CountKey(key))
+        # Replay every card seen so far through the new system's tag values,
+        # passing the original rank label when available (GAP-03).
+        for i, key in enumerate(old_log):
+            label = old_labels[i] if i < len(old_labels) else None
+            counter.count_card(_CountKey(key, label))
 
         _safe_emit('state_update', get_full_state())
 
@@ -1905,8 +2089,22 @@ def handle_record_result(data):
          Previously insurance P&L was invisible in session stats because the
          server only recorded the client-supplied main-hand profit.
     """
-    bet = data.get('bet', BettingConfig.TABLE_MIN)
-    profit = data.get('profit', 0)
+    # ── GAP-06: server-side validation of client-supplied bet/profit ─────
+    # Reject NaN/Inf/non-numeric, then cap profit relative to bet so a malicious
+    # client cannot inflate bankroll/session_profit/stop-loss-win calculations.
+    import math as _math
+    try:
+        bet    = float(data.get('bet',    BettingConfig.TABLE_MIN))
+        profit = float(data.get('profit', 0))
+    except (TypeError, ValueError):
+        emit('error', {'message': 'record_result: bet and profit must be numbers'})
+        return
+    if any(_math.isnan(x) or _math.isinf(x) for x in (bet, profit)):
+        emit('error', {'message': 'record_result: bet/profit must be finite'})
+        return
+    if bet < 0:
+        emit('error', {'message': 'record_result: bet must be non-negative'})
+        return
 
     # ── MED-07: Server-side bet validation for doubled hands ─────────────
     # If the current hand was doubled but the client sent the pre-double bet,
@@ -1916,6 +2114,18 @@ def handle_record_result(data):
         if abs(bet - expected) > 0.01 and abs(bet * 2 - expected) < 0.01:
             # Client sent pre-double bet — correct silently
             bet = expected
+
+    # GAP-06: cap profit to a reasonable multiple of bet to prevent inflation.
+    # Max possible win on a single hand: BJ 3:2 on doubled+split = bet*1.5.
+    # We use 4x as a generous bound that still blocks 999_999 abuse.
+    MAX_PROFIT_RATIO = 4.0
+    cap = max(bet * MAX_PROFIT_RATIO, BettingConfig.TABLE_MIN * MAX_PROFIT_RATIO)
+    if abs(profit) > cap:
+        _log.getLogger('session.security').warning(
+            "[GAP-06] Profit %.2f exceeds %.2fx bet (%.2f) — clamping to %+.2f",
+            profit, MAX_PROFIT_RATIO, bet, cap if profit > 0 else -cap
+        )
+        profit = cap if profit > 0 else -cap
 
     # ── MED-06: Insurance resolution ─────────────────────────────────────
     insurance_pnl = 0.0
@@ -1949,6 +2159,24 @@ def handle_record_result(data):
     _safe_emit('state_update', get_full_state())
 
 
+@socketio.on('set_kelly_fraction')
+@with_session
+def handle_set_kelly_fraction(data):
+    """P3.8: runtime fractional-Kelly slider. Payload: {fraction: 0.10..1.00}.
+    Bet sizing immediately reflects the new fraction on the next state_update."""
+    try:
+        frac = float((data or {}).get('fraction', 0.5))
+    except (TypeError, ValueError):
+        emit('error', {'message': 'set_kelly_fraction: fraction must be a number'})
+        return
+    applied = betting_engine.set_kelly_fraction(frac)
+    _safe_emit('state_update', get_full_state())
+    emit('notification', {
+        'type': 'info',
+        'message': f'Kelly fraction set to {applied:.2f}',
+    })
+
+
 @socketio.on('set_stop_thresholds')
 @with_session
 def handle_set_stop_thresholds(data):
@@ -1959,9 +2187,33 @@ def handle_set_stop_thresholds(data):
     stop_loss must be negative; stop_win must be positive.
     Emits a full state_update so the UI reflects the new thresholds immediately.
     """
+    import math as _math
+    MAX_ABS = 1_000_000_000.0  # 1B units — wider than any real bankroll
     try:
-        stop_loss = float(data.get('stop_loss', betting_engine.stop_loss))
-        stop_win  = float(data.get('stop_win',  betting_engine.stop_win))
+        raw_sl = data.get('stop_loss', betting_engine.stop_loss)
+        raw_sw = data.get('stop_win',  betting_engine.stop_win)
+        stop_loss = float(raw_sl)
+        stop_win  = float(raw_sw)
+    except (ValueError, TypeError) as exc:
+        _safe_emit('error', {'message': f'Invalid stop thresholds: {exc}'})
+        return
+
+    # GAP-08: reject NaN/Inf, wrong-sign, and out-of-range values.
+    if _math.isnan(stop_loss) or _math.isinf(stop_loss) \
+            or _math.isnan(stop_win) or _math.isinf(stop_win):
+        _safe_emit('error', {'message': 'Stop thresholds must be finite numbers'})
+        return
+    if stop_loss > 0:
+        _safe_emit('error', {'message': 'stop_loss must be <= 0 (a loss limit is non-positive)'})
+        return
+    if stop_win < 0:
+        _safe_emit('error', {'message': 'stop_win must be >= 0 (a win limit is non-negative)'})
+        return
+    if abs(stop_loss) > MAX_ABS or abs(stop_win) > MAX_ABS:
+        _safe_emit('error', {'message': f'Stop thresholds out of range (|x| <= {MAX_ABS:.0f})'})
+        return
+
+    try:
         betting_engine.set_stop_thresholds(stop_loss, stop_win)
         _log.getLogger('session.stops').info(
             "[THRESHOLDS] Updated: stop_loss=%.2f  stop_win=%.2f", stop_loss, stop_win
@@ -2193,6 +2445,7 @@ def _scanner_session_context(fn):
         global split_hands, active_hand_index, num_splits_done, session_history
         global _seen_cards_this_hand, _hand_start_counter_snapshot
         global _wonging_mode, _confirmation_mode, _zone_config
+        global _pending_cards, _pending_id_counter  # SEC-06
         # Load
         shoe                         = s.shoe
         counter                      = s.counter
@@ -2209,6 +2462,9 @@ def _scanner_session_context(fn):
         _confirmation_mode           = s.confirmation_mode
         _zone_config                 = s.zone_config
         _hand_start_counter_snapshot = s.hand_start_counter_snapshot
+        # SEC-06: load per-session pending-cards
+        _pending_cards               = s.pending_cards
+        _pending_id_counter          = s.pending_id_counter
         try:
             return fn(s)
         finally:
@@ -2228,6 +2484,9 @@ def _scanner_session_context(fn):
             s.confirmation_mode              = _confirmation_mode
             s.zone_config                    = _zone_config
             s.hand_start_counter_snapshot    = _hand_start_counter_snapshot
+            # SEC-06: write per-session pending-cards back
+            s.pending_cards                  = _pending_cards
+            s.pending_id_counter             = _pending_id_counter
 
 
 def _apply_card(rank, suit, target=TARGET_SEEN):
