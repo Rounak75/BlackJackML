@@ -49,6 +49,14 @@ Get-ChildItem "$BuildSrc\*.js","$BuildSrc\*.tsx" | ForEach-Object {
     }
 }
 
+# PHASE 7 T7 - production builds drop DebugLayer source. Set BJML_DEBUG=1 to keep it.
+if (-not $env:BJML_DEBUG) {
+    Remove-Item -ErrorAction SilentlyContinue "$BuildSrc\DebugLayer.js"
+    Write-Host "  (production build - DebugLayer excluded; set `$env:BJML_DEBUG=1 to include)" -ForegroundColor DarkGray
+} else {
+    Write-Host "  (debug build - DebugLayer included)" -ForegroundColor DarkGray
+}
+
 # Step 2 - Compile JSX to plain JS
 Write-Host "Step 2: Compiling JSX..." -ForegroundColor Yellow
 if (-not (Test-Path $OutDir)) { New-Item -ItemType Directory -Path $OutDir | Out-Null }
@@ -61,15 +69,18 @@ if ($tscOutput) {
 # Step 3 - Bundle all compiled files in load order
 Write-Host "Step 3: Bundling files..." -ForegroundColor Yellow
 
-$loadOrder = @(
-    "constants","utils","Widget","TopBar","ActionPanel","CompDepAlert","BettingPanel",
+$loadOrder = @("ErrorBoundary")
+if ($env:BJML_DEBUG) { $loadOrder += "DebugLayer" }
+$loadOrder += @(
+    "constants","utils","perfProbe","icons","HelpChip",
+    "Widget","TopBar","ActionPanel","CompDepAlert","BettingPanel",
     "SideBetPanel","HandDisplay","CardGrid","StrategyRefTable",
     "ShoePanel","EdgeMeter","SessionStats","ShuffleTracker",
     "CountHistory","I18Panel","AnalyticsPanel","LiveOverlayPanel","CenterToolBar",
     "DealOrderEngine",
     "SplitHandPanel","SideCountPanel","CasinoRiskMeter","StopAlerts",
     "SeenCardsPanel","ZoneConfigPanel","ConfirmationPanel","WongPanel","ScannerHub","BettingRampPanel",
-    "OutcomeStrip","BetSpreadHelper","MultiSystemPanel","DragLayoutEditor","DebugLayer",
+    "OutcomeStrip","BetSpreadHelper","MultiSystemPanel","DragLayoutEditor",
     "TabStrip","DeviationBanner","StatusBar","HotkeyOverlay","App"
 )
 
@@ -116,7 +127,7 @@ $sizeKB = [math]::Round((Get-Item $BundleMin).Length / 1024)
 Write-Host "Step 7: Smoke testing bundle..." -ForegroundColor Yellow
 $bundleContent = Get-Content $BundleMin -Raw -Encoding UTF8
 $requiredGlobals = @(
-    "DebugErrorBoundary",
+    "class ErrorBoundary",
     "function App(",
     "function mountApp(",
     "function Widget(",
@@ -128,6 +139,8 @@ $requiredGlobals = @(
     "function LiveOverlayPanel(",
     "function CompDepAlert(",
     "function AnalyticsPanel(",
+    "function HelpChip(",
+    "function Icon(",
     "BettingRampPanel",
     "DealOrderEngine",
     "function SeenCardsPanel(",
@@ -135,14 +148,17 @@ $requiredGlobals = @(
     "function ConfirmationPanel(",
     "function WongPanel(",
     "function ScannerHub(",
-    "function DebugPanel(",
     "function OutcomeStrip(",
     "function DragLayoutEditor(",
     "function DeviationBanner(",
     "function StatusBar(",
     "function TabStrip(",
-    "function HotkeyOverlay("
+    "function HotkeyOverlay(",
+    "PerfProbe"
 )
+if ($env:BJML_DEBUG) {
+    $requiredGlobals += @("DebugController","DebugUI","DebugNet","DebugState","function DebugPanel(")
+}
 $missing = @()
 foreach ($g in $requiredGlobals) {
     if ($bundleContent -notlike "*$g*") {

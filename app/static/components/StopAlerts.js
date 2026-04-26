@@ -373,7 +373,7 @@ function StopAlerts({ session, currency, socket }) {
       <div style={shellStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 16, lineHeight: 1 }}>⚠️</span>
+            <Icon name="alert-triangle" size={16} color="#ffd447" />
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#ffd447' }}>
                 {showLossWarning ? 'Approaching stop-loss' : 'Approaching stop-win'}

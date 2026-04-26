@@ -31,13 +31,21 @@ build() {
     [ -f "$f" ] && grep -q "@ts-nocheck" "$f" || sed -i '1s/^/\/\/ @ts-nocheck\n/' "$f"
   done
 
+  # PHASE 7 T7 — production builds drop DebugLayer source. Set BJML_DEBUG=1 to keep it.
+  if [ -z "$BJML_DEBUG" ]; then
+    rm -f "$BUILD_DIR/src/DebugLayer.js"
+    echo "  (production build — DebugLayer excluded; export BJML_DEBUG=1 to include)"
+  else
+    echo "  (debug build — DebugLayer included)"
+  fi
+
   echo "⚙️   Compiling JSX → JS (tsc)..."
   tsc --project "$BUILD_DIR/tsconfig.json" 2>&1 | grep -v "error TS" || true
 
   echo "📦  Bundling in load order..."
-  {
-    echo "/* BlackjackML bundle — compiled $(date -u '+%Y-%m-%dT%H:%M:%SZ') */"
-    for f in DebugLayer constants utils Widget TopBar ActionPanel CompDepAlert BettingPanel \
+  COMPONENTS="ErrorBoundary"
+  if [ -n "$BJML_DEBUG" ]; then COMPONENTS="$COMPONENTS DebugLayer"; fi
+  COMPONENTS="$COMPONENTS constants utils perfProbe icons HelpChip Widget TopBar ActionPanel CompDepAlert BettingPanel \
               SideBetPanel HandDisplay CardGrid StrategyRefTable \
               ShoePanel EdgeMeter SessionStats ShuffleTracker \
               CountHistory I18Panel AnalyticsPanel LiveOverlayPanel CenterToolBar \
@@ -45,7 +53,10 @@ build() {
               SplitHandPanel SideCountPanel CasinoRiskMeter StopAlerts \
               SeenCardsPanel ZoneConfigPanel ConfirmationPanel WongPanel ScannerHub \
               BettingRampPanel BetSpreadHelper MultiSystemPanel \
-              OutcomeStrip DragLayoutEditor TabStrip DeviationBanner StatusBar HotkeyOverlay App; do
+              OutcomeStrip DragLayoutEditor TabStrip DeviationBanner StatusBar HotkeyOverlay App"
+  {
+    echo "/* BlackjackML bundle — compiled $(date -u '+%Y-%m-%dT%H:%M:%SZ') */"
+    for f in $COMPONENTS; do
       echo "/* ── $f ── */"
       cat "$OUT_DIR/$f.js"
       echo ""
@@ -86,30 +97,45 @@ PYEOF
 
   echo "🧪  Smoke testing bundle..."
   SMOKE_FAIL=0
-  for global in \
-    'class DebugErrorBoundary' \
-    'var DebugController' \
-    'var DebugUI' \
-    'var DebugNet' \
-    'var DebugState' \
-    'function App(' \
-    'function mountApp(' \
-    'function Widget(' \
-    'function TopBar(' \
-    'function ActionPanel(' \
-    'function BettingPanel(' \
-    'function HandDisplay(' \
-    'function CardGrid(' \
-    'function LiveOverlayPanel(' \
-    'function ScannerHub(' \
-    'function CompDepAlert(' \
-    'function AnalyticsPanel(' \
-    'var BettingRampPanel'; do
+  ALWAYS_GLOBALS=(
+    'class ErrorBoundary'
+    'function App('
+    'function mountApp('
+    'function Widget('
+    'function TopBar('
+    'function ActionPanel('
+    'function BettingPanel('
+    'function HandDisplay('
+    'function CardGrid('
+    'function LiveOverlayPanel('
+    'function ScannerHub('
+    'function CompDepAlert('
+    'function AnalyticsPanel('
+    'function HelpChip('
+    'function Icon('
+    'var BettingRampPanel'
+    'PerfProbe = function'
+  )
+  DEBUG_GLOBALS=(
+    'var DebugController'
+    'var DebugUI'
+    'var DebugNet'
+    'var DebugState'
+  )
+  for global in "${ALWAYS_GLOBALS[@]}"; do
     if ! grep -q "$global" "$BUNDLE_MIN"; then
       echo "  MISSING: $global"
       SMOKE_FAIL=1
     fi
   done
+  if [ -n "$BJML_DEBUG" ]; then
+    for global in "${DEBUG_GLOBALS[@]}"; do
+      if ! grep -q "$global" "$BUNDLE_MIN"; then
+        echo "  MISSING (debug build): $global"
+        SMOKE_FAIL=1
+      fi
+    done
+  fi
   if [ "$SMOKE_FAIL" -eq 1 ]; then
     echo "❌  Bundle is missing required definitions — check load order"
     exit 1

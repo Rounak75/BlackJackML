@@ -40,10 +40,18 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
     { key: 'clubs',    label: '♣',   ariaLabel: 'Clubs only' },
   ];
 
+  // PHASE 6 A1: 🏦 dealer → Lucide landmark icon (functional). 👤/👁 stay
+  // (decorative — not in the audit list).
   const targets = [
-    { t: 'player', label: '👤 Player', ariaLabel: 'Deal next card to player hand' },
-    { t: 'dealer', label: dealerMustDraw ? '🏦 Dealer ←' : '🏦 Dealer', ariaLabel: dealerMustDraw ? 'Deal next card to dealer (dealer must draw)' : 'Deal next card to dealer hand' },
-    { t: 'seen',   label: '👁 Seen',   ariaLabel: 'Mark card as seen (count only, no hand)' },
+    { t: 'player', label: <span>👤 Player</span>, ariaLabel: 'Deal next card to player hand' },
+    { t: 'dealer',
+      label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <Icon name="landmark" size={12} />
+        Dealer{dealerMustDraw ? ' ←' : ''}
+      </span>,
+      ariaLabel: dealerMustDraw ? 'Deal next card to dealer (dealer must draw)' : 'Deal next card to dealer hand'
+    },
+    { t: 'seen',   label: <span>👁 Seen</span>, ariaLabel: 'Mark card as seen (count only, no hand)' },
   ];
 
   const suitFullName = { spades: 'Spades', hearts: 'Hearts', diamonds: 'Diamonds', clubs: 'Clubs' };
@@ -54,41 +62,61 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
   // Compact mode = rank-only strip (default in manual mode, forced in zen/speed)
   const showCompact = isMinimal || (isManualMode && !gridExpanded);
 
-  // ── SPEED MODE: Number key shortcuts for rapid card entry ─────────────
+  // ── PHASE 1 (revised): 1-key card entry — suit-prompt by default ──
+  //   Plain rank   → opens 4-suit popover (asks the user which suit).
+  //   Shift+rank   → quick-fire as spades (skips the popover).
+  //   With popover open, plain Digit1-4 selects the suit:
+  //     1=spades  2=hearts  3=diamonds  4=clubs
+  // Keyed on e.code so Shift+digit still resolves to the digit
+  // (US layout: e.key for Shift+1 is "!", which would miss).
   const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
-  const KEY_TO_RANK = { '1': 'A', '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7', '8': '8', '9': '9', '0': '10' };
-  const SUIT_KEYS = { '1': 'spades', '2': 'hearts', '3': 'diamonds', '4': 'clubs' };
+  const RANK_CODES = {
+    Digit1: 'A',  Digit2: '2', Digit3: '3', Digit4: '4', Digit5: '5',
+    Digit6: '6',  Digit7: '7', Digit8: '8', Digit9: '9', Digit0: '10',
+    KeyJ:   'J',  KeyQ:    'Q', KeyK:    'K',
+  };
+  // While popover is open, plain Digit1-4 picks the suit for that rank.
+  const SUIT_CODES = { Digit1: 'spades', Digit2: 'hearts', Digit3: 'diamonds', Digit4: 'clubs' };
 
   useEffect(() => {
-    if (!isSpeed) return;
     const handler = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-      // If suit popover is open, 1-4 picks suit
-      if (suitPopoverRank && SUIT_KEYS[e.key]) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') return;
+      // Don't intercept shortcuts that include Ctrl/Meta/Alt (Ctrl+Z etc.)
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+
+      // Esc closes popover
+      if (suitPopoverRank && e.key === 'Escape') {
         e.preventDefault();
-        onDealCard(suitPopoverRank, SUIT_KEYS[e.key]);
         setSuitPopoverRank(null);
         return;
       }
-      // Number keys open rank popover
-      if (KEY_TO_RANK[e.key]) {
+
+      // Popover open + plain Digit1-4 picks suit for the popover rank
+      if (suitPopoverRank && !e.shiftKey && SUIT_CODES[e.code]) {
         e.preventDefault();
-        setSuitPopoverRank(prev => prev === KEY_TO_RANK[e.key] ? null : KEY_TO_RANK[e.key]);
+        onDealCard(suitPopoverRank, SUIT_CODES[e.code]);
+        setSuitPopoverRank(null);
         return;
       }
-      // Letter keys for J/Q/K
-      const upper = e.key.toUpperCase();
-      if (upper === 'J' || upper === 'Q' || upper === 'K') {
-        // Only intercept if not already handled by App shortcuts
-        // J/Q/K are unused in App.jsx, so safe to use here
+
+      // Rank keys:
+      //   Shift+rank → quick-fire spades (no popover)
+      //   plain rank → open suit popover
+      if (RANK_CODES[e.code]) {
         e.preventDefault();
-        setSuitPopoverRank(prev => prev === upper ? null : upper);
+        const rank = RANK_CODES[e.code];
+        if (e.shiftKey) {
+          onDealCard(rank, 'spades');
+          setSuitPopoverRank(null);
+        } else {
+          setSuitPopoverRank(prev => prev === rank ? null : rank);
+        }
         return;
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isSpeed, suitPopoverRank, onDealCard]);
+  }, [suitPopoverRank, onDealCard]);
 
   return (
     <div
@@ -170,7 +198,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             animation: 'pulse 1.5s ease-in-out infinite',
           }}
         >
-          <span aria-hidden="true">🏦</span>
+          <Icon name="landmark" size={14} color="#ffb347" />
           <span>DEALER MUST DRAW — click a card to deal to dealer</span>
         </div>
       )}
@@ -465,7 +493,10 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
           onClick={() => setGridExpanded(true)}
           className="card-grid-expand-btn"
         >
-          🃏 Tap to expand 52-card grid for manual entry
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <Icon name="spade" size={14} />
+            Tap to expand 52-card grid for manual entry
+          </span>
         </button>
       )}
     </div>

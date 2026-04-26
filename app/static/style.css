@@ -15,9 +15,21 @@
   --bg-3: #212d45;
   --bg-4: #2a3a58;
 
+  /* PHASE 6 F2 — semantic surface aliases (prefer these in new code) */
+  --surface-base:   var(--bg-0);   /* page background */
+  --surface-chrome: var(--bg-1);   /* TopBar, StatusBar, panel chrome */
+  --surface-raised: var(--bg-2);   /* cards / raised panels */
+  --surface-deep:   var(--bg-3);   /* hover / pressed */
+
   /* Borders — visible at a glance */
   --border:        rgba(255, 255, 255, 0.15);
   --border-bright: rgba(255, 255, 255, 0.28);
+
+  /* PHASE 6 F1 — single soft border for raised panels (1.5px @ 0.09 opacity).
+     Use --border-soft + --border-w for new code. Existing --border /
+     --border-bright stay for higher-emphasis surfaces (focus, active). */
+  --border-soft: rgba(255, 255, 255, 0.09);
+  --border-w:    1.5px;
 
   /* Text — high contrast, readable at any size */
   --text-0: #ffffff;   /* Primary — pure white for max contrast */
@@ -38,8 +50,25 @@
   --action-split:     #b99bff;
   --action-surrender: #ff5c5c;
 
+  /* PHASE 6 F3 — single typographic scale.
+     Use these in new code instead of hard-coding fontSize: 11. */
+  --font-xs:     0.6875rem;   /* 11px — chips, micro labels */
+  --font-sm:     0.75rem;     /* 12px — secondary labels */
+  --font-base:   0.875rem;    /* 14px — body */
+  --font-lg:     1rem;        /* 16px — emphasized body */
+  --font-hand:   1.5rem;      /* 24px — hand totals */
+  --font-action: 2.4rem;      /* 38px — action recommendation */
+  --font-hero:   3rem;        /* 48px — TC display */
+
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
   --t:    0.18s var(--ease);
+}
+
+/* PHASE 6 F4 — tabular numerics. Apply .num to any cell whose digits
+   change in place (TC, count, edge%, bet sizes, EV%, $ totals). */
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -2434,4 +2463,34 @@ body {
 .bsh-unit-input:focus {
   outline: none; border-color: rgba(106,175,255,0.5);
   box-shadow: 0 0 0 2px rgba(106,175,255,0.15);
+}
+
+/* ══════════════════════════════════════════════════════════
+   PHASE 4 — Standardised focus rings (gold, 2px)
+   ══════════════════════════════════════════════════════════ */
+:focus { outline: none; }
+
+button:focus-visible,
+[role="button"]:focus-visible,
+[role="tab"]:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 6px;
+  box-shadow: 0 0 0 4px rgba(255, 212, 71, 0.18);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 0;
+  border-color: var(--gold) !important;
+  box-shadow: 0 0 0 3px rgba(255, 212, 71, 0.15);
+}
+
+/* Suppress focus ring on cards/buttons inside the hotkey overlay backdrop */
+[role="dialog"]:focus-visible {
+  outline: none;
 }

@@ -205,13 +205,13 @@ function HandDisplay({
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{
                   fontSize: 11, fontFamily: 'DM Mono, monospace', fontWeight: 700,
-                  color: '#6aafff',
+                  color: '#6aafff', display: 'inline-flex', alignItems: 'center', gap: 4,
                 }}>
                   {dealerBj
-                    ? `🎯 Pays +${sym}${(activeBet).toFixed(0)}`
+                    ? <><Icon name="target" size={11} /> Pays +{sym}{(activeBet).toFixed(0)}</>
                     : dealerHand?.card_count >= 2
-                    ? `❌ Lost ${sym}${(activeBet * 0.5).toFixed(0)}`
-                    : `⏳ Waiting…`}
+                    ? <>❌ Lost {sym}{(activeBet * 0.5).toFixed(0)}</>
+                    : <>⏳ Waiting…</>}
                 </span>
                 <button
                   onClick={() => onInsuranceChange && onInsuranceChange(false)}

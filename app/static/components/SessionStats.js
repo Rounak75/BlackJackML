@@ -81,7 +81,9 @@ function SessionStats({ session, currency }) {
 
         {/* Dealer wins row */}
         <div className="flex items-center justify-between py-1 text-xs">
-          <span className="font-semibold" style={{ color: '#ff5c5c' }}>🏦 Dealer Won</span>
+          <span className="font-semibold" style={{ color: '#ff5c5c', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <Icon name="landmark" size={12} /> Dealer Won
+          </span>
           <div className="flex items-center gap-3">
             <span className="font-mono font-bold" style={{ color: '#ff5c5c' }}>{losses} hands</span>
             <span className="font-mono text-[10px]" style={{ color: '#b8ccdf' }}>{dealerWinPct}%</span>

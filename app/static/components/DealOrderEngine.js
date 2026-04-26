@@ -554,7 +554,12 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
               letterSpacing: '0.05em',
               animation: 'none',
             }
-          }, '🎯 SEATS ONLY'),
+          },
+            React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 4 } },
+              React.createElement(Icon, { name: 'target', size: 9, color: '#ffd447' }),
+              ' SEATS ONLY'
+            )
+          ),
           totalCardsDealt > 0 && React.createElement('span', { className: 'de-card-count' },
             totalCardsDealt + ' card' + (totalCardsDealt !== 1 ? 's' : ''))
         ),

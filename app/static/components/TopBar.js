@@ -109,7 +109,8 @@ const STRIPE_CLASS = {
 };
 
 /* ── Main TopBar ─────────────────────────────────────────── */
-function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, uiMode, onModeChange }) {
+function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, uiMode, onModeChange,
+                  sideCounts, onShowLayoutEditor }) {
   const isMinimal = uiMode === 'zen' || uiMode === 'speed';
   const [activeSystem,  setActiveSystem]  = useState('hi_lo');
   const [activeShuffle, setActiveShuffle] = useState('machine');
@@ -119,6 +120,16 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
   const rc  = count ? count.running    : 0;
   const adv = count ? count.advantage  : -0.5;
   const etc = count ? count.enhanced_true : 0;
+  // P3.2 (CRIT-06): KO is unbalanced — use Running Count vs Pivot, not TC
+  const isKO     = !!(count && (count.is_ko || count.system === 'ko' || count.system_name === 'ko'));
+  const koPivot  = (count && (count.ko_pivot != null ? count.ko_pivot : count.pivot)) || 0;
+  // P3.7 (FEAT-04): penetration display.
+  // Backend already serialises count.penetration as a 0-100 percentage.
+  const penPct   = count && count.penetration != null ? Math.round(count.penetration) : null;
+  const penColor = penPct == null ? '#b8ccdf'
+                 : penPct >= 80 ? '#ff5c5c'
+                 : penPct >= 70 ? '#ffd447'
+                 : '#b8ccdf';
 
   const sysMeta  = COUNTING_SYSTEMS[activeSystem]  || COUNTING_SYSTEMS.hi_lo;
   const shufMeta = SHUFFLE_TYPES[activeShuffle] || SHUFFLE_TYPES.machine;
@@ -247,12 +258,14 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
           {/* Divider */}
           <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
 
-          {/* ── TRUE COUNT — hero at 3rem ──────────────── */}
+          {/* ── HERO: True Count (balanced) OR Running Count vs Pivot (KO) ── */}
           <div
             ref={tcBlockRef}
             className="flex flex-col items-center justify-center"
             style={{ padding: '8px 24px', borderRadius: 8, transition: 'background 0.3s ease' }}
-            title="True Count: Running Count ÷ Decks Remaining. Use this for all strategy decisions."
+            title={isKO
+              ? 'KO is unbalanced: bet decisions use Running Count vs Pivot, not True Count.'
+              : 'True Count: Running Count ÷ Decks Remaining. Use this for all strategy decisions.'}
           >
             <div
               style={{
@@ -261,35 +274,130 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
                 color: '#b8ccdf', marginBottom: 3,
               }}
             >
-              True Count
+              {isKO ? 'Running Count' : 'True Count'}
             </div>
             <div
-              className={`font-mono font-bold leading-none ${countClass(tc)}`}
-              style={{ fontSize: '3rem' }}
+              className={`font-mono font-bold leading-none num ${countClass(isKO ? rc - koPivot : tc)}`}
+              style={{ fontSize: 'var(--font-hero)' }}
             >
-              {tc.toFixed(1)}
+              {isKO ? rc.toFixed(0) : tc.toFixed(1)}
             </div>
+            {isKO && (
+              <div style={{
+                marginTop: 4, fontSize: '0.65rem', letterSpacing: '0.08em',
+                color: rc >= koPivot ? '#44e882' : '#b8ccdf', fontWeight: 600,
+              }}>
+                Pivot {koPivot >= 0 ? '+' : ''}{koPivot}{rc >= koPivot ? ' · BET' : ' · MIN'}
+              </div>
+            )}
           </div>
+
+          {/* P3.7 (FEAT-04): penetration always-visible — now with depth bar */}
+          {penPct != null && (
+            <>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
+              <div
+                title={`Penetration: ${penPct}% of shoe dealt. Gold ≥70%, Ruby ≥80%.`}
+                style={{
+                  padding: '6px 12px', alignSelf: 'stretch',
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  background: 'rgba(255,255,255,0.03)',
+                  gap: 3,
+                }}
+              >
+                <div style={{
+                  fontSize: '0.55rem', textTransform: 'uppercase',
+                  letterSpacing: '0.1em', color: '#a8bcd4', fontWeight: 700,
+                }}>PEN</div>
+                <div className="num" style={{
+                  fontFamily: 'DM Mono, monospace', fontWeight: 700,
+                  fontSize: '1.05rem', color: penColor, lineHeight: 1,
+                }}>{penPct}%</div>
+                {/* Depth bar */}
+                <div style={{
+                  width: 42, height: 3, borderRadius: 2,
+                  background: 'rgba(255,255,255,0.08)',
+                  overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${Math.min(100, penPct)}%`, height: '100%',
+                    background: penColor, transition: 'width 0.3s, background 0.3s',
+                  }} />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* PHASE 3: Aces ±x chip — always-visible side count */}
+          {sideCounts && (typeof sideCounts.aces_remaining === 'number') && (
+            <>
+              <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
+              {(() => {
+                const aceRem = sideCounts.aces_remaining || 0;
+                const aceExp = sideCounts.aces_expected  || 0;
+                const aceDelta = aceRem - aceExp; // + = rich, - = poor
+                const aceCol = aceDelta >  0.5 ? '#44e882'
+                             : aceDelta < -0.5 ? '#ff5c5c'
+                             : '#94a7c4';
+                const sign = aceDelta >= 0 ? '+' : '';
+                return (
+                  <div
+                    title={`Aces remaining: ${aceRem.toFixed(1)} (expected ${aceExp.toFixed(1)}). Green = rich, red = poor.`}
+                    style={{
+                      padding: '6px 12px', alignSelf: 'stretch',
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center',
+                      background: 'rgba(255,255,255,0.03)',
+                    }}
+                  >
+                    <div style={{
+                      fontSize: '0.55rem', textTransform: 'uppercase',
+                      letterSpacing: '0.1em', color: '#8fa5be', fontWeight: 700,
+                    }}>ACES</div>
+                    <div className="num" style={{
+                      fontFamily: 'DM Mono, monospace', fontWeight: 700,
+                      fontSize: '1.05rem', color: aceCol, lineHeight: 1,
+                    }}>{sign}{aceDelta.toFixed(1)}</div>
+                  </div>
+                );
+              })()}
+            </>
+          )}
 
           {/* Divider */}
           <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
 
-          {/* Right cluster — Advantage */}
-          <div
-            style={{
-              padding: '6px 14px',
-              background: 'rgba(255,255,255,0.03)',
-              alignSelf: 'stretch', display: 'flex', alignItems: 'center',
-            }}
-          >
-            <CountBlock
-              label="Edge"
-              value={`${adv >= 0 ? '+' : ''}${adv.toFixed(2)}%`}
-              colorVal={adv}
-              mono
-              secondary
-            />
-          </div>
+          {/* Right cluster — Advantage (PHASE 3: bucketed by EV) */}
+          {(() => {
+            const edgeCol = adv >= 1.5 ? '#44e882'
+                          : adv >= 0   ? '#ffd447'
+                          : '#ff5c5c';
+            return (
+              <div
+                title={`Player Edge ${adv.toFixed(2)}% — green ≥+1.5%, gold ≥0%, ruby <0%`}
+                style={{
+                  padding: '6px 14px',
+                  background: 'rgba(255,255,255,0.03)',
+                  alignSelf: 'stretch', display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <div style={{
+                  fontSize: '0.6rem', textTransform: 'uppercase',
+                  letterSpacing: '0.1em', fontWeight: 600, color: '#8fa5be',
+                  marginBottom: 2,
+                }}>Edge</div>
+                <div className="num" style={{
+                  fontFamily: 'DM Mono, monospace', fontWeight: 700,
+                  fontSize: '1rem', color: edgeCol, lineHeight: 1,
+                }}>
+                  {adv >= 0 ? '+' : ''}{adv.toFixed(2)}%
+                </div>
+              </div>
+            );
+          })()}
 
         </div>
 
@@ -381,6 +489,24 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
               )}
             </div>
           </div>
+
+          {/* PHASE 2: Layout-editor overflow button (replaces floating circle) */}
+          {onShowLayoutEditor && !isMinimal && (
+            <button
+              onClick={onShowLayoutEditor}
+              aria-label="Customize panel layout"
+              title="Customize panel layout (L)"
+              className="topbar-btn"
+              style={{
+                padding: '4px 8px', fontSize: 12,
+                background: 'transparent',
+                border: '1px solid rgba(255,255,255,0.18)',
+                color: '#8fa5be',
+              }}
+            >
+              ⚙
+            </button>
+          )}
 
         </div>
       </div>

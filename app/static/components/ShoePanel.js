@@ -33,7 +33,7 @@ function ShoePanel({ shoe }) {
     <Widget title="Shoe Composition">
       {/* Meta row */}
       <div className="flex items-center justify-between mb-3">
-        <span className="font-mono text-[11px]" style={{ color: '#ccdaec' }}>
+        <span className="font-mono text-[11px] num" style={{ color: 'var(--text-1)' }}>
           {shoe.cards_remaining} cards · {shoe.decks_remaining} decks
         </span>
         <span
@@ -68,7 +68,7 @@ function ShoePanel({ shoe }) {
               <div
                 style={{
                   height: 52,
-                  background: '#111827',
+                  background: 'var(--surface-chrome)',
                   borderRadius: 3,
                   position: 'relative',
                   overflow: 'hidden',
@@ -77,8 +77,8 @@ function ShoePanel({ shoe }) {
                 <div className={`shoe-bar ${cls}`} style={{ height: `${pct2}%` }} />
               </div>
               <div
-                className="text-[9px] font-mono mt-1"
-                style={{ color: '#b8ccdf' }}
+                className="text-[9px] font-mono mt-1 num"
+                style={{ color: 'var(--text-2)' }}
               >
                 {rem}
               </div>
@@ -106,11 +106,11 @@ function ShoePanel({ shoe }) {
 
       {/* Penetration bar */}
       <div
-        style={{ height: 7, background: '#111827', borderRadius: 999, overflow: 'hidden', marginBottom: 5 }}
+        style={{ height: 7, background: 'var(--surface-chrome)', borderRadius: 999, overflow: 'hidden', marginBottom: 5 }}
       >
         <div className="pen-fill" style={{ width: `${pct}%` }} />
       </div>
-      <div className="font-mono text-[10px]" style={{ color: '#ccdaec' }}>
+      <div className="font-mono text-[10px] num" style={{ color: 'var(--text-1)' }}>
         {pct}% penetration
       </div>
     </Widget>

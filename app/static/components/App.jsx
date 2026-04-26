@@ -1029,25 +1029,25 @@ function App() {
           isOpen={showLayoutEditor}
           onClose={() => setShowLayoutEditor(false)}
           leftPanels={[
-            { key: 'betting',   label: 'Bet Sizing (Kelly)',     icon: '💰' },
-            { key: 'sidecount', label: 'Ace & Ten Side Counts',  icon: '🎴' },
-            { key: 'strategy',  label: 'Basic Strategy Grid',    icon: '📊' },
+            { key: 'betting',   label: 'Bet Sizing (Kelly)',     lucide: 'wallet' },
+            { key: 'sidecount', label: 'Ace & Ten Side Counts',  lucide: 'layers' },
+            { key: 'strategy',  label: 'Basic Strategy Grid',    lucide: 'bar-chart-3' },
           ]}
           lockedSlots={[
-            { key: 'edgeshoe',     label: 'Edge & Shoe (fixed)',     icon: '📈' },
-            { key: 'betreference', label: 'Bet Reference (fixed)',   icon: '📐' },
+            { key: 'edgeshoe',     label: 'Edge & Shoe (fixed)',     lucide: 'trending-up' },
+            { key: 'betreference', label: 'Bet Reference (fixed)',   lucide: 'ruler' },
           ]}
           rightTabs={[
-            { key: 'i18',       label: 'I18 · Fab 4',          icon: '🃏' },
-            { key: 'session',   label: 'Session Stats',        icon: '📋' },
-            { key: 'sidebet',   label: 'Side Bet EV',          icon: '🎰' },
-            { key: 'analytics', label: 'Analytics',            icon: '🔬' },
-            { key: 'shuffle',   label: 'Shuffle ML',           icon: '🔀' },
-            { key: 'risk',      label: 'Casino Risk',          icon: '🏦' },
-            { key: 'history',   label: 'Count History',        icon: '📉' },
-            { key: 'multi',     label: 'Multi-System',         icon: '🔄' },
-            { key: 'stops',     label: 'Stop Alerts',          icon: '⚠️' },
-            { key: 'scanner',   label: 'Live Scanner',         icon: '📷' },
+            { key: 'i18',       label: 'I18 · Fab 4',          lucide: 'spade' },
+            { key: 'session',   label: 'Session Stats',        lucide: 'clipboard-list' },
+            { key: 'sidebet',   label: 'Side Bet EV',          lucide: 'dice' },
+            { key: 'analytics', label: 'Analytics',            lucide: 'microscope' },
+            { key: 'shuffle',   label: 'Shuffle ML',           lucide: 'shuffle' },
+            { key: 'risk',      label: 'Casino Risk',          lucide: 'landmark' },
+            { key: 'history',   label: 'Count History',        lucide: 'trending-down' },
+            { key: 'multi',     label: 'Multi-System',         lucide: 'refresh-ccw' },
+            { key: 'stops',     label: 'Stop Alerts',          lucide: 'alert-triangle' },
+            { key: 'scanner',   label: 'Live Scanner',         lucide: 'camera' },
           ]}
           onLayoutChange={(layout) => setLayoutOrder(layout)}
         />
@@ -1154,8 +1154,9 @@ function App() {
 function mountApp() {
   var container = document.getElementById('root');
   if (!container) { setTimeout(mountApp, 10); return; }
-  // Use DebugErrorBoundary from DebugLayer.js (enhanced with safe mode + recovery)
-  var Boundary = (typeof DebugErrorBoundary !== 'undefined') ? DebugErrorBoundary : React.Fragment;
+  // PHASE 7 T2: ErrorBoundary lives in its own file and always ships,
+  // even in production builds where DebugLayer is excluded.
+  var Boundary = (typeof ErrorBoundary !== 'undefined') ? ErrorBoundary : React.Fragment;
   ReactDOM.createRoot(container).render(
     React.createElement(Boundary, null,
       React.createElement(App),

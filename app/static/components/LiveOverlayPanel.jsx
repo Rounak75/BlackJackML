@@ -564,7 +564,9 @@ function PasteZone() {
       background: pulse ? C.jadeD : 'transparent',
       transition:'all 0.15s', marginBottom:8,
     }}>
-      <div style={{fontSize:22, marginBottom:4}}>{pulse ? '✅' : '📋'}</div>
+      <div style={{marginBottom:4, display:'flex', justifyContent:'center'}}>
+        <Icon name={pulse ? 'check' : 'clipboard-list'} size={22} color={pulse ? C.jade : C.sapph} />
+      </div>
       <div style={{fontSize:12, fontWeight:700, color: pulse ? C.jade : C.sapph, marginBottom:4}}>
         {pulse ? 'Screenshot received!' : 'Ctrl+V  /  Cmd+V to paste'}
       </div>

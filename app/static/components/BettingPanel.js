@@ -197,7 +197,7 @@ function BettingPanel({
             color: '#ffd447',
           }}
         >
-          <span style={{ fontSize: '1rem', flexShrink: 0 }}>💰</span>
+          <Icon name="wallet" size={16} color="#ffd447" style={{ flexShrink: 0, marginTop: 1 }} />
           <div>
             <div className="font-bold mb-0.5">Cashout Suggested</div>
             <div className="font-normal" style={{ color: '#ccdaec' }}>

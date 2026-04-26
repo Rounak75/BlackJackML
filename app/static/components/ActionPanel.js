@@ -17,7 +17,7 @@
  *   compDep16      — recommendation.comp_dep_16 object (Issue #8 inline)
  */
 
-function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode }) {
+function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode, insurance }) {
   const { useState, useRef, useEffect } = React;
   const [showWhy, setShowWhy] = useState(false);
   const isZen   = uiMode === 'zen';
@@ -92,6 +92,52 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode }) 
       {/* ── 4px coloured stripe at top ───────────────────────────── */}
       <div className={`action-stripe ${stripe}`} />
 
+      {/* PHASE 3: Insurance row — always shown when dealer up = A (informational).
+          Pulse + gold styling only when shoe-EV makes insurance correct. */}
+      {insurance && insurance.available && (() => {
+        const recommended = !!insurance.recommended;
+        const evNum = typeof insurance.ev === 'number' ? insurance.ev : 0;
+        const baseStyle = recommended ? {
+          background: 'linear-gradient(90deg, rgba(255,212,71,0.18), rgba(255,212,71,0.05))',
+          borderBottom: '2px solid #ffd447',
+          animation: 'pulse 1.4s ease-in-out infinite',
+        } : {
+          background: 'rgba(255,255,255,0.025)',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+        };
+        return (
+          <div style={{
+            ...baseStyle,
+            padding: '6px 14px',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          }}>
+            <div style={{
+              fontWeight: recommended ? 800 : 700,
+              color: recommended ? '#ffd447' : '#94a7c4',
+              letterSpacing: '0.08em',
+              fontSize: recommended ? '0.95rem' : '0.78rem',
+              textTransform: 'uppercase',
+            }}>
+              {recommended ? '⚠ TAKE INSURANCE' : 'Insurance offered'}
+            </div>
+            <div style={{
+              fontFamily: 'DM Mono, monospace', fontSize: '0.78rem',
+              color: recommended ? '#f0f4ff' : '#b8ccdf',
+              fontVariantNumeric: 'tabular-nums',
+            }}>
+              EV <span style={{ color: evNum >= 0 ? '#44e882' : '#ff5c5c', fontWeight: 700 }}>
+                {evNum >= 0 ? '+' : ''}{evNum}%
+              </span>
+              {' · '}
+              10s {insurance.ten_probability}%
+              {!recommended && evNum < 0 && (
+                <span style={{ marginLeft: 8, color: '#6b7f96', fontStyle: 'italic' }}>decline</span>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Main action row ─────────────────────────────────────── */}
       <div
         style={{
@@ -110,12 +156,13 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode }) 
             className={`action-text-base ${action ? actionClass(action) : ''}`}
             title={action ? `Best play: ${action}` : 'Deal cards to see recommendation'}
             style={{
-              fontSize: action ? (isZen ? '3rem' : '2.4rem') : '1.6rem',
+              fontSize: action ? (isZen ? 'var(--font-hero)' : 'var(--font-action)') : '1.6rem',
               lineHeight: 1,
               fontWeight: 900,
               letterSpacing: '-0.02em',
-              color: action ? undefined : '#4a5568',
-              opacity: action ? 1 : 0.4,
+              color: action ? undefined : 'var(--text-2)',
+              opacity: action ? 1 : 0.7,
+              fontVariantNumeric: 'tabular-nums',
             }}
           >
             {action || 'DEAL CARDS'}

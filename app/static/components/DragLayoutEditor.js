@@ -1,73 +1,87 @@
 /*
  * components/DragLayoutEditor.js
  * ─────────────────────────────────────────────────────────
- * Drag & Drop Layout Editor — P3 Feature
+ * Drag & Drop Layout Editor — PHASE 5 revision.
  *
- * Lets users rearrange sidebar panels via drag-and-drop.
- * Layout is stored in localStorage ('bjml_layout') and
- * restored on mount.
+ * The right column is no longer a free-form panel stack — it has
+ * two LOCKED slots (Edge & Shoe / Bet Reference) followed by a
+ * TabStrip. So this editor now manages two independent orderings:
  *
- * ARCHITECTURE:
- *   Pure client-side. Uses HTML5 Drag and Drop API.
- *   Each panel slot has a unique key. The editor emits
- *   the ordered arrays for left and right columns.
+ *   • Left column   — free-form drag of left-column panels
+ *   • Right tabs    — drag to reorder the TabStrip's tabs
+ *
+ * Locked slots are displayed read-only so users understand they
+ * cannot be moved (preserves a stable "always-on" header for the
+ * right column).
+ *
+ * Storage:
+ *   localStorage 'bjml_layout' → { left: string[], rightTabs: string[] }
  *
  * Props:
- *   isOpen          — boolean, show/hide the editor overlay
- *   onClose         — callback to close the editor
- *   leftPanels      — array of { key, label, icon }
- *   rightPanels     — array of { key, label, icon }
- *   onLayoutChange  — callback({ left: string[], right: string[] })
+ *   isOpen          — boolean
+ *   onClose         — () => void
+ *   leftPanels      — [{ key, label, icon }]
+ *   rightTabs       — [{ key, label, icon }]   (TabStrip tabs only)
+ *   lockedSlots     — [{ key, label, icon }]   (read-only header rows)
+ *   onLayoutChange  — ({ left, rightTabs }) => void
  */
 
-function DragLayoutEditor({ isOpen, onClose, leftPanels, rightPanels, onLayoutChange }) {
-  var useState = React.useState;
-  var useCallback = React.useCallback;
-  var useEffect = React.useEffect;
-  var useRef = React.useRef;
+function DragLayoutEditor({
+  isOpen, onClose,
+  leftPanels = [],
+  rightTabs = [],
+  lockedSlots = [],
+  onLayoutChange,
+}) {
+  var useState    = React.useState;
+  var useEffect   = React.useEffect;
 
-  var _left = useState(leftPanels.map(function (p) { return p.key; }));
-  var leftOrder = _left[0];
+  // Lookup tables for label/icon by key
+  var allPanels = {};
+  leftPanels.forEach(function (p) { allPanels[p.key] = p; });
+  rightTabs.forEach(function (p) { allPanels[p.key] = p; });
+
+  var leftKeys  = leftPanels.map(function (p) { return p.key; });
+  var rightKeys = rightTabs.map(function (p) { return p.key; });
+
+  var _left = useState(leftKeys);
+  var leftOrder    = _left[0];
   var setLeftOrder = _left[1];
 
-  var _right = useState(rightPanels.map(function (p) { return p.key; }));
-  var rightOrder = _right[0];
+  var _right = useState(rightKeys);
+  var rightOrder    = _right[0];
   var setRightOrder = _right[1];
 
   var _dragging = useState(null);
-  var dragging = _dragging[0];
+  var dragging    = _dragging[0];
   var setDragging = _dragging[1];
 
-  var _dragOverItem = useState(null);
-  var dragOverItem = _dragOverItem[0];
-  var setDragOverItem = _dragOverItem[1];
+  var _dragOver = useState(null);
+  var dragOver    = _dragOver[0];
+  var setDragOver = _dragOver[1];
 
   var _dragCol = useState(null);
-  var dragCol = _dragCol[0];
+  var dragCol    = _dragCol[0];
   var setDragCol = _dragCol[1];
 
-  // All panel definitions keyed by key
-  var allPanels = {};
-  leftPanels.forEach(function (p) { allPanels[p.key] = p; });
-  rightPanels.forEach(function (p) { allPanels[p.key] = p; });
-
-  // Load saved layout from localStorage
+  // Restore from localStorage on mount
   useEffect(function () {
     try {
       var saved = localStorage.getItem('bjml_layout');
-      if (saved) {
-        var parsed = JSON.parse(saved);
-        if (parsed.left && Array.isArray(parsed.left)) {
-          // Validate keys exist
-          var validLeft = parsed.left.filter(function (k) { return allPanels[k]; });
-          if (validLeft.length > 0) setLeftOrder(validLeft);
-        }
-        if (parsed.right && Array.isArray(parsed.right)) {
-          var validRight = parsed.right.filter(function (k) { return allPanels[k]; });
-          if (validRight.length > 0) setRightOrder(validRight);
-        }
+      if (!saved) return;
+      var parsed = JSON.parse(saved);
+      if (parsed.left && Array.isArray(parsed.left)) {
+        var validLeft = parsed.left.filter(function (k) { return allPanels[k] && leftKeys.indexOf(k) !== -1; });
+        // Append any keys present in props but missing in saved order
+        leftKeys.forEach(function (k) { if (validLeft.indexOf(k) === -1) validLeft.push(k); });
+        if (validLeft.length > 0) setLeftOrder(validLeft);
       }
-    } catch (e) { /* ignore parse errors */ }
+      if (parsed.rightTabs && Array.isArray(parsed.rightTabs)) {
+        var validRight = parsed.rightTabs.filter(function (k) { return allPanels[k] && rightKeys.indexOf(k) !== -1; });
+        rightKeys.forEach(function (k) { if (validRight.indexOf(k) === -1) validRight.push(k); });
+        if (validRight.length > 0) setRightOrder(validRight);
+      }
+    } catch (e) { /* ignore */ }
   }, []);
 
   if (!isOpen) return null;
@@ -81,152 +95,168 @@ function DragLayoutEditor({ isOpen, onClose, leftPanels, rightPanels, onLayoutCh
 
   function handleDragOver(e, key) {
     e.preventDefault();
-    setDragOverItem(key);
+    setDragOver(key);
   }
 
   function handleDrop(e, targetKey, targetColumn) {
     e.preventDefault();
-    if (!dragging) return;
-
-    var sourceCol = dragCol;
-
-    // Get source and target arrays
-    var sourceArr = sourceCol === 'left' ? leftOrder.slice() : rightOrder.slice();
-    var targetArr = targetColumn === 'left' ? leftOrder.slice() : rightOrder.slice();
-
-    if (sourceCol === targetColumn) {
-      // Reorder within same column
-      var fromIdx = sourceArr.indexOf(dragging);
-      var toIdx = sourceArr.indexOf(targetKey);
-      if (fromIdx !== -1 && toIdx !== -1 && fromIdx !== toIdx) {
-        sourceArr.splice(fromIdx, 1);
-        sourceArr.splice(toIdx, 0, dragging);
-        if (sourceCol === 'left') setLeftOrder(sourceArr);
-        else setRightOrder(sourceArr);
-      }
-    } else {
-      // Move across columns
-      var fromIdx = sourceArr.indexOf(dragging);
-      if (fromIdx !== -1) {
-        sourceArr.splice(fromIdx, 1);
-        var toIdx = targetArr.indexOf(targetKey);
-        if (toIdx === -1) toIdx = targetArr.length;
-        targetArr.splice(toIdx, 0, dragging);
-
-        if (sourceCol === 'left') {
-          setLeftOrder(sourceArr);
-          setRightOrder(targetArr);
-        } else {
-          setRightOrder(sourceArr);
-          setLeftOrder(targetArr);
-        }
-      }
+    if (!dragging || dragCol !== targetColumn) {
+      // Cross-column moves are disallowed in PHASE 5 — left/right are now
+      // semantically distinct (panels vs tabs).
+      setDragging(null); setDragOver(null); setDragCol(null);
+      return;
     }
+    var arr = (targetColumn === 'left' ? leftOrder : rightOrder).slice();
+    var fromIdx = arr.indexOf(dragging);
+    var toIdx   = arr.indexOf(targetKey);
+    if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) {
+      setDragging(null); setDragOver(null); setDragCol(null);
+      return;
+    }
+    arr.splice(fromIdx, 1);
+    arr.splice(toIdx, 0, dragging);
+    if (targetColumn === 'left') setLeftOrder(arr);
+    else setRightOrder(arr);
 
     setDragging(null);
-    setDragOverItem(null);
+    setDragOver(null);
     setDragCol(null);
   }
 
   function handleDragEnd() {
     setDragging(null);
-    setDragOverItem(null);
+    setDragOver(null);
     setDragCol(null);
   }
 
   function handleSave() {
-    var layout = { left: leftOrder, right: rightOrder };
-    localStorage.setItem('bjml_layout', JSON.stringify(layout));
+    var layout = { left: leftOrder, rightTabs: rightOrder };
+    try { localStorage.setItem('bjml_layout', JSON.stringify(layout)); } catch (e) {}
     if (onLayoutChange) onLayoutChange(layout);
     onClose();
   }
 
   function handleReset() {
-    var defLeft = leftPanels.map(function (p) { return p.key; });
-    var defRight = rightPanels.map(function (p) { return p.key; });
-    setLeftOrder(defLeft);
-    setRightOrder(defRight);
-    localStorage.removeItem('bjml_layout');
-    if (onLayoutChange) onLayoutChange({ left: defLeft, right: defRight });
+    setLeftOrder(leftKeys);
+    setRightOrder(rightKeys);
+    try { localStorage.removeItem('bjml_layout'); } catch (e) {}
+    if (onLayoutChange) onLayoutChange({ left: leftKeys, rightTabs: rightKeys });
   }
 
   function renderSlot(key, column) {
     var panel = allPanels[key];
     if (!panel) return null;
-    var isDragOver = dragOverItem === key;
-    var isBeingDragged = dragging === key;
+    var isOver    = dragOver === key && dragCol === column;
+    var isDragged = dragging === key && dragCol === column;
+
     return React.createElement('div', {
       key: key,
       draggable: true,
       onDragStart: function (e) { handleDragStart(e, key, column); },
-      onDragOver: function (e) { handleDragOver(e, key); },
-      onDrop: function (e) { handleDrop(e, key, column); },
-      onDragEnd: handleDragEnd,
-      className: 'dle-slot' + (isDragOver ? ' dle-over' : '') + (isBeingDragged ? ' dle-dragging' : ''),
+      onDragOver:  function (e) { handleDragOver(e, key); },
+      onDrop:      function (e) { handleDrop(e, key, column); },
+      onDragEnd:   handleDragEnd,
       style: {
         display: 'flex', alignItems: 'center', gap: 8,
         padding: '8px 12px', borderRadius: 8,
-        background: isDragOver ? 'rgba(255,212,71,0.12)' : 'rgba(255,255,255,0.04)',
-        border: isDragOver ? '2px dashed rgba(255,212,71,0.6)' : '1.5px solid rgba(255,255,255,0.1)',
+        background: isOver ? 'rgba(255,212,71,0.12)' : 'rgba(255,255,255,0.04)',
+        border: isOver ? '2px dashed rgba(255,212,71,0.6)' : '1.5px solid rgba(255,255,255,0.10)',
         cursor: 'grab',
-        opacity: isBeingDragged ? 0.4 : 1,
-        transition: 'all 0.15s ease',
-        marginBottom: 4,
+        opacity: isDragged ? 0.4 : 1,
+        transition: 'background 0.15s, border-color 0.15s, opacity 0.15s',
+        marginBottom: 6,
         userSelect: 'none',
       },
     },
-      React.createElement('span', {
-        style: { fontSize: 14, flexShrink: 0, lineHeight: 1 }
-      }, panel.icon || '▪'),
-      React.createElement('span', {
-        style: { fontSize: 11, fontWeight: 600, color: '#f0f4ff', flex: 1 }
-      }, panel.label),
-      React.createElement('span', {
-        style: { fontSize: 10, color: '#6b7f96', fontFamily: 'DM Mono, monospace' }
-      }, '⣿')
+      renderIcon(panel),
+      React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#f0f4ff', flex: 1 } },
+        panel.label),
+      React.createElement('span', { style: { fontSize: 10, color: '#8fa5be', fontFamily: 'DM Mono, monospace' } },
+        '⋮⋮')
     );
   }
 
-  function renderColumn(title, order, column) {
+  // PHASE 6 A1: prefer Lucide via panel.lucide; fall back to emoji panel.icon.
+  function renderIcon(p) {
+    if (p && p.lucide && typeof Icon === 'function') {
+      return React.createElement('span', {
+        style: { display: 'inline-flex', flexShrink: 0, color: 'var(--text-1)' },
+      }, React.createElement(Icon, { name: p.lucide, size: 14 }));
+    }
+    return React.createElement('span', {
+      style: { fontSize: 14, lineHeight: 1, flexShrink: 0 },
+    }, (p && p.icon) || '▪');
+  }
+
+  function renderLockedSlot(slot) {
     return React.createElement('div', {
-      style: { flex: 1 },
-      onDragOver: function (e) { e.preventDefault(); },
-      onDrop: function (e) {
-        if (order.length === 0 && dragging) {
-          // Drop into empty column
-          handleDrop(e, null, column);
-        }
+      key: 'locked-' + slot.key,
+      title: 'This slot is fixed — it always shows the same panel for predictable scanning.',
+      style: {
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '8px 12px', borderRadius: 8,
+        background: 'rgba(255,255,255,0.02)',
+        border: '1.5px dashed rgba(255,255,255,0.10)',
+        marginBottom: 6, userSelect: 'none',
+        opacity: 0.75,
       },
+    },
+      renderIcon(slot),
+      React.createElement('span', { style: { fontSize: 11, fontWeight: 600, color: '#ccdaec', flex: 1 } },
+        slot.label),
+      React.createElement('span', {
+        style: {
+          fontSize: 8, fontWeight: 800, padding: '2px 6px', borderRadius: 4,
+          background: 'rgba(255,255,255,0.06)', color: '#94a7c4',
+          textTransform: 'uppercase', letterSpacing: '0.08em',
+        }
+      }, 'Fixed')
+    );
+  }
+
+  function renderColumn(title, subtitle, slots, order, column) {
+    return React.createElement('div', {
+      style: { flex: 1, minWidth: 0 },
+      onDragOver: function (e) { e.preventDefault(); },
     },
       React.createElement('div', {
         style: {
-          fontSize: 10, fontWeight: 800, color: '#8fa5be',
+          fontSize: 10, fontWeight: 800, color: '#a8bcd4',
           textTransform: 'uppercase', letterSpacing: '0.08em',
-          marginBottom: 8, paddingBottom: 4,
-          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          marginBottom: 4, paddingBottom: 4,
+          borderBottom: '1px solid rgba(255,255,255,0.10)',
         }
       }, title),
+      subtitle && React.createElement('div', {
+        style: { fontSize: 10, color: '#8fa5be', marginBottom: 8 }
+      }, subtitle),
+      slots && slots.length > 0 && React.createElement('div', { style: { marginBottom: 6 } },
+        slots.map(renderLockedSlot)
+      ),
       order.map(function (key) { return renderSlot(key, column); })
     );
   }
 
-  // Overlay
   return React.createElement('div', {
+    role: 'dialog',
+    'aria-modal': 'true',
+    'aria-label': 'Layout editor',
     style: {
       position: 'fixed', inset: 0, zIndex: 10000,
       background: 'rgba(0,0,0,0.7)',
       backdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 16,
     },
     onClick: function (e) { if (e.target === e.currentTarget) onClose(); },
   },
     React.createElement('div', {
       style: {
-        width: 640, maxHeight: '80vh', overflow: 'auto',
+        width: 720, maxWidth: '100%', maxHeight: '88vh', overflow: 'auto',
         background: '#1c2540',
         border: '1.5px solid rgba(255,255,255,0.15)',
         borderRadius: 14,
-        padding: 20,
+        padding: 22,
         boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
       },
       onClick: function (e) { e.stopPropagation(); },
@@ -235,55 +265,67 @@ function DragLayoutEditor({ isOpen, onClose, leftPanels, rightPanels, onLayoutCh
       React.createElement('div', {
         style: {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 16,
+          marginBottom: 14,
         }
       },
-        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
-          React.createElement('span', { style: { fontSize: 18 } }, '🎯'),
+        React.createElement('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } },
           React.createElement('span', {
-            style: { fontSize: 14, fontWeight: 800, color: '#f0f4ff', fontFamily: 'Syne, sans-serif' }
+            style: {
+              fontFamily: 'Syne, sans-serif',
+              fontSize: 16, fontWeight: 900, color: '#f0f4ff', letterSpacing: '0.02em',
+            }
           }, 'Layout Editor'),
           React.createElement('span', {
             style: {
-              fontSize: 8, fontWeight: 700, padding: '2px 6px', borderRadius: 4,
+              fontSize: 9, fontWeight: 800, padding: '3px 7px', borderRadius: 4,
               background: 'rgba(255,212,71,0.15)', border: '1px solid rgba(255,212,71,0.4)',
-              color: '#ffd447', textTransform: 'uppercase',
+              color: '#ffd447', textTransform: 'uppercase', letterSpacing: '0.08em',
             }
-          }, 'DRAG')
+          }, 'Drag to reorder')
         ),
         React.createElement('button', {
           onClick: onClose,
-          style: {
-            background: 'transparent', border: 'none', color: '#6b7f96',
-            fontSize: 18, cursor: 'pointer', padding: '4px 8px',
-          },
           'aria-label': 'Close layout editor',
+          style: {
+            background: 'transparent', border: 'none', color: '#8fa5be',
+            fontSize: 18, cursor: 'pointer', padding: '4px 8px', lineHeight: 1,
+          },
         }, '✕')
       ),
-      // Info
+
+      // Hint
       React.createElement('div', {
         style: {
-          fontSize: 10, color: '#94a7c4', marginBottom: 16,
-          padding: '6px 10px', borderRadius: 6,
+          fontSize: 11, color: '#a8bcd4', marginBottom: 14,
+          padding: '8px 10px', borderRadius: 6,
           background: 'rgba(255,255,255,0.03)',
           border: '1px solid rgba(255,255,255,0.06)',
+          lineHeight: 1.45,
         }
-      }, 'Drag panels between columns to customize your layout. Changes persist across sessions.'),
+      }, 'Drag panels within a column to reorder. Cross-column moves are disabled — the right column has fixed slots for shoe/edge and bet reference, and a tabbed reference strip below them.'),
+
       // Two columns
-      React.createElement('div', {
-        style: { display: 'flex', gap: 16 }
-      },
-        renderColumn('← Left Column', leftOrder, 'left'),
-        React.createElement('div', {
-          style: { width: 1, background: 'rgba(255,255,255,0.1)', flexShrink: 0 }
-        }),
-        renderColumn('Right Column →', rightOrder, 'right')
+      React.createElement('div', { style: { display: 'flex', gap: 18 } },
+        renderColumn(
+          'Left Column',
+          'Bet sizing, side counts, strategy reference',
+          null,
+          leftOrder, 'left'
+        ),
+        React.createElement('div', { style: { width: 1, background: 'rgba(255,255,255,0.10)', flexShrink: 0 } }),
+        renderColumn(
+          'Right Column — Tab Order',
+          'Reorder the reference tabs that appear below the fixed slots',
+          lockedSlots,
+          rightOrder, 'right'
+        )
       ),
-      // Footer buttons
+
+      // Footer
       React.createElement('div', {
         style: {
           display: 'flex', gap: 8, marginTop: 16,
-          paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.1)',
+          paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.10)',
         }
       },
         React.createElement('button', {
@@ -294,7 +336,7 @@ function DragLayoutEditor({ isOpen, onClose, leftPanels, rightPanels, onLayoutCh
             color: '#ffffff', fontWeight: 700, fontSize: 12,
             cursor: 'pointer', letterSpacing: '0.02em',
           }
-        }, '💾 Save Layout'),
+        }, 'Save Layout'),
         React.createElement('button', {
           onClick: handleReset,
           style: {
@@ -304,14 +346,14 @@ function DragLayoutEditor({ isOpen, onClose, leftPanels, rightPanels, onLayoutCh
             color: '#ff8888', fontWeight: 700, fontSize: 12,
             cursor: 'pointer',
           }
-        }, '↺ Reset Default'),
+        }, 'Reset to Default'),
         React.createElement('button', {
           onClick: onClose,
           style: {
             padding: '10px 16px', borderRadius: 8,
             background: 'transparent',
             border: '1.5px solid rgba(255,255,255,0.15)',
-            color: '#8fa5be', fontWeight: 600, fontSize: 12,
+            color: '#a8bcd4', fontWeight: 600, fontSize: 12,
             cursor: 'pointer',
           }
         }, 'Cancel')

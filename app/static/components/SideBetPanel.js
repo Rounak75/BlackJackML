@@ -89,7 +89,7 @@ function SideBetPanel({ sideBets }) {
   const urgencyLevel = (ev) => {
     if (ev >= 5)  return { label: '🔥 HIGH',   color: '#ff5c5c', bg: 'rgba(255,92,92,0.15)'   };
     if (ev >= 2)  return { label: '⚡ MEDIUM', color: '#ffd447', bg: 'rgba(255,212,71,0.15)'  };
-    return              { label: '📈 LOW',    color: '#44e882', bg: 'rgba(68,232,130,0.12)' };
+    return              { label: <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icon name="trending-up" size={11} /> LOW</span>, color: '#44e882', bg: 'rgba(68,232,130,0.12)' };
   };
 
   return (

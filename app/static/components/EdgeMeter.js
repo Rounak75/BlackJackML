@@ -47,7 +47,7 @@ function EdgeMeter({ count }) {
 
       {/* Bar */}
       <div style={{
-        height: 20, background: '#111827', borderRadius: 999,
+        height: 20, background: 'var(--surface-chrome)', borderRadius: 999,
         position: 'relative', overflow: 'hidden', marginBottom: 8,
       }}>
         <div className="edge-fill" style={{ width: `${pct}%` }} />
@@ -59,8 +59,8 @@ function EdgeMeter({ count }) {
       </div>
 
       {/* Axis labels */}
-      <div className="flex justify-between mb-3 font-mono"
-        style={{ fontSize: '0.62rem', color: '#ccdaec' }}>
+      <div className="flex justify-between mb-3 font-mono num"
+        style={{ fontSize: 'var(--font-xs)', color: 'var(--text-1)' }}>
         <span>House −2%</span>
         <span>Break Even</span>
         <span>Player +2%</span>
@@ -68,18 +68,18 @@ function EdgeMeter({ count }) {
 
       {/* Main value + system badge */}
       <div className="flex items-baseline gap-2 flex-wrap">
-        <span className="font-display font-extrabold leading-none"
-          style={{ fontSize: '1.6rem', color: isPos ? '#44e882' : '#ff5c5c' }}>
+        <span className="font-display font-extrabold leading-none num"
+          style={{ fontSize: '1.6rem', color: isPos ? 'var(--jade)' : 'var(--ruby)' }}>
           {adv >= 0 ? '+' : ''}{adv.toFixed(2)}%
         </span>
-        <span className="text-xs" style={{ color: '#ccdaec' }}>
+        <span style={{ fontSize: 'var(--font-sm)', color: 'var(--text-1)' }}>
           {isPos ? 'Player Edge' : 'House Edge'}
         </span>
         <span style={{
           fontSize: '0.54rem', marginLeft: 'auto',
           background: 'rgba(255,212,71,0.10)',
-          border: '1px solid rgba(255,212,71,0.30)',
-          color: '#ffd447', borderRadius: 4,
+          border: 'var(--border-w) solid rgba(255,212,71,0.30)',
+          color: 'var(--gold)', borderRadius: 4,
           padding: '1px 5px',
           fontFamily: 'DM Mono, monospace',
           letterSpacing: '0.05em',
@@ -89,7 +89,7 @@ function EdgeMeter({ count }) {
       </div>
 
       {/* Footer — FIX U6: correct 0.43% base edge (not 0.50%) */}
-      <div className="font-mono text-[10px] mt-1" style={{ color: '#b8ccdf' }}>
+      <div className="font-mono text-[10px] mt-1 num" style={{ color: 'var(--text-2)' }}>
         RTP: {(100 + adv).toFixed(2)}%
         {' · '}Base edge: 0.43% (8-deck S17)
         {' · '}{isKO ? 'KO Effective TC: ' : 'Break-even TC ≈ +'}{isKO ? (dispTC >= 0 ? '+' : '') + dispTC.toFixed(1) : breakEvenTC}
