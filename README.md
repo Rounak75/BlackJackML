@@ -40,13 +40,14 @@
 23. [Running the Tests](#-running-the-tests)
 24. [Desktop Overlay (Live Mode)](#-desktop-overlay-live-mode)
 25. [Illustrious 18 + Fab 4 — Complete Reference](#-illustrious-18--fab-4--complete-reference)
-26. [Dashboard Panels](#-dashboard-panels)
-27. [Deployment — Putting It Online](#-deployment--putting-it-online)
-28. [Troubleshooting — Common Errors](#-troubleshooting--common-errors)
-29. [Model Performance & Accuracy](#-model-performance--accuracy)
-30. [Architecture Reference](#-architecture-reference)
-31. [Developer Diagnostics & Debug Infrastructure](#-developer-diagnostics--debug-infrastructure)
-32. [Bug Fix Changelog](#-bug-fix-changelog)
+26. [Dashboard Panels Reference](#-dashboard-panels-reference)
+27. [Dashboard Layout & Modes](#-dashboard-layout--modes)
+28. [Deployment — Putting It Online](#-deployment--putting-it-online)
+29. [Troubleshooting — Common Errors](#-troubleshooting--common-errors)
+30. [Model Performance & Accuracy](#-model-performance--accuracy)
+31. [Architecture Reference](#-architecture-reference)
+32. [Developer Diagnostics & Debug Infrastructure](#-developer-diagnostics--debug-infrastructure)
+33. [Bug Fix Changelog](#-bug-fix-changelog)
 
 ---
 
@@ -2003,7 +2004,7 @@ The Action Panel recommendation updates simultaneously.
 
 ---
 
-## 📊 Dashboard Panels — Analytics, Risk, Stop Alerts, Shuffle Tracker
+## 📊 Dashboard Panels Reference
 
 ### Analytics Panel — N₀ and Shoe Quality Score
 
@@ -2147,7 +2148,199 @@ A traditional card counter resets to zero on every shuffle. The Shuffle Tracker 
 
 ---
 
+### Multi-System Comparison Panel
 
+The Multi-System panel replays every dealt card through all six counting systems at once and shows them side-by-side. You can see the running count, true count, and player edge that Hi-Lo, KO, Omega II, Zen, Wong Halves, and Uston APC each report for the **same** shoe.
+
+**Why it's useful:**
+- Validates that the system you're using is competitive — sometimes Wong Halves or Uston APC will report a higher edge on the same shoe than your active Hi-Lo.
+- Highlights the "best edge" system in real time, so you can switch mid-shoe if you're comfortable doing so.
+- Useful for learning — watch how the same cards produce different counts in different systems.
+
+The panel is collapsed by default to save space and only fetches data when expanded. Click the header or the **↻ Refresh** button to update. Server side, this is the `get_multi_system_compare` socket event, which replays the current `card_log` through every system.
+
+---
+
+### Bet Spread Helper (visual)
+
+A horizontal bar chart of the optimal True Count → units bet spread, with a marker for "where you are now". Designed for at-a-glance reads at the table.
+
+**What it shows:**
+- A row of bet sizes (1u, 2u, 4u, 6u, 8u, 12u — or your configured spread) keyed to TC values.
+- Estimated EV/hour and projected hands/hour for the current TC.
+- Wong Out / Sit Down / Spread Up signal text matching the TC zone.
+- A live "you are here" pointer that updates with every card.
+
+This panel is the visual companion to the Betting Ramp Panel (which shows the same data as a numeric table).
+
+---
+
+### Betting Ramp Panel (table)
+
+The full TC → Units → Currency table for the configured spread. The current TC row is highlighted live. Useful when you want exact numbers rather than the bar chart.
+
+The ramp is configurable from `BettingConfig` in `config.py`:
+- `MIN_BET_UNITS` / `MAX_BET_UNITS` — defines the spread (default 1–16).
+- `KELLY_FRACTION` — adjusts unit size from your bankroll.
+- `BANKROLL` — drives the unit base.
+
+---
+
+### Edge Meter
+
+A horizontal bar showing your current advantage (player edge minus house edge) for the active counting system. Reads `count.advantage` from the server, which is normalised across counting systems by `COUNT_NORM_SCALARS` so Omega II, Zen, and Uston APC are directly comparable to Hi-Lo.
+
+The footer shows the **base house edge (0.43%)** for the table rules, the **break-even True Count**, and the **active system name**.
+
+---
+
+### Side Count Panel (Aces & Tens)
+
+When you're playing **Uston APC** or **Omega II** — systems that count Aces separately — this panel makes the side count visible. It shows:
+- Aces remaining vs expected (with rich/poor indicator).
+- 10-value cards remaining vs expected.
+- Ace-adjustment to the True Count (a TC bump or penalty per deck above/below expectation).
+- The **Ace-adjusted True Count** — the number to use for bet sizing.
+- Visual depleted bars for Aces and Tens.
+
+Useful even with Hi-Lo: an Ace-rich shoe adds roughly +0.4 TC to your true betting advantage that the raw Hi-Lo count cannot see.
+
+---
+
+### Strategy Reference Table
+
+Compact three-tab basic-strategy chart (Hard / Soft / Pairs) that fits on screen without scrolling. The cell that matches your current hand vs the dealer's upcard is highlighted with a gold outline, so you can confirm the recommendation visually.
+
+Useful when learning, when you suspect the AI is wrong, or when teaching the table to a friend. The tab state is local to the panel and resets on reload.
+
+---
+
+### Composition-Dependent Alert (Hard 16 vs 10)
+
+Some hands have correct plays that depend not just on the total but on the **specific cards** you hold. The classic case is **Hard 16 vs dealer 10**:
+- **10 + 6** vs 10 → Stand at TC ≥ 0 (the standard composition-dependent variant).
+- **9 + 7** vs 10 → Hit until TC ≥ +1.
+
+When the active hand triggers this case, an inline alert appears below the recommendation explaining the threshold and which side of it you're on. The alert is driven by the server's `recommendation.comp_dep_16` payload — it only renders for those two specific compositions.
+
+---
+
+### Deviation Banner
+
+A full-width row between the top bar and the main grid that lights up only when the current play is a count-driven deviation from basic strategy. Shows:
+- Hand vs dealer upcard.
+- Basic-strategy action → deviated action (with arrow).
+- Trigger threshold (e.g. `TC ≥ +3`).
+- Live TC and how far you are from the threshold.
+
+This is the at-a-glance signal that you're in Illustrious 18 / Fab 4 territory. The full table of deviations lives in the I18 Panel; the banner is the live notification.
+
+---
+
+### Hotkey Overlay
+
+A modal hotkey reference — press **`?`** anywhere in the dashboard to open it, **Esc** to close. Lists every keyboard shortcut grouped by category (Card Entry, Card Routing, Hand Actions, Result Recording, Misc). Mirrors `App.jsx`'s actual key handlers — if you add a new shortcut, update this overlay too.
+
+The Status Bar's `?` button opens the same overlay.
+
+---
+
+### Center Toolbar
+
+Slim two-row strip directly under the card grid, showing data unique to that location:
+- **Row 1** — Action badge, hand value, your bust % at this hand value, dealer bust % from the upcard, hotkey hints.
+- **Row 2** — Side bet EV pills (Perfect Pairs / 21+3 / Lucky Ladies) and the Shoe Quality gauge from the Analytics Panel.
+
+Designed so your eyes stay near the cards instead of darting to the right column to read derived numbers.
+
+---
+
+### Outcome Strip
+
+The fastest way to record a hand's result. Sits below the Center Toolbar with one button per outcome (Win / Loss / Push / Blackjack / Surrender / Insurance Won / Insurance Lost). Pre-populates the bet, double, and insurance numbers from the active hand so you don't have to type them.
+
+Records the result via the `record_result` socket event — the server then updates Session Stats, Bankroll, and Analytics.
+
+---
+
+### Status Bar
+
+Sticky 28-pixel bar at the bottom of the screen showing — at a glance, in one row — hands played, penetration %, the Wong cue, ML model status, time since the last server update, and a `?` button that opens the Hotkey Overlay.
+
+If you want to know whether the dashboard is still talking to the server, the "last update" cell is the canonical signal.
+
+---
+
+### Session Stats
+
+Win/loss/push/blackjack tally, total profit, dealer-vs-player win breakdown, and longest streaks. Honours the active currency (₹/$/₿/etc.) for all monetary fields.
+
+Session resets when you click "New Session" or restart the server.
+
+---
+
+### Shoe Composition
+
+One bar per rank showing how many cards remain (4–8 for low/Ace ranks, 16–32 for 10-value ranks at 8 decks). The penetration progress bar shows how deep you are in the shoe with text status — `FRESH` → `MID SHOE` → `SHUFFLE SOON`.
+
+Use this to spot a shoe that has gone heavily Ace-poor or 10-poor — even if the count says otherwise, a depleted Ten bar tells you 21s and Blackjacks are scarce.
+
+---
+
+### Count History
+
+A sparkline of the True Count over time and a scrollable log of the last 15 counted cards (with each card's count tag for the active system). Useful for spotting trend shifts and confirming you didn't miscount a particular card. The history is capped at 500 entries server-side; the panel reads at most the last 60.
+
+---
+
+## 🧱 Dashboard Layout & Modes
+
+The dashboard is not a fixed page. It has three display modes, two reorderable panel zones, and a tabbed right column. Layout state persists in `localStorage`, so your preferences survive a refresh.
+
+### UI Modes — Normal / Zen / Speed
+
+Click the mode toggle in the top bar (or press `Z`) to cycle:
+- **Normal** — full dashboard with every panel and helper visible. Default.
+- **Zen** — minimal layout: count, recommendation, hand entry, and one bet number. Strips away analytics, stop alerts, and reference tables. Designed for live casino play where you only need the answer.
+- **Speed** — even tighter than Zen. Removes secondary widgets (history, side bets, deviation banner) so the eye doesn't have to choose. Designed for fast online tables.
+
+The current mode is saved as `bjml_ui_mode` in `localStorage` and reapplied on the next load.
+
+### Tabbed Right Column
+
+The right column is a single tabbed container — only one tab body renders at a time, which keeps render cost flat regardless of how many panels exist. Tabs include Reference, Scanner, Analytics, History, Side Bets, and Settings (the exact set depends on the build).
+
+The active tab persists across reloads under the `localStorage` key `bjml_tab_active`. The right-column header has two locked slots (Edge Meter and Bet Reference) that always stay visible — those cannot be reordered.
+
+### Scanner Hub
+
+The Scanner tab unifies the live-scan widgets into one place. It mounts the Live Overlay Panel (mode toggle + per-mode body) plus three collapsible sub-sections:
+
+- **Zone Config** — visible in `live` or `screenshot` mode. Edits the screen region the YOLO detector reads.
+- **Confirmation** — visible in `live` mode only. Shows the pending-card queue when confirmation mode is on.
+- **Wonging** — visible in `live` mode only. Shows the back-counting signal and TC-bar entry/leave thresholds.
+
+Each sub-section's open/closed state persists per-section in `localStorage` (`bjml_scanner_zone_open`, `bjml_scanner_conf_open`, `bjml_scanner_wong_open`). Status dots beside each header signal panel state without expanding it: **jade** = zone applied, **gold** = pending cards waiting, **sapph** = `SIT DOWN NOW` Wong signal.
+
+### Drag-and-Drop Layout Editor
+
+Open the layout editor from the top bar (or the gear menu) to reorder:
+- The **left column's** free-form panel stack — any order you like.
+- The **right column's** TabStrip tab order.
+
+The two locked right-column slots (Edge Meter, Bet Reference) are shown read-only so it's clear they cannot be moved.
+
+The full ordering is stored as `bjml_layout = { left: string[], rightTabs: string[] }` in `localStorage`. Clearing this key from your browser dev tools resets the layout to defaults.
+
+### Reduced-Motion Accessibility
+
+The dashboard respects the OS-level `prefers-reduced-motion` preference. When it's on, animations (TC flash, panel slide-ins, chart redraws, hover transitions) are reduced to fades or removed entirely. There is no in-app setting — toggle it from your OS accessibility settings (Windows: Settings → Accessibility → Visual Effects → Animation; macOS: System Settings → Accessibility → Display → Reduce motion; Linux varies by desktop environment).
+
+---
+
+## 📡 Deployment — Putting It Online
+
+The app can run three ways: locally on your own machine (default), on a small Linux VPS for shared access, or inside Docker. Pick the option that matches your situation — the local mode is what you want unless you have a specific reason to deploy.
 
 ### Option A — Local use (default)
 
@@ -2630,6 +2823,19 @@ React re-renders all panels
 14. React: setGameState(data)          → all panels re-render
 ```
 
+### Codebase knowledge graph
+
+The repo ships with a generated knowledge graph at `graphify-out/`. It's useful for answering "how does X connect to Y?" without grepping the whole codebase.
+
+| File | What it is |
+|------|-----------|
+| `graphify-out/GRAPH_REPORT.md` | Narrative summary — god nodes, modules, community structure |
+| `graphify-out/wiki/index.md` | Per-file wiki pages with cross-links |
+| `graphify-out/graph.html` | Interactive force-directed graph (open in a browser) |
+| `graphify-out/graph.json` | Raw graph for tooling |
+
+The cache directory `graphify-out/cache/` is gitignored (machine-specific). The four files above are committed so collaborators always have an up-to-date map without re-running the extractor.
+
 ---
 
 ## 🚀 Advanced Tracking Features
@@ -2923,7 +3129,18 @@ __BJDebug.getPerfData()     // Get current FPS, memory, render counts
 
 ## 🐛 Bug Fix Changelog
 
-### v4 — Current
+### v5 — Current
+
+**Frontend (`app/static/components/TopBar.js`)**
+- **Uston APC missing from the system selector** — `COUNTING_SYSTEMS` listed only five systems even though the rest of the app (`config.py`, `constants.js`, `MultiSystemPanel.js`, server replay logic) supported six. Users could not switch to Uston APC from the dashboard. Added the missing entry so the dropdown matches the supported set, then rebuilt `bundle.min.js`.
+
+**Backend (`ml_model/__init__.py`)**
+- **Real `ShuffleTracker` never loaded** — `ml_model/__init__.py` was a stale copy of `blackjack/__init__.py` and tried to import `card`, `game`, `counting` from `ml_model/`, which don't exist there. The `ImportError` cascaded so every `from ml_model.shuffle_tracker import ShuffleTracker` fell through to the stub fallback in `app/server.py`. Rewrote the init file with no eager imports — the real `ShuffleTracker` (LSTM + Bayesian + Ace sequencer) now loads as intended, restoring the shuffle-resistant counting feature.
+
+**Backend (`app/server.py`)**
+- **`'ShuffleTracker' object has no attribute 'snapshot'` on every new hand** — the fallback stub class lacked the `snapshot()` and `restore()` methods the real class has. After fixing the init-file root cause above, the stub still gets used in environments without torch, so its surface was extended to match the real class's `snapshot()` / `restore()` / `reset()` methods as defence-in-depth. A missing-torch install can no longer crash `handle_new_hand`.
+
+### v4
 
 **Frontend (`app/static/bundle.min.js`)**
 - **Ctrl+Z shortcut missing** — the keyboard `useEffect` ran before `handleUndo` was defined, making `handleUndo` undefined. Fixed by moving the effect after all handler definitions.

@@ -144,6 +144,8 @@ dmypy.json
 .agents/
 # Claude Code project-local settings — per-machine
 .claude/
+# Claude Code project instructions — local to each contributor
+CLAUDE.md
 # Claude Code skill packs synced to the repo — installed locally per-dev
 skills/
 skills-lock.json
