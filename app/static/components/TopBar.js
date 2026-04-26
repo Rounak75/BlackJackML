@@ -114,6 +114,8 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
   const isMinimal = uiMode === 'zen' || uiMode === 'speed';
   const [activeSystem,  setActiveSystem]  = useState('hi_lo');
   const [activeShuffle, setActiveShuffle] = useState('machine');
+  // PHASE 7 T5: TC-flash key remount replaces void offsetWidth reflow.
+  const [tcFlashKey, setTcFlashKey] = useState(0);
   const { useRef, useEffect } = React;
 
   const tc  = count ? count.true       : 0;
@@ -134,9 +136,9 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
   const sysMeta  = COUNTING_SYSTEMS[activeSystem]  || COUNTING_SYSTEMS.hi_lo;
   const shufMeta = SHUFFLE_TYPES[activeShuffle] || SHUFFLE_TYPES.machine;
 
-  // ── TC flash on threshold crossing ──────────────────────
+  // PHASE 7 T5: TC flash on threshold crossing — increment key to remount,
+  // which restarts the .tc-flash CSS animation cleanly without forced reflow.
   const prevTcRef = useRef(tc);
-  const tcBlockRef = useRef(null);
   useEffect(() => {
     const prev = prevTcRef.current;
     prevTcRef.current = tc;
@@ -145,11 +147,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
       const crossed = (prev < t && tc >= t) || (prev > t && tc <= t) ||
                       (prev >= t && tc < t) || (prev <= t && tc > t);
       if (crossed && prev !== tc) {
-        if (tcBlockRef.current) {
-          tcBlockRef.current.classList.remove('tc-flash');
-          void tcBlockRef.current.offsetWidth; // force reflow
-          tcBlockRef.current.classList.add('tc-flash');
-        }
+        setTcFlashKey(k => k + 1);
         break;
       }
     }
@@ -260,9 +258,9 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
 
           {/* ── HERO: True Count (balanced) OR Running Count vs Pivot (KO) ── */}
           <div
-            ref={tcBlockRef}
-            className="flex flex-col items-center justify-center"
-            style={{ padding: '8px 24px', borderRadius: 8, transition: 'background 0.3s ease' }}
+            key={tcFlashKey}
+            className="tc-flash flex flex-col items-center justify-center"
+            style={{ padding: '8px 24px', borderRadius: 8 }}
             title={isKO
               ? 'KO is unbalanced: bet decisions use Running Count vs Pivot, not True Count.'
               : 'True Count: Running Count ÷ Decks Remaining. Use this for all strategy decisions.'}
@@ -541,4 +539,12 @@ function CountBlock({ label, value, colorVal, mono, secondary, title }) {
       </div>
     </div>
   );
+}
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function TopBar(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  TopBar = React.memo(TopBar);
 }

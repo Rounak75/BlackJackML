@@ -2494,3 +2494,24 @@ textarea:focus-visible {
 [role="dialog"]:focus-visible {
   outline: none;
 }
+
+/* ══════════════════════════════════════════════════════════
+   PHASE 7 T6 — Respect prefers-reduced-motion
+   Neutralizes every animation and transition for users who
+   request reduced motion at the OS level. Covers tc-flash,
+   pulse, fadeIn, split-advance-pulse, live-pulse, de-pulse-seat,
+   de-hotpulse, de-expand-in, de-chip-in, splitActivePulse,
+   cardDeal, toastSlide, edge-fill, etc.
+   ══════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}

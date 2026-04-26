@@ -170,3 +170,11 @@ function AnalyticsPanel({ analytics }) {
     </Widget>
   );
 }
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function AnalyticsPanel(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  AnalyticsPanel = React.memo(AnalyticsPanel);
+}

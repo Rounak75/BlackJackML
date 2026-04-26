@@ -33,7 +33,7 @@
  */
 
 function ScannerHub({
-  socket, count,
+  count,
   scanMode, onSetMode,
   onDealCard, dealTarget,
   zoneConfig,
@@ -42,6 +42,7 @@ function ScannerHub({
 }) {
   var useState  = React.useState;
   var useEffect = React.useEffect;
+  // PHASE 7 T3: socket no longer read here — children pull from SocketContext.
 
   // ── Persistent collapsibles ──────────────────────────────────
   function loadOpen(key, def) {
@@ -141,7 +142,6 @@ function ScannerHub({
   },
     // LiveOverlayPanel — owns the mode toggle and per-mode body
     React.createElement(LiveOverlayPanel, {
-      socket: socket,
       count: count,
       scanMode: scanMode,
       onSetMode: onSetMode,
@@ -155,22 +155,29 @@ function ScannerHub({
     },
       showZone && section('Zone Config', zoneOpen, setZoneOpen, zoneDot,
         React.createElement(ZoneConfigPanel, {
-          socket: socket, zoneConfig: zoneConfig,
+          zoneConfig: zoneConfig,
           onApply: function () {},
         })
       ),
       showConf && section('Confirmation', confOpen, setConfOpen, confDot,
         React.createElement(ConfirmationPanel, {
-          socket: socket,
           confirmationMode: confirmationMode,
           pendingCards: pendingCards,
         })
       ),
       showWong && section('Wonging', wongOpen, setWongOpen, wongDot,
         React.createElement(WongPanel, {
-          socket: socket, wonging: wonging, count: count,
+          wonging: wonging, count: count,
         })
       )
     )
   );
+}
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function ScannerHub(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  ScannerHub = React.memo(ScannerHub);
 }

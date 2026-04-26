@@ -18,8 +18,11 @@
  */
 
 const { useState, useEffect, useRef, useCallback } = React;
-// ErrorBoundary is now DebugErrorBoundary — defined in DebugLayer.js
-// (includes safe mode, recovery button, copy-to-clipboard, and debug logging)
+
+// PHASE 7 T3: SocketContext — single connection exposed without prop drilling.
+// Value is null until the first connect, then stable for the session.
+window.SocketContext = window.SocketContext || React.createContext(null);
+const SocketContext = window.SocketContext;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // APP — the one and only root component
@@ -111,6 +114,10 @@ function App() {
     setUiMode(prev => prev === 'normal' ? 'zen' : prev === 'zen' ? 'speed' : 'normal')
   }, [])
 
+  // PHASE 7 T3: socket as state mirrors socketRef so SocketContext consumers
+  // re-render once the connection is established.
+  const [socket, setSocket] = useState(null);
+
   // ── REFS ───────────────────────────────────────────────────────────────────
   const socketRef = useRef(null)
   const undoStack = useRef([])
@@ -128,12 +135,13 @@ function App() {
 
   // ── WEBSOCKET SETUP ────────────────────────────────────────────────────────
   useEffect(() => {
-    const socket = io()
+    const sock = io()
     // §3 Debug: wrap socket for network event logging
-    if (typeof DebugNet !== 'undefined') DebugNet.wrapEmit(socket)
-    socketRef.current = socket
+    if (typeof DebugNet !== 'undefined') DebugNet.wrapEmit(sock)
+    socketRef.current = sock
+    setSocket(sock)              // PHASE 7 T3: trigger context provider re-render
 
-    socket.on('state_update', (data) => {
+    sock.on('state_update', (data) => {
       // §3 Debug: log incoming state update
       if (typeof DebugNet !== 'undefined') DebugNet.logReceive('state_update', data)
       // §4 Debug: track state diff
@@ -162,24 +170,24 @@ function App() {
       if (data.wonging) setWongingData(data.wonging)
     })
 
-    socket.on('notification', (data) => {
+    sock.on('notification', (data) => {
       if (typeof DebugNet !== 'undefined') DebugNet.logReceive('notification', data)
       showToast(data.message, data.type || 'info')
     })
-    socket.on('error', (data) => {
+    sock.on('error', (data) => {
       if (typeof DebugNet !== 'undefined') DebugNet.logError('error', data)
       showToast(data.message, 'error')
     })
-    socket.on('pending_cards_update', (data) => setPendingCards(data.pending || []))
+    sock.on('pending_cards_update', (data) => setPendingCards(data.pending || []))
 
     // §3 Debug: listen for backend debug_log events
-    socket.on('debug_log', (data) => {
+    sock.on('debug_log', (data) => {
       if (typeof DebugController !== 'undefined' && DebugController.isActive()) {
         DebugController.log(data.cat || 'GENERAL', 3, '[SRV] ' + (data.msg || ''), data.data || null)
       }
     })
 
-    return () => socket.disconnect()
+    return () => sock.disconnect()
   }, [])
 
 
@@ -681,20 +689,23 @@ function App() {
 
   // ── RENDER ─────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen font-body" style={{ background: '#0a0e18', color: '#f0f4ff', display: 'flex', flexDirection: 'column' }}>
+    <SocketContext.Provider value={socket}>
+    <div className="min-h-screen font-body" style={{ background: 'var(--surface-base)', color: 'var(--text-1)', display: 'flex', flexDirection: 'column' }}>
 
       {/* ── TOP BAR (Issue #12: condensed brand, Issue #2: TC hero) ───── */}
-      <TopBar
-        count={count}
-        onNewHand={handleNewHand}
-        onShuffle={handleShuffle}
-        onChangeSystem={handleChangeSystem}
-        currentAction={rec?.action}
-        uiMode={uiMode}
-        onModeChange={setUiMode}
-        sideCounts={sideCounts}
-        onShowLayoutEditor={() => setShowLayoutEditor(true)}
-      />
+      <PerfProbe id="topbar">
+        <TopBar
+          count={count}
+          onNewHand={handleNewHand}
+          onShuffle={handleShuffle}
+          onChangeSystem={handleChangeSystem}
+          currentAction={rec?.action}
+          uiMode={uiMode}
+          onModeChange={setUiMode}
+          sideCounts={sideCounts}
+          onShowLayoutEditor={() => setShowLayoutEditor(true)}
+        />
+      </PerfProbe>
 
       {/* ── PHASE 2/3: Deviation Banner — full-width, conditional ── */}
       {!isMinimal && (
@@ -795,7 +806,6 @@ function App() {
               splitHands={splitHands}
               activeHandIndex={activeHandIdx}
               dealerUpcard={dealerUp}
-              socket={socketRef.current}
               onNextHand={handleNextSplitHand}
             />
           )}
@@ -838,14 +848,17 @@ function App() {
         }}>
 
         {/* ── LEFT COLUMN (dynamic order from DragLayoutEditor) ──── */}
-        <div className="flex flex-col gap-2.5">
-          {_leftKeys.map(key => (
-            <div key={key}>{_panelRegistry[key]}</div>
-          ))}
-        </div>
+        <PerfProbe id="left-column">
+          <div className="flex flex-col gap-2.5">
+            {_leftKeys.map(key => (
+              <div key={key}>{_panelRegistry[key]}</div>
+            ))}
+          </div>
+        </PerfProbe>
 
 
         {/* ── CENTER COLUMN ─────────────────────────────────────────── */}
+        <PerfProbe id="center-column">
         <div className="flex flex-col gap-2.5">
 
           {/* ── Action recommendation banner ── */}
@@ -894,7 +907,6 @@ function App() {
               splitHands={splitHands}
               activeHandIndex={activeHandIdx}
               dealerUpcard={dealerUp}
-              socket={socketRef.current}
               onNextHand={handleNextSplitHand}
             />
           )}
@@ -946,9 +958,11 @@ function App() {
             splitHandsActive={splitHands.length > 0}
           />
         </div>
+        </PerfProbe>
 
 
         {/* ── PHASE 2: RIGHT COLUMN — fixed structure (2 slots + TabStrip) ─── */}
+        <PerfProbe id="right-column">
         <div className="panel-right flex flex-col gap-2.5">
 
           {/* PHASE 5: live-scan widgets (Zone / Confirmation / Wong) moved
@@ -983,16 +997,15 @@ function App() {
               { key: 'history',   label: 'History',     render: () => <CountHistoryPanel history={history} /> },
               { key: 'multi',     label: 'Multi-Sys',
                 render: () => typeof MultiSystemPanel !== 'undefined'
-                  ? <MultiSystemPanel socket={socketRef.current} count={count} shoe={shoe} />
+                  ? <MultiSystemPanel count={count} shoe={shoe} />
                   : null
               },
               { key: 'stops',     label: 'Stops',
-                render: () => <StopAlertsConfig session={session} currency={currency} socket={socketRef.current} />
+                render: () => <StopAlertsConfig session={session} currency={currency} />
               },
               { key: 'scanner',   label: 'Scanner',
                 render: () => <ScannerHub
-                                socket={socketRef.current}
-                                count={gameState?.count}
+                                                  count={gameState?.count}
                                 scanMode={scanMode}
                                 onSetMode={setScanMode}
                                 onDealCard={handleDealCardWrapped}
@@ -1020,6 +1033,7 @@ function App() {
           })()}
 
         </div>
+        </PerfProbe>
 
       {/* PHASE 5: Layout Editor — left panels reorder, right TabStrip tabs reorder.
           The two right-column fixed slots (Edge & Shoe / Bet Reference) are
@@ -1057,14 +1071,16 @@ function App() {
       )}{/* end normal/minimal layout conditional */}
 
       {/* ── PHASE 2: Status Bar — sticky at bottom (one row, glanceable) ── */}
-      <StatusBar
-        session={session}
-        count={count}
-        wonging={wongingData}
-        mlModelInfo={gameState?.ml_model_info}
-        lastUpdateAgo={lastUpdateAgo}
-        onShowHelp={() => setShowHotkeys(true)}
-      />
+      <PerfProbe id="statusbar">
+        <StatusBar
+          session={session}
+          count={count}
+          wonging={wongingData}
+          mlModelInfo={gameState?.ml_model_info}
+          lastUpdateAgo={lastUpdateAgo}
+          onShowHelp={() => setShowHotkeys(true)}
+        />
+      </PerfProbe>
 
       {/* ── PHASE 4: Hotkey overlay (modal) ─────────────────────────── */}
       <HotkeyOverlay
@@ -1078,7 +1094,7 @@ function App() {
         zIndex: 1000, pointerEvents: 'none',
       }}>
         <div style={{ pointerEvents: 'auto' }}>
-          <StopAlerts session={session} currency={currency} socket={socketRef.current} />
+          <StopAlerts session={session} currency={currency} />
         </div>
       </div>
 
@@ -1147,6 +1163,7 @@ function App() {
         }
       `}</style>
     </div>
+    </SocketContext.Provider>
   )
 }
 

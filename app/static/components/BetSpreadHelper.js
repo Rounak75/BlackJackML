@@ -245,3 +245,11 @@ var BetSpreadHelper = (function () {
 
   return BetSpreadHelper;
 })();
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function BetSpreadHelper(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  BetSpreadHelper = React.memo(BetSpreadHelper);
+}

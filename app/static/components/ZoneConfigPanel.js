@@ -31,7 +31,9 @@
  *   onApply     optional callback after applying (for toasts etc.)
  */
 
-function ZoneConfigPanel({ socket, zoneConfig, onApply }) {
+function ZoneConfigPanel({ zoneConfig, onApply }) {
+  // PHASE 7 T3: socket from context.
+  var socket = React.useContext(window.SocketContext);
 
   // Local editable copies of the zone boundaries (as percentages 0-100)
   const [playerEnd, setPlayerEnd] = React.useState(

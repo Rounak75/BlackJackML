@@ -147,6 +147,21 @@ function SideCountPanel({ sideCounts, count }) {
       {/* Ten-value side count */}
       {row('10-Values', tenRem, tenExp, tenAdj, tenFill, tenColor, tenRich, totalTens)}
 
+      {/* P3.3: Five count — fives are the strongest dealer-bust tag.
+          rich=true here means FEW fives left (good for player). */}
+      {sideCounts.fives_remaining != null && (() => {
+        const fiveRem  = sideCounts.fives_remaining ?? 0;
+        const fiveExp  = sideCounts.fives_expected  ?? 0;
+        const fivesSeen = sideCounts.fives_seen ?? 0;
+        const totalFives = (fiveRem + fivesSeen) || 24;
+        const fiveFill = totalFives > 0 ? Math.max(0, Math.min(1, fiveRem / totalFives)) : 0;
+        const fiveDiff = fiveExp - fiveRem;     // positive = fewer than expected = good
+        const fiveAdj  = fiveDiff * 0.5;        // approx TC contribution
+        const fiveRich = !!sideCounts.five_rich;
+        const fiveColor = fiveRich ? '#44e882' : '#ff5c5c';
+        return row('Fives', fiveRem, fiveExp, fiveAdj, fiveFill, fiveColor, fiveRich, totalFives);
+      })()}
+
       {/* Explanation note */}
       <div style={{
         padding: '6px 8px', borderRadius: 6, marginTop: 4,
@@ -158,4 +173,12 @@ function SideCountPanel({ sideCounts, count }) {
       </div>
     </Widget>
   );
+}
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function SideCountPanel(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  SideCountPanel = React.memo(SideCountPanel);
 }

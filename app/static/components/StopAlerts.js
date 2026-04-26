@@ -83,8 +83,10 @@ function _StopEditForm({ sym, tempLoss, tempWin, setTempLoss, setTempWin, onSave
 // StopAlertsConfig — always-visible inline panel (right column Tier 1)
 // ══════════════════════════════════════════════════════════════════════
 
-function StopAlertsConfig({ session, currency, socket }) {
-  const { useState, useEffect } = React;
+function StopAlertsConfig({ session, currency }) {
+  const { useState, useEffect, useContext } = React;
+  // PHASE 7 T3: socket from context.
+  const socket = useContext(window.SocketContext);
 
   const profit = session?.total_profit ?? 0;
   const sym    = currency?.symbol ?? '₹';
@@ -238,8 +240,10 @@ function StopAlertsConfig({ session, currency, socket }) {
 // StopAlerts — floating overlay toast (bottom-right, renders null idle)
 // ══════════════════════════════════════════════════════════════════════
 
-function StopAlerts({ session, currency, socket }) {
-  const { useState, useEffect, useRef } = React;
+function StopAlerts({ session, currency }) {
+  const { useState, useEffect, useRef, useContext } = React;
+  // PHASE 7 T3: socket from context.
+  const socket = useContext(window.SocketContext);
 
   const profit = session?.total_profit ?? 0;
   const hands  = session?.hands_played ?? 0;

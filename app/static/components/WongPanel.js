@@ -33,7 +33,9 @@
  *   count         full count object { running, true, advantage, decks_remaining }
  */
 
-function WongPanel({ socket, wonging, count }) {
+function WongPanel({ wonging, count }) {
+  // PHASE 7 T3: socket from context.
+  var socket = React.useContext(window.SocketContext);
 
   // ── Local state ──────────────────────────────────────────────────────────
   // We optimistically toggle the UI before the server confirms,

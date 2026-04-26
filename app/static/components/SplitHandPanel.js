@@ -158,7 +158,9 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
   );
 }
 
-function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, socket, onNextHand }) {
+function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, onNextHand }) {
+  // PHASE 7 T3: socket from context, no longer prop-drilled.
+  var socket = React.useContext(window.SocketContext);
   if (!splitHands || splitHands.length === 0) return null;
 
   const handleComplete = () => {
@@ -235,4 +237,12 @@ function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, socket, onN
       )}
     </div>
   );
+}
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function SplitHandPanel(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  SplitHandPanel = React.memo(SplitHandPanel);
 }

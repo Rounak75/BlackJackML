@@ -738,7 +738,8 @@ function SetupGuide({ available }) {
 // (socket) to update the scanner ROI to that window's screen coordinates.
 // Browser windows (Chrome/Edge/Firefox/Stake etc.) are sorted to the top.
 
-function WindowPicker({ socket, onWindowSelect = null }) {
+function WindowPicker({ onWindowSelect = null }) {
+  const socket = React.useContext(window.SocketContext);
   const { useState, useEffect } = React;
   const [open,    setOpen]    = useState(false);
   const [windows, setWindows] = useState([]);
@@ -971,7 +972,9 @@ function WindowPicker({ socket, onWindowSelect = null }) {
 // The optional region input lets users restrict scanning to just the casino
 // window area (e.g. x=0 y=0 w=800 h=600) instead of the full screen,
 // which is faster and more accurate.
-function LiveMode({ socket, count }) {
+function LiveMode({ count }) {
+  // PHASE 7 T3: socket from context, no longer prop-drilled.
+  const socket = React.useContext(window.SocketContext);
   // Is the live scanner currently running?
   const [running, setRunning] = useState(false);
 
@@ -1100,7 +1103,7 @@ function LiveMode({ socket, count }) {
   return (
     <div>
       {/* Window / tab picker — lets user point scanner at a specific browser window */}
-      <WindowPicker socket={socket} />
+      <WindowPicker />
 
       <div style={{
         fontSize:9, color:C.jade, marginBottom:8,
@@ -1225,7 +1228,7 @@ function LiveMode({ socket, count }) {
 //
 // All three modes share the same Widget wrapper and header.
 // Switching modes just changes which content renders inside that wrapper.
-function LiveOverlayPanel({ socket, count, scanMode, onSetMode, onDealCard, dealTarget }) {
+function LiveOverlayPanel({ count, scanMode, onSetMode, onDealCard, dealTarget }) {
   // The accent colour on the Widget title bar changes with the active mode:
   //   live = green (active, scanning)    screenshot = blue    manual = grey
   const accentColor = scanMode === 'live'       ? C.jade
@@ -1241,7 +1244,7 @@ function LiveOverlayPanel({ socket, count, scanMode, onSetMode, onDealCard, deal
       )}
 
       {scanMode === 'live' && (
-        <LiveMode socket={socket} count={count} />
+        <LiveMode count={count} />
       )}
 
       <style>{`

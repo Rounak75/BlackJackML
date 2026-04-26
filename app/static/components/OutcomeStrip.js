@@ -21,13 +21,37 @@
 
 function OutcomeStrip({
   onRecordResult, activeBet, effectiveBet, isDoubled,
-  tookInsurance, insurance, dealerHand, currency, playerHand
+  tookInsurance, insurance, dealerHand, currency, playerHand,
+  splitHandsActive
 }) {
   var cur = currency || { symbol: '$', isCrypto: false };
   var bet = effectiveBet || activeBet || 100;
 
-  // Only show when we have player cards (mid-hand or post-hand)
+  // Only show when we have player cards (mid-hand or post-hand).
+  // Pre-hand: render nothing — keeps the card grid above the fold and avoids
+  // duplicating the manual-override row that BettingPanel already provides.
   var hasCards = playerHand && playerHand.cards && playerHand.cards.length >= 2;
+  if (!hasCards) return null;
+
+  // PHASE 1: gate W/L/Push/Surr until the hand is actually resolved.
+  // Resolution = both player and dealer ≥2 cards AND one of:
+  //   player BJ, player bust, dealer BJ, dealer bust, dealer stands ≥17.
+  // While split hands are in progress the parent strip is meaningless,
+  // so disable then too.
+  var pCards = (playerHand && playerHand.cards && playerHand.cards.length) || 0;
+  var dCards = (dealerHand && dealerHand.card_count) || 0;
+  var pBust  = playerHand && playerHand.is_bust;
+  var dBust  = dealerHand && dealerHand.is_bust;
+  var pBJ    = playerHand && playerHand.is_blackjack;
+  var dBJ    = dealerHand && dealerHand.is_blackjack;
+  var dStands = dealerHand && (
+    dealerHand.dealer_stands !== undefined
+      ? dealerHand.dealer_stands
+      : (dCards >= 2 && !dBust && dealerHand.value >= 17)
+  );
+  var isResolved = !splitHandsActive
+    && pCards >= 2 && dCards >= 2
+    && (pBust || dBust || pBJ || dBJ || dStands);
 
   var fmtBet = function (n) {
     return cur.isCrypto ? n.toFixed(cur.decimals || 4) : n.toLocaleString();
@@ -89,9 +113,13 @@ function OutcomeStrip({
         }, hasCards ? 'Record Result' : 'Manual Override'),
         React.createElement('span', {
           style: {
-            fontSize: 8, color: '#6b7f96', fontStyle: 'italic',
+            fontSize: 8, color: !isResolved ? '#ff9a20' : '#6b7f96',
+            fontStyle: 'italic', fontWeight: !isResolved ? 700 : 400,
+            letterSpacing: '0.04em',
           }
-        }, 'auto-resolves when outcome is clear')
+        }, !isResolved
+            ? (splitHandsActive ? 'locked — finish splits' : 'locked — awaiting resolution')
+            : 'auto-resolves when outcome is clear')
       ),
       // Bet amount badge
       React.createElement('div', {
@@ -121,11 +149,22 @@ function OutcomeStrip({
         var profitStr = profit >= 0
           ? '+' + cur.symbol + fmtBet(Math.abs(profit))
           : '-' + cur.symbol + fmtBet(Math.abs(profit));
+        var locked = !isResolved;
 
         return React.createElement('button', {
           key: o.result,
-          'aria-label': 'Record hand result as ' + o.result + ' (' + profitStr + ')',
+          disabled: locked,
+          'aria-label': locked
+            ? o.result + ' — locked until hand resolves'
+            : 'Record hand result as ' + o.result + ' (' + profitStr + ')',
+          'aria-disabled': locked ? 'true' : undefined,
+          title: locked
+            ? (splitHandsActive
+                ? 'Resolve all split hands first'
+                : 'Locked — waiting for player bust / dealer ≥17 / blackjack')
+            : undefined,
           onClick: function () {
+            if (locked) return;
             onRecordResult(
               o.result === 'surrender' ? 'loss' : o.result,
               bet,
@@ -138,16 +177,20 @@ function OutcomeStrip({
             borderRadius: 8,
             background: o.bg,
             border: '1.5px solid ' + o.border,
-            cursor: 'pointer',
+            cursor: locked ? 'not-allowed' : 'pointer',
+            opacity: locked ? 0.4 : 1,
+            filter: locked ? 'grayscale(40%)' : 'none',
             transition: 'all 0.15s ease',
             position: 'relative',
           },
           onMouseEnter: function (e) {
+            if (locked) return;
             e.currentTarget.style.background = o.hoverBg;
             e.currentTarget.style.transform = 'translateY(-1px)';
             e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.3)';
           },
           onMouseLeave: function (e) {
+            if (locked) return;
             e.currentTarget.style.background = o.bg;
             e.currentTarget.style.transform = 'translateY(0)';
             e.currentTarget.style.boxShadow = 'none';
@@ -182,4 +225,12 @@ function OutcomeStrip({
       })
     )
   );
+}
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function OutcomeStrip(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  OutcomeStrip = React.memo(OutcomeStrip);
 }

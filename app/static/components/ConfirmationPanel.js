@@ -33,7 +33,9 @@
  *   pendingCards        array of { id, rank, suit, target } — pending queue
  */
 
-function ConfirmationPanel({ socket, confirmationMode, pendingCards = [] }) {
+function ConfirmationPanel({ confirmationMode, pendingCards = [] }) {
+  // PHASE 7 T3: socket from context.
+  var socket = React.useContext(window.SocketContext);
 
   // ── Local state ──────────────────────────────────────────────────────────
   // Subscribe to pending_cards_update events directly in this panel

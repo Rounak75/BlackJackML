@@ -502,3 +502,11 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
     </div>
   );
 }
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function CardGrid(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  CardGrid = React.memo(CardGrid);
+}

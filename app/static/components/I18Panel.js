@@ -57,3 +57,11 @@ function I18Panel({ count }) {
     </Widget>
   );
 }
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function I18Panel(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  I18Panel = React.memo(I18Panel);
+}

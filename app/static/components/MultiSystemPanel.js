@@ -50,7 +50,8 @@ var MultiSystemPanel = (function () {
   };
 
   function MultiSystemPanel(props) {
-    var socket = props.socket;
+    // PHASE 7 T3: socket from context.
+    var socket = React.useContext(window.SocketContext);
     var count  = props.count || {};
     var shoe   = props.shoe  || {};
 
@@ -264,3 +265,11 @@ var MultiSystemPanel = (function () {
 
   return MultiSystemPanel;
 })();
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function MultiSystemPanel(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  MultiSystemPanel = React.memo(MultiSystemPanel);
+}

@@ -107,3 +107,11 @@ function SessionStats({ session, currency }) {
     </Widget>
   );
 }
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function SessionStats(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  SessionStats = React.memo(SessionStats);
+}

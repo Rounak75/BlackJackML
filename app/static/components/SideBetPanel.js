@@ -304,3 +304,11 @@ function SideBetPanel({ sideBets }) {
     </>
   );
 }
+
+
+// PHASE 7 T4 — React.memo wrap. Script-mode reassignment of the
+// function declaration keeps `function SideBetPanel(` intact for the
+// build.sh smoke check while routing all consumers through memo.
+if (typeof React !== 'undefined' && React.memo) {
+  SideBetPanel = React.memo(SideBetPanel);
+}
