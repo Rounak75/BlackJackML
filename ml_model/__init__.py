@@ -1,45 +1,24 @@
 """
-blackjack/__init__.py — Core Game Engine Package
-─────────────────────────────────────────────────
-This package contains the pure Python game engine — no ML required.
-
-HOW TO USE DIRECTLY (without the web UI):
-    from blackjack import Shoe, CardCounter, BasicStrategy
-
-    shoe    = Shoe(num_decks=6)
-    counter = CardCounter(system="hi_lo", num_decks=6)
-    strategy = BasicStrategy()
-
-    card = shoe.deal()
-    counter.count_card(card)
-    print(f"True Count: {counter.true_count:.1f}")
+ml_model/__init__.py — ML Strategy & Shuffle Tracking Package
+─────────────────────────────────────────────────────────────
+PyTorch-backed components that live alongside the pure-Python
+game engine in `blackjack/`.
 
 WHAT EACH MODULE CONTAINS:
-    card.py       → Card, Deck, Shoe, Rank, Suit, ShuffleType
-    game.py       → Hand, Round, BlackjackTable, Action, HandResult
-    counting.py   → CardCounter (Hi-Lo, KO, Omega II, Zen)
-    strategy.py   → BasicStrategy (hard/soft/pair/surrender tables)
-    deviations.py → DeviationEngine (Illustrious 18 + Fab 4)
-    betting.py    → BettingEngine (Kelly Criterion + spread)
-    side_bets.py  → SideBetAnalyzer (Perfect Pairs, 21+3, Lucky Ladies)
-    # Note: Insurance is a core game mechanic handled in app/server.py, not here.
+    model.py            → BlackjackDecisionModel (ResidualNet + 3 heads)
+    train.py            → Trainer (writes models/best_model.pt)
+    simulate.py         → Simulator (training data + 3-way validation)
+    shuffle_tracker.py  → ShuffleTracker (LSTM + ace seq + Bayesian)
+
+These imports are deliberately lazy: importing the package itself
+does not pull torch unless you reach into a specific submodule.
+That keeps the web app importable when torch is not installed —
+server.py falls back to a stub ShuffleTracker in that case.
 """
 
-from .card     import Card, Deck, Shoe
-from .game     import Hand, Round, BlackjackTable
-from .counting import CardCounter
-from .strategy import BasicStrategy
-from .deviations import DeviationEngine
-from .betting  import BettingEngine
-from .side_bets import SideBetAnalyzer
-
-# __all__ controls what gets imported with "from blackjack import *"
 __all__ = [
-    'Card', 'Deck', 'Shoe',
-    'Hand', 'Round', 'BlackjackTable',
-    'CardCounter',
-    'BasicStrategy',
-    'DeviationEngine',
-    'BettingEngine',
-    'SideBetAnalyzer',
+    'BlackjackDecisionModel',
+    'Trainer',
+    'Simulator',
+    'ShuffleTracker',
 ]

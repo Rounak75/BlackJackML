@@ -105,6 +105,9 @@ except ImportError as _ml_err:
         def get_enhanced_true_count(self, tc, *a, **kw): return tc
         def get_count_adjustment(self): return 0.0
         def on_shuffle(self, *a, **kw): pass
+        def reset(self, *a, **kw): pass
+        def snapshot(self): return {}
+        def restore(self, snap): pass
         def get_state(self):
             return {'bayesian_confidence':0,'count_adjustment':0,
                     'ace_prediction':None,'shuffles_tracked':0}

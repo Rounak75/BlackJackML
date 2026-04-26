@@ -17,6 +17,7 @@ const COUNTING_SYSTEMS = {
   omega_ii:    { label: 'Omega II',     level: '★★★', desc: 'Level 2. More accurate than Hi-Lo, harder to maintain under pressure.' },
   zen:         { label: 'Zen Count',    level: '★★☆', desc: 'Level 2 balanced. Good accuracy vs difficulty trade-off.' },
   wong_halves: { label: 'Wong Halves',  level: '★★★', desc: 'Level 3. Fractional values (±0.5, ±1, ±1.5). Most accurate balanced system.' },
+  uston_apc:   { label: 'Uston APC',    level: '★★★', desc: 'Level 3. Highest BC (.91) & IC (.90). Ace = 0 in main count, tracked via ace side count.' },
 };
 
 /* ── Data: shuffle types with their effect on the ML tracker ─ */
