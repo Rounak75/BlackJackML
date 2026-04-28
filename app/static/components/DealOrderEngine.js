@@ -552,16 +552,16 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
             className: 'de-badge',
             title: 'Deal Engine mode: cards go to seats only. Player & Dealer hands are isolated.',
             style: {
-              background: 'rgba(255,212,71,0.15)',
-              border: '1px solid rgba(255,212,71,0.5)',
-              color: '#ffd447',
-              fontSize: '0.55rem',
+              background: 'transparent',
+              border: 'var(--border-w) solid var(--amber)',
+              color: 'var(--amber)',
+              fontSize: 'var(--font-xs)',
               letterSpacing: '0.05em',
               animation: 'none',
             }
           },
             React.createElement('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 4 } },
-              React.createElement(Icon, { name: 'target', size: 9, color: '#ffd447' }),
+              React.createElement(Icon, { name: 'target', size: 9, color: 'var(--amber)' }),
               ' SEATS ONLY'
             )
           ),
