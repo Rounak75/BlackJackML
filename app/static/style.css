@@ -192,7 +192,7 @@ body {
   background: var(--bg-3);
   border-color: var(--gold);
   transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.55), 0 0 10px rgba(255,212,71,0.15);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.55);
   z-index: 1;
   color: #fff;
 }
@@ -200,7 +200,7 @@ body {
 .card-btn:active { transform: translateY(-1px); }
 
 .card-btn.red-card          { color: #ff7a7a; }
-.card-btn.red-card:hover    { border-color: #ff5c5c; box-shadow: 0 8px 20px rgba(0,0,0,0.55), 0 0 10px rgba(255,92,92,0.2); color: #ff9999; }
+.card-btn.red-card:hover    { border-color: #ff5c5c; box-shadow: 0 8px 20px rgba(0,0,0,0.55); color: #ff9999; }
 
 .card-btn.count-pos::after  { content: "+"; position: absolute; top: 2px; right: 3px; font-size: 0.52rem; color: var(--jade); line-height: 1; }
 .card-btn.count-neg::after  { content: "−"; position: absolute; top: 2px; right: 3px; font-size: 0.52rem; color: var(--ruby); line-height: 1; }
@@ -786,9 +786,7 @@ body {
 
 .de-dot.active {
   border-color: var(--jade) !important;
-  background: rgba(68, 232, 130, 0.12) !important;
   color: var(--jade) !important;
-  box-shadow: 0 0 8px rgba(68, 232, 130, 0.3);
   animation: de-pulse-seat 0.8s ease-in-out infinite;
 }
 
@@ -986,8 +984,8 @@ body {
   height: 74px;
   border-top-left-radius: 145px;
   border-top-right-radius: 145px;
-  background: linear-gradient(180deg, #0d2618, #0a1a10);
-  border: 1px solid rgba(40, 80, 50, 0.5);
+  background: var(--surface-deep);
+  border: var(--border-w) solid var(--border);
   border-bottom: none;
 }
 
@@ -1052,17 +1050,13 @@ body {
 .de-seat.occ { color: var(--text-1); }
 
 .de-seat.me {
-  border-color: var(--gold);
-  background: rgba(255, 212, 71, 0.12);
-  color: var(--gold);
-  box-shadow: 0 0 14px rgba(255, 212, 71, 0.2);
+  border-color: var(--amber);
+  color: var(--amber);
 }
 
 .de-seat.active-deal {
   border-color: var(--jade) !important;
-  background: rgba(68, 232, 130, 0.12) !important;
   color: var(--jade) !important;
-  box-shadow: 0 0 12px rgba(68, 232, 130, 0.3) !important;
   animation: de-pulse-seat 0.8s ease-in-out infinite;
 }
 
@@ -1509,8 +1503,8 @@ body {
   height: 74px;
   border-top-left-radius: 145px;
   border-top-right-radius: 145px;
-  background: linear-gradient(180deg, #0d2618, #0a1a10);
-  border: 1px solid rgba(40, 80, 50, 0.5);
+  background: var(--surface-deep);
+  border: var(--border-w) solid var(--border);
   border-bottom: none;
 }
 
@@ -1575,17 +1569,13 @@ body {
 .de-seat.occ { color: var(--text-1); }
 
 .de-seat.me {
-  border-color: var(--gold);
-  background: rgba(255, 212, 71, 0.12);
-  color: var(--gold);
-  box-shadow: 0 0 14px rgba(255, 212, 71, 0.2);
+  border-color: var(--amber);
+  color: var(--amber);
 }
 
 .de-seat.active-deal {
   border-color: var(--jade) !important;
-  background: rgba(68, 232, 130, 0.12) !important;
   color: var(--jade) !important;
-  box-shadow: 0 0 12px rgba(68, 232, 130, 0.3) !important;
   animation: de-pulse-seat 0.8s ease-in-out infinite;
 }
 
@@ -2025,11 +2015,6 @@ body {
 .center-column {
   display: flex;
   flex-direction: column;
-}
-
-/* Collapsed bar hover glow */
-.card-grid-collapsed-bar:hover {
-  box-shadow: 0 0 16px rgba(255,212,71,0.15);
 }
 
 /* fadeIn for result banners */
