@@ -49,7 +49,7 @@ build() {
               SideBetPanel HandDisplay CardGrid StrategyRefTable \
               ShoePanel EdgeMeter SessionStats ShuffleTracker \
               CountHistory I18Panel AnalyticsPanel LiveOverlayPanel CenterToolBar \
-              DealOrderEngine \
+              DealOrderEngine SpeedShufflePrompt \
               SplitHandPanel SideCountPanel CasinoRiskMeter StopAlerts \
               SeenCardsPanel ZoneConfigPanel ConfirmationPanel WongPanel ScannerHub \
               BettingRampPanel BetSpreadHelper MultiSystemPanel \
@@ -113,6 +113,7 @@ PYEOF
     'function AnalyticsPanel('
     'function HelpChip('
     'function Icon('
+    'function SpeedShufflePrompt('
     'var BettingRampPanel'
     'PerfProbe = function'
   )
