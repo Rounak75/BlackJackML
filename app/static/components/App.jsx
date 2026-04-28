@@ -854,22 +854,24 @@ function App() {
 
       {/* ── LAYOUT: 3-column (normal) or single centered column (zen/speed) ── */}
       {isMinimal ? (
-        /* ═══ ZEN / SPEED: single centered column ═══════════════════════ */
+        /* ═══ ZEN / SPEED: single centered column — Spec B density contrast ═══
+             Both modes share width (640px); padding/gap and the Speed border
+             carry the visual difference. */
         <div style={{
-          maxWidth: isZen ? 780 : 800,
+          maxWidth: 640,
           margin: '0 auto',
-          padding: isZen ? 20 : 10,
+          padding: isZen ? 24 : 8,
           paddingBottom: 38, // PHASE 2: clear room for StatusBar
           width: '100%', flex: 1,
-          display: 'flex', flexDirection: 'column', gap: isZen ? 14 : 8,
+          display: 'flex', flexDirection: 'column', gap: isZen ? 16 : 6,
           ...(isSpeed ? {
-            borderLeft: '2px solid rgba(68,232,130,0.15)',
-            borderRight: '2px solid rgba(68,232,130,0.15)',
-            boxShadow: '0 0 40px rgba(68,232,130,0.04)',
+            borderLeft: '2px solid rgba(68,232,130,0.45)',
+            borderRight: '2px solid rgba(68,232,130,0.45)',
+            boxShadow: '0 0 32px rgba(68,232,130,0.08)',
           } : {}),
         }}>
 
-          {/* Speed mode indicator badge */}
+          {/* Speed mode indicator badge — short hint, full keymap moved to HotkeyOverlay */}
           {isSpeed && (
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -882,8 +884,8 @@ function App() {
               }}>
                 <span style={{ fontSize: 12 }}>⚡</span>
                 SPEED MODE
-                <span style={{ color: '#6b7f96', fontWeight: 500, letterSpacing: '0.05em' }}>
-                  — keys: 2-9 J Q K A=suit prompt · ⇧+rank=spades · 1-4 picks suit · H/X/B/P/R · W/L/U · N · ⇧+S=shuffle · ?=help
+                <span style={{ color: '#6b7f96', fontWeight: 500, letterSpacing: '0.05em', fontSize: 9 }}>
+                  — press ? for keys
                 </span>
               </div>
             </div>
