@@ -914,7 +914,7 @@ function App() {
             dealerUpcard={dealerUp}
             dealerHand={dealerHand}
             dealerMustDraw={dealerMustDraw}
-            sideBets={isZen ? sideBets : null}
+            sideBets={null}
             insurance={isSpeed ? null : insurance}
             isDoubled={isDoubled}
             tookInsurance={tookInsurance}
@@ -963,18 +963,8 @@ function App() {
             />
           )}
 
-          {/* Zen: show side bet EV below cards (pros use this for bet sizing) */}
-          {isZen && (
-            <CenterToolbar
-              recommendation={rec}
-              count={count}
-              playerHand={playerHand}
-              dealerUpcard={dealerUp}
-              sideBets={sideBets}
-              analytics={gameState?.analytics}
-              shoe={shoe}
-            />
-          )}
+          {/* Spec B: CenterToolbar removed from Zen — analytics belong in Default
+              (study/training mode). Real-game Zen keeps the screen clean. */}
         </div>
       ) : (
         /* ═══ NORMAL: 3-column grid ═════════════════════════════════════ */
