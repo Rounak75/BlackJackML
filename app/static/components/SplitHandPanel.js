@@ -24,8 +24,8 @@
  */
 
 const ACTION_COLORS_SP = {
-  HIT: '#ff5c5c', STAND: '#44e882', DOUBLE: '#ffd447',
-  SPLIT: '#b99bff', SURRENDER: '#ff9944',
+  HIT: 'var(--ruby)', STAND: 'var(--jade)', DOUBLE: 'var(--amber)',
+  SPLIT: 'var(--ameth)', SURRENDER: '#ff9944',
 };
 
 function SplitHandCard({ cardStr }) {
@@ -37,9 +37,9 @@ function SplitHandCard({ cardStr }) {
     <div style={{
       display: 'flex', flexDirection: 'column', alignItems: 'center',
       justifyContent: 'center', width: 40, height: 56, borderRadius: 6,
-      background: '#1a2236', border: `1.5px solid ${isRed ? 'rgba(255,120,120,0.5)' : 'rgba(255,255,255,0.2)'}`,
-      fontFamily: 'DM Mono, monospace', fontWeight: 800,
-      color: isRed ? '#ff7a7a' : '#ffffff',
+      background: 'var(--surface-raised)', border: `1.5px solid ${isRed ? 'rgba(255,120,120,0.5)' : 'rgba(255,255,255,0.2)'}`,
+      fontFamily: 'var(--font-mono)', fontWeight: 800,
+      color: isRed ? '#ff7a7a' : 'var(--text-0)',
       boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
       fontSize: 13, gap: 1,
     }}>
@@ -56,14 +56,14 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
 
   const rec    = hand.recommendation;
   const action = rec?.action;
-  const acCol  = action ? (ACTION_COLORS_SP[action] || '#ffffff') : '#94a7c4';
+  const acCol  = action ? (ACTION_COLORS_SP[action] || 'var(--text-0)') : 'var(--text-2)';
   const val    = hand.value;
   const isBust = hand.is_bust;
   const isBJ   = hand.is_blackjack;
   const isSplitAce = hand.is_split_ace;
 
   const status = isBust ? 'BUST' : isBJ ? 'BJ' : hand.cards.length === 0 ? 'WAITING' : null;
-  const statusColor = isBust ? '#ff5c5c' : isBJ ? '#ffd447' : '#94a7c4';
+  const statusColor = isBust ? 'var(--ruby)' : isBJ ? 'var(--amber)' : 'var(--text-2)';
 
   return (
     <div style={{
@@ -78,25 +78,25 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, fontWeight: 800, color: isActive ? '#ffd447' : '#94a7c4',
+          <span style={{ fontSize: 10, fontWeight: 800, color: isActive ? 'var(--amber)' : 'var(--text-2)',
             textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             Hand {handNumber}
           </span>
           {isActive && (
-            <span style={{ fontSize: 8, fontWeight: 700, color: '#ffd447',
+            <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--amber)',
               background: 'rgba(255,212,71,0.15)', border: '1px solid rgba(255,212,71,0.4)',
               borderRadius: 3, padding: '1px 5px' }}>ACTIVE</span>
           )}
           {isSplitAce && (
-            <span style={{ fontSize: 8, color: '#b99bff',
+            <span style={{ fontSize: 8, color: 'var(--ameth)',
               background: 'rgba(185,155,255,0.12)', border: '1px solid rgba(185,155,255,0.3)',
               borderRadius: 3, padding: '1px 5px' }}>ACE — 1 card</span>
           )}
         </div>
         {/* Hand total */}
         <div style={{
-          fontSize: 18, fontWeight: 900, fontFamily: 'DM Mono, monospace',
-          color: isBust ? '#ff5c5c' : isBJ ? '#ffd447' : '#ffffff',
+          fontSize: 18, fontWeight: 900, fontFamily: 'var(--font-mono)',
+          color: isBust ? 'var(--ruby)' : isBJ ? 'var(--amber)' : 'var(--text-0)',
         }}>
           {hand.cards.length > 0 ? (hand.is_soft && !isBust ? `S${val}` : val) : '—'}
           {status && <span style={{ fontSize: 11, color: statusColor, marginLeft: 5 }}>{status}</span>}
@@ -106,7 +106,7 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
       {/* Cards */}
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 10, minHeight: 60 }}>
         {hand.cards.length === 0
-          ? <div style={{ fontSize: 10, color: '#94a7c4', alignSelf: 'center' }}>Deal a card</div>
+          ? <div style={{ fontSize: 10, color: 'var(--text-2)', alignSelf: 'center' }}>Deal a card</div>
           : hand.cards.map((c, i) => <SplitHandCard key={i} cardStr={c} />)
         }
       </div>
@@ -119,23 +119,23 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
           <span style={{ fontSize: 20, fontWeight: 900, color: acCol,
-            fontFamily: 'Syne, sans-serif', textShadow: `0 0 12px ${acCol}50` }}>
+            fontFamily: 'var(--font-display)', textShadow: `0 0 12px ${acCol}50` }}>
             {action}
           </span>
           {rec.is_deviation && (
-            <span style={{ fontSize: 8, fontWeight: 700, color: '#b99bff',
+            <span style={{ fontSize: 8, fontWeight: 700, color: 'var(--ameth)',
               background: 'rgba(185,155,255,0.12)', border: '1px solid rgba(185,155,255,0.3)',
               borderRadius: 3, padding: '1px 4px' }}>DEV</span>
           )}
           {isSplitAce && (
-            <span style={{ fontSize: 9, color: '#94a7c4' }}>Forced STAND (split aces)</span>
+            <span style={{ fontSize: 9, color: 'var(--text-2)' }}>Forced STAND (split aces)</span>
           )}
         </div>
       )}
 
       {/* Waiting / complete states */}
       {!isActive && !isBust && !isBJ && hand.cards.length > 0 && (
-        <div style={{ fontSize: 10, color: '#94a7c4', textAlign: 'center', paddingTop: 4 }}>
+        <div style={{ fontSize: 10, color: 'var(--text-2)', textAlign: 'center', paddingTop: 4 }}>
           {action ? `→ ${action} when active` : 'Complete'}
         </div>
       )}
@@ -149,7 +149,7 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
             ? 'rgba(255,92,92,0.15)' : 'rgba(106,175,255,0.15)',
           border: isBust
             ? '2px solid rgba(255,92,92,0.6)' : '2px solid rgba(106,175,255,0.6)',
-          color: isBust ? '#ff5c5c' : '#6aafff',
+          color: isBust ? 'var(--ruby)' : 'var(--sapph)',
           animation: 'split-advance-pulse 1.5s ease-in-out infinite',
         }}>
           {isBust
@@ -181,38 +181,38 @@ function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, onNextHand 
 
   return (
     <div style={{
-      background: '#1a2236', border: '1.5px solid rgba(255,212,71,0.3)',
+      background: 'var(--surface-raised)', border: '1.5px solid rgba(255,212,71,0.3)',
       borderRadius: 12, padding: '14px',
     }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, color: '#ffd447',
-            textTransform: 'uppercase', letterSpacing: '0.09em', fontFamily: 'Syne, sans-serif' }}>
+          <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--amber)',
+            textTransform: 'uppercase', letterSpacing: '0.09em', fontFamily: 'var(--font-display)' }}>
             ✂ Split Hands
           </span>
           {/* PHASE 8.1: Hand X of Y pill — discrete, glanceable */}
           <span style={{
-            fontSize: 11, fontWeight: 800, color: '#ffd447',
+            fontSize: 11, fontWeight: 800, color: 'var(--amber)',
             background: 'rgba(255,212,71,0.12)',
             border: '1px solid rgba(255,212,71,0.4)',
             borderRadius: 4, padding: '2px 8px',
             textTransform: 'uppercase', letterSpacing: '0.08em',
-            fontFamily: 'DM Mono, monospace',
+            fontFamily: 'var(--font-mono)',
           }}>
             Hand {activeHandIndex + 1} of {splitHands.length}
           </span>
         </div>
         {dealerUpcard && (
-          <span style={{ fontSize: 10, color: '#94a7c4' }}>
-            Dealer shows: <b style={{ color: '#ffffff' }}>{dealerUpcard}</b>
+          <span style={{ fontSize: 10, color: 'var(--text-2)' }}>
+            Dealer shows: <b style={{ color: 'var(--text-0)' }}>{dealerUpcard}</b>
           </span>
         )}
       </div>
 
       {/* Rules reminder */}
       <div style={{
-        fontSize: 9, color: '#94a7c4', marginBottom: 10,
+        fontSize: 9, color: 'var(--text-2)', marginBottom: 10,
         padding: '5px 8px', borderRadius: 5,
         background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)',
         lineHeight: 1.6,
@@ -241,7 +241,7 @@ function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, onNextHand 
         <div style={{
           marginTop: 10, padding: '8px', borderRadius: 6, textAlign: 'center',
           background: 'rgba(68,232,130,0.08)', border: '1px solid rgba(68,232,130,0.3)',
-          fontSize: 11, color: '#44e882', fontWeight: 700,
+          fontSize: 11, color: 'var(--jade)', fontWeight: 700,
         }}>
           All split hands complete — record results then press N for new hand
         </div>
