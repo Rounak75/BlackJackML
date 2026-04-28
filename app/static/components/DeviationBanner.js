@@ -58,23 +58,24 @@ function DeviationBanner({ recommendation, count, playerHand, dealerUpcard }) {
 
   // Action color tokens (kept consistent with ActionPanel)
   const AC = {
-    HIT: '#44e882', STAND: '#6aafff', DOUBLE: '#ffd447',
-    'DOUBLE DOWN': '#ffd447', SPLIT: '#b99bff', SURRENDER: '#ff5c5c',
+    HIT: 'var(--jade)', STAND: 'var(--sapph)', DOUBLE: 'var(--amber)',
+    'DOUBLE DOWN': 'var(--amber)', SPLIT: 'var(--ameth)', SURRENDER: 'var(--ruby)',
   };
-  const actCol  = AC[action]      || '#f0f4ff';
-  const baseCol = AC[basicAction] || '#94a7c4';
+  const actCol  = AC[action]      || 'var(--text-0)';
+  const baseCol = AC[basicAction] || 'var(--text-2)';
 
   return (
     <div
       role="status"
       aria-label={`Deviation: ${handLabel} vs ${upRank}, ${basicAction || 'basic'} to ${action} at TC ${dir} ${thr}`}
       style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        padding: '8px 18px',
-        background: 'linear-gradient(90deg, rgba(185,155,255,0.18), rgba(185,155,255,0.04) 60%, transparent)',
-        borderTop: '1px solid rgba(185,155,255,0.35)',
-        borderBottom: '1.5px solid rgba(185,155,255,0.55)',
-        color: '#f0f4ff',
+        display: 'flex', alignItems: 'center', gap: 'var(--space-3)',
+        padding: 'var(--space-2) var(--space-4)',
+        background: 'var(--surface-raised)',
+        borderTop: 'var(--border-w) solid var(--ameth)',
+        borderBottom: 'var(--border-w) solid var(--ameth)',
+        borderLeft: '4px solid var(--ameth)',
+        color: 'var(--text-0)',
       }}
     >
       {/* DEV badge */}
@@ -85,7 +86,7 @@ function DeviationBanner({ recommendation, count, playerHand, dealerUpcard }) {
         padding: '4px 10px', borderRadius: 6,
         background: 'rgba(185,155,255,0.25)',
         border: '1px solid rgba(185,155,255,0.7)',
-        color: '#d4c0ff', fontFamily: 'DM Mono, monospace',
+        color: '#d4c0ff', fontFamily: 'var(--font-mono)',
       }}>
         ⚡ DEV
       </div>
@@ -93,16 +94,16 @@ function DeviationBanner({ recommendation, count, playerHand, dealerUpcard }) {
       {/* Hand vs upcard */}
       <div style={{
         flexShrink: 0, fontSize: 13, fontWeight: 700,
-        fontFamily: 'DM Mono, monospace', color: '#ccdaec',
+        fontFamily: 'var(--font-mono)', color: 'var(--text-1)',
         letterSpacing: '0.04em',
       }}>
-        {handLabel} <span style={{ color: '#6b7f96' }}>vs</span> {upRank}
+        {handLabel} <span style={{ color: 'var(--text-2)' }}>vs</span> {upRank}
       </div>
 
       {/* Basic → Deviated transition */}
       <div style={{
         flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6,
-        fontFamily: 'Syne, sans-serif',
+        fontFamily: 'var(--font-display)',
       }}>
         <span style={{
           fontSize: 11, fontWeight: 700,
@@ -112,7 +113,7 @@ function DeviationBanner({ recommendation, count, playerHand, dealerUpcard }) {
         }}>
           {basicAction || '—'}
         </span>
-        <span aria-hidden="true" style={{ fontSize: 12, color: '#b99bff' }}>→</span>
+        <span aria-hidden="true" style={{ fontSize: 12, color: 'var(--ameth)' }}>→</span>
         <span style={{
           fontSize: 15, fontWeight: 900,
           color: actCol, letterSpacing: '0.04em',
@@ -128,19 +129,19 @@ function DeviationBanner({ recommendation, count, playerHand, dealerUpcard }) {
       {/* Trigger + live TC + delta */}
       <div style={{
         flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12,
-        fontSize: 11, fontFamily: 'DM Mono, monospace',
+        fontSize: 11, fontFamily: 'var(--font-mono)',
       }}>
-        <div style={{ color: '#b8ccdf' }}>
+        <div style={{ color: 'var(--text-2)' }}>
           Trigger:
           <span style={{ marginLeft: 5, fontWeight: 800, color: '#d4c0ff' }}>
             TC {dir} {thr >= 0 && dir === '>=' ? '+' : ''}{thr}
           </span>
         </div>
-        <div style={{ color: '#b8ccdf' }}>
+        <div style={{ color: 'var(--text-2)' }}>
           Now:
           <span style={{
             marginLeft: 5, fontWeight: 900,
-            color: triggered ? '#44e882' : '#ff9a20',
+            color: triggered ? 'var(--jade)' : 'var(--amber)',
           }}>
             {tc >= 0 ? '+' : ''}{tc.toFixed(1)}
           </span>
@@ -149,7 +150,7 @@ function DeviationBanner({ recommendation, count, playerHand, dealerUpcard }) {
           padding: '3px 8px', borderRadius: 5,
           background: triggered ? 'rgba(68,232,130,0.12)' : 'rgba(255,154,32,0.12)',
           border: `1px solid ${triggered ? 'rgba(68,232,130,0.4)' : 'rgba(255,154,32,0.4)'}`,
-          color:  triggered ? '#44e882' : '#ff9a20',
+          color:  triggered ? 'var(--jade)' : 'var(--amber)',
           fontWeight: 800, letterSpacing: '0.04em',
         }}>
           {triggered ? 'ACTIVE' : `Δ ${Math.abs(delta).toFixed(1)}`}
