@@ -1142,10 +1142,18 @@ BlackJackML-main/
 │           ├── AccordionPanel.js Collapsible wrapper for Tier 2 reference
 │           │                     panels. Smooth height animation, collapsed
 │           │                     by default to reduce scroll noise.
-│           ├── ActionPanel.js    HIT / STAND / DOUBLE / SPLIT buttons
+│           ├── ActionPanel.js    The recommendation hero — big colored
+│           │                     verb, 4px state stripe, optional "Why?"
+│           │                     panel, last-3-actions strip, Speed-mode
+│           │                     jumbo verb + outcome-flash overlay.
 │           ├── AnalyticsPanel.js Detailed session analytics
+│           ├── BetSpreadHelper.js Visual bet-spread aid (signature row,
+│           │                     EV per unit, bankroll context).
 │           ├── BettingPanel.js   Bet sizing recommendations + bankroll
-│           ├── CardGrid.js       The 52-card input grid
+│           ├── BettingRampPanel.js Tabular bet ramp by true count.
+│           ├── CardGrid.js       The 52-card input grid (compact rank-only
+│           │                     strip with suit popover by default;
+│           │                     full 13×4 grid behind a "Full Grid" toggle).
 │           ├── CasinoRiskMeter.js Casino detection risk indicator
 │           ├── CenterToolBar.js  Centre control bar
 │           ├── CompDepAlert.js   Composition-dependent strategy alerts
@@ -1161,10 +1169,35 @@ BlackJackML-main/
 │           │                     when off. Activate: __BJDebug.enable(4)
 │           │                     or Ctrl+Shift+D. Floating draggable panel
 │           │                     with timeline, state, network, perf, ML tabs.
+│           ├── DeviationBanner.js Full-width banner shown when the current
+│           │                     play is a count-driven deviation from
+│           │                     basic strategy. Hidden in Speed mode.
+│           ├── DragLayoutEditor.js Drag-and-drop layout editor that
+│           │                     persists left-column panel order and
+│           │                     right-column tab order to localStorage.
 │           ├── EdgeMeter.js      Player edge visual indicator
+│           ├── ErrorBoundary.js  Top-level React error boundary that
+│           │                     renders a fallback UI on render crashes
+│           │                     instead of taking down the whole app.
 │           ├── HandDisplay.js    Current hand display
+│           ├── HelpChip.js       Inline help chip (info hover with
+│           │                     contextual explanation pop).
+│           ├── HotkeyOverlay.js  Modal keyboard shortcut reference,
+│           │                     opened with `?` and closed with `Esc`
+│           │                     or a backdrop click.
 │           ├── I18Panel.js       Illustrious 18 deviation display
+│           ├── icons.js          Shared Lucide icon helper used by every
+│           │                     panel that renders an `<Icon name="..." />`.
 │           ├── LiveOverlayPanel.jsx  Live scan overlay panel
+│           ├── MultiSystemPanel.js Side-by-side comparison of every
+│           │                     counting system on the same shoe.
+│           ├── OutcomeStrip.js   Recent-hand outcome strip (W/L/P chips
+│           │                     + cumulative P/L).
+│           ├── perfProbe.js      Lightweight performance probe used by
+│           │                     the debug timeline tab.
+│           ├── ScannerHub.js     Unified Scanner-tab container — mounts
+│           │                     LiveOverlayPanel + ZoneConfig +
+│           │                     Confirmation + Wonging sub-sections.
 │           ├── SeenCardsPanel.js Other players' seen cards display
 │           │                     (Feature 2). Hidden when empty.
 │           ├── SessionStats.js   Session win/loss stats
@@ -1172,10 +1205,20 @@ BlackJackML-main/
 │           ├── ShuffleTracker.js Shuffle tracking display
 │           ├── SideBetPanel.js   Side bet EV analysis
 │           ├── SideCountPanel.js Side count (aces, fives, tens)
+│           ├── SpeedShufflePrompt.js Speed-mode-only banner that appears
+│           │                     when penetration ≥ 75%. `Y` shuffles,
+│           │                     `Esc` dismisses until the next shoe.
 │           ├── SplitHandPanel.js Split hand UI
+│           ├── StatusBar.js      Sticky bottom 28-px status strip
+│           │                     (Hands · Pen · Wong · AI · RoR · Update
+│           │                     · `?` chip). Slim variant in Zen / Speed.
 │           ├── StopAlerts.js     Session stop-loss / stop-win alerts
 │           ├── StrategyRefTable.js  Strategy reference table
-│           ├── TopBar.js         Top navigation bar
+│           ├── TabStrip.js       Tabbed container for the right column —
+│           │                     only the active tab body renders.
+│           ├── TopBar.js         Top navigation bar — brand mark, mode
+│           │                     switcher (Normal / Zen / Speed), TC hero,
+│           │                     RC/ML and Edge clusters. Slim in Speed.
 │           ├── Widget.js         Reusable widget wrapper
 │           ├── WongPanel.js      Wonging / back-counting mode panel
 │           │                     (Feature 5). Real-time TC bar, SIT/LEAVE
@@ -1701,13 +1744,79 @@ When you have a pair, a **SPLIT PAIR** button appears with a pulsing purple bord
 
 ## ⌨️ Keyboard Shortcuts
 
+Press `?` in the dashboard to open the in-app cheatsheet (HotkeyOverlay).
+
+**Card entry**
+
 | Key | Action |
 |-----|--------|
-| `N` | New hand (count is preserved) |
-| `S` | Shuffle — resets running count to 0 |
-| `P` | Set deal target to Player |
-| `D` | Set deal target to Dealer |
-| `Ctrl+Z` / `Cmd+Z` | Undo last card dealt |
+| `2`–`9` | Open the suit picker for that rank |
+| `0` | Open the suit picker for 10 |
+| `1` | Open the suit picker for A |
+| `J` / `Q` / `K` | Open the suit picker for that face card |
+| `1` / `2` / `3` / `4` (with the suit picker open) | ♠ / ♥ / ♦ / ♣ |
+| `Shift`+`rank` | Quick-fire as ♠ (skips the suit picker) |
+
+**Deal target** (which hand the next card goes to)
+
+| Key | Action |
+|-----|--------|
+| `A` (or `,` / `H`) | Player |
+| `S` (or `.` / `X`) | Dealer |
+| `D` (or `/`) | Seen (count only, no hand) |
+
+**Player action** (informational — these don't deal cards, just label the next move)
+
+| Key | Action |
+|-----|--------|
+| `H` | Hit (also retargets to player) |
+| `X` | Stand (also retargets to dealer) |
+| `B` | Double down |
+| `P` | Split pair |
+| `R` | Surrender |
+
+**Record result**
+
+| Key | Action |
+|-----|--------|
+| `W` | Win |
+| `L` | Loss |
+| `U` | Push |
+
+**Bet ramp**
+
+| Key | Action |
+|-----|--------|
+| `[` | Decrease bet by 1 unit |
+| `]` | Increase bet by 1 unit |
+| `=` | Set bet to Kelly recommendation |
+
+**Session**
+
+| Key | Action |
+|-----|--------|
+| `N` | New hand (count persists across hands within a shoe) |
+| `Shift`+`S` (held) | Shuffle the shoe (resets the count) |
+| `Ctrl`+`Z` / `Cmd`+`Z` | Undo last card |
+| `Ctrl`+`Shift`+`Z` / `Cmd`+`Shift`+`Z` | Redo last undo |
+
+**Interface**
+
+| Key | Action |
+|-----|--------|
+| `M` | Cycle UI mode (Normal → Zen → Speed) |
+| `T` | Toggle the floating True-Count HUD |
+| `Shift`+`L` | Open the drag-and-drop layout editor |
+| `Shift`+`E` | Toggle the Deal-Order Engine on/off |
+| `?` | Open / close the keyboard shortcut overlay |
+| `Esc` | Close any open popover or modal |
+
+**Speed mode only**
+
+| Key | Action |
+|-----|--------|
+| `Y` | Confirm the shuffle prompt (appears at penetration ≥ 75%) |
+| `Esc` | Dismiss the shuffle prompt until the next shoe |
 
 > Shortcuts are automatically disabled when your cursor is inside a text input or dropdown. Click anywhere outside the input first if shortcuts stop working.
 
@@ -2299,12 +2408,25 @@ The dashboard is not a fixed page. It has three display modes, two reorderable p
 
 ### UI Modes — Normal / Zen / Speed
 
-Click the mode toggle in the top bar (or press `Z`) to cycle:
+Click the mode toggle in the top bar (or press `M`) to cycle:
+
 - **Normal** — full dashboard with every panel and helper visible. Default.
-- **Zen** — minimal layout: count, recommendation, hand entry, and one bet number. Strips away analytics, stop alerts, and reference tables. Designed for live casino play where you only need the answer.
-- **Speed** — even tighter than Zen. Removes secondary widgets (history, side bets, deviation banner) so the eye doesn't have to choose. Designed for fast online tables.
+- **Zen** — airy minimal layout: count, recommendation, hand entry, deviation banner, and one bet number. Strips away analytics, stop alerts, side-bet chips, the CenterToolbar, and the Deal-Order Engine. The right column is hidden. Designed for live casino play where you only need the answer.
+- **Speed** — tightest layout, with extra signals tuned for fast online tables:
+  - Action verb is rendered jumbo (64 px, scaling to 48 px below 480 px viewport) instead of the 38 px / 48 px used in Normal / Zen.
+  - TopBar is slim — RC/ML and Edge clusters are hidden; only the brand mark, mode switcher, and TC remain.
+  - StatusBar drops to a slim variant (Hands · Pen · Wong · AI · `?` chip), hiding Risk-of-Ruin and the last-update cell.
+  - DeviationBanner is hidden (Speed prioritizes the action verb and ignores the basic-vs-deviation comparison).
+  - Side-bet chips and the CenterToolbar are hidden; the Deal-Order Engine is hidden too (its state is preserved — switching back to Normal restores the live snapshot).
+  - The deal target sticks during the dealer draw — if the dealer is hitting, the next card stays routed to the dealer until the round resolves, so you don't have to re-target between cards.
+  - When a hand resolves, the action panel briefly flashes WIN / LOSE / PUSH (~700 ms) before the next hand starts.
+  - **Shuffle prompt** — at penetration ≥ 75% the SpeedShufflePrompt appears as an amber banner. Press `Y` to shuffle, `Esc` to dismiss until the next shoe.
 
 The current mode is saved as `bjml_ui_mode` in `localStorage` and reapplied on the next load.
+
+### Visual design system
+
+The dashboard uses a token-based design system (Inter for body and display, JetBrains Mono for numerics, neutral-dark backgrounds, jade/ruby/sapph/amber/ameth state colors). Every component routes through CSS custom properties — `var(--surface-raised)`, `var(--font-mono)`, `var(--space-3)`, `var(--radius-md)`, `var(--amber)`, etc. — so a single edit in `style.css` cascades to every panel. The legacy `--gold` token is aliased to `--amber` and will be removed in a future pass; new code must reference `--amber` directly.
 
 ### Tabbed Right Column
 
@@ -3129,7 +3251,37 @@ __BJDebug.getPerfData()     // Get current FPS, memory, render counts
 
 ## 🐛 Bug Fix Changelog
 
-### v5 — Current
+### v6 — Current
+
+**Spec A — Deal-Order Engine + hotkeys (`app/static/components/CardGrid.js`, `App.jsx`, `DealOrderEngine.js`, `HotkeyOverlay.js`)**
+- **Three-state deal target row** — the target chip row now reflects DOE state: when the engine is off, all three chips (Player / Dealer / Seen) are interactive; when DOE is on and a round is in progress, the row goes read-only and is lit by `doeTarget`; when DOE is on and the round is done, all three chips are interactive again.
+- **A/S/D primary target shortcuts** — Player / Dealer / Seen now map to `A` / `S` / `D` respectively. Legacy `,` / `.` / `/` and `H` / `X` / `/` continue to work as aliases. The `H` and `X` action keys also retarget to player and dealer as a side effect, matching how a live counter actually thinks.
+- **Imperative DOE ref + routing** — `DealOrderEngine` exposes `getDealRound()` so `App.jsx` can route `deal_card` events to seats when DOE is active and a round is in progress. The Player / Dealer / Seen hands stay isolated from the seat-only routing, so the dashboard's basic-strategy state never picks up phantom cards.
+- **CardGrid render order fix** — `CardGrid` now always renders above `DealOrderEngine` regardless of UI mode, so the deal grid stays in the same spot when toggling DOE.
+
+**Spec B — Mode differentiation (`App.jsx`, `TopBar.js`, `StatusBar.js`, `ActionPanel.js`, `CardGrid.js`, `DeviationBanner.js`, `SpeedShufflePrompt.js`, `constants.js`)**
+- **Density contrast across modes** — Zen renders airy spacing; Speed clamps everything tight and adds a 1-px bordered container so the mode reads at a glance.
+- **Slim TopBar in Speed** — RC/ML and Edge clusters are hidden, leaving brand mark + mode switcher + TC.
+- **Slim StatusBar in Zen and Speed** — Risk-of-Ruin and the last-update cell are hidden in both modes.
+- **DeviationBanner visible in Zen, hidden in Speed** — Zen players still want to see when basic strategy and the deviation diverge; Speed players want only the action verb.
+- **Side bets and CenterToolbar hidden in Zen** — both are decision aids that get in the way of pure live-table use.
+- **Deal-Order Engine hidden in Speed** — its state is preserved (the snapshot keeps tracking in the background), so switching back to Normal or Zen restores the live view.
+- **Jumbo action verb in Speed** — `ActionPanel` renders the verb at 64 px (48 px below 480 px viewport), up from 38 px in Normal and 48 px in Zen. The verb's color and glow remain on the existing `.action-*` CSS classes.
+- **Bigger rank buttons in Speed (CardGrid)** — rank buttons enlarge by ~25 % to match the jumbo verb's stride. Padding and font size are intentionally literal at this site (Spec B "+25 %" magic) and not tokenized.
+- **Sticky-target lock during dealer draw in Speed** — once the dealer is hitting, the target stays on the dealer until the round resolves, so the player doesn't have to re-target between dealer cards.
+- **Round-outcome flash in Speed** — when a hand resolves, the action panel briefly tints jade / ruby / amber and shows WIN / LOSE / PUSH for ~700 ms before the auto-new-hand kicks in.
+- **`SHUFFLE_PROMPT_THRESHOLD` constant + SpeedShufflePrompt** — new constant in `constants.js` (75 %); a new `SpeedShufflePrompt` component appears when penetration crosses it. `Y` confirms, `Esc` dismisses until the next shoe. Mounted by `App.jsx` with dismiss-until-shoe state.
+- **HotkeyOverlay Speed Mode section** — the in-app cheatsheet (`?`) now has a "Speed Mode" section documenting `Y` / `Esc` for the shuffle prompt.
+
+**Spec C — Design system pass (`index.html`, `style.css`, all 10 playing-kit components)**
+- **Fonts swapped to Inter + JetBrains Mono** — Inter replaces Syne (display) and DM Sans (body); JetBrains Mono replaces DM Mono. Tailwind config and the body `font-family` were updated alongside the Google Fonts link, so the cascade reaches every component.
+- **Neutral-dark palette** — backgrounds dropped from blue-tinted `#0a0e18` / `#1c2540` / `#212d45` to true neutral `#0a0a0a` / `#141414` / `#1c1c1c` / `#232323`.
+- **State-only accent colors** — `--gold` (`#ffd447`) was renamed to `--amber` (`#ffb84d`); the deprecated alias is kept temporarily so legacy code does not break. Jade, ruby, sapph, ameth retained at their original values; `--ameth` is reserved for SPLIT and not allowed in chrome.
+- **Token system extended** — `--font-display`, `--font-body`, `--font-mono`, `--font-xs`–`--font-jumbo`, `--radius-sm`/`-md`/`-lg`, `--space-1`–`--space-5`, `--border-w`. New `--font-jumbo` (64 px) is used by Speed mode's action verb.
+- **Decoration strip** — gradient panel banners and ambient action-color box-shadow glows were dropped from `style.css`. Glassmorphism (`backdrop-filter`) on TopBar / StatusBar, the 4-px state stripes on action panels, action-verb text-shadow glows, focus rings, and the shoe-bar / edge / pen / ml gradient meters were kept (the latter four are functional state visualizations, not ambient decorations).
+- **All 10 playing-kit components token-ized** — `ActionPanel`, `HandDisplay`, `CardGrid`, `TopBar`, `StatusBar`, `DealOrderEngine`, `DeviationBanner`, `SplitHandPanel`, `SpeedShufflePrompt`, `HotkeyOverlay` route their inline styles through `var(--…)` tokens. About 25 Default-mode-only components inherit the cascade automatically and were left out of scope.
+
+### v5
 
 **Frontend (`app/static/components/TopBar.js`)**
 - **Uston APC missing from the system selector** — `COUNTING_SYSTEMS` listed only five systems even though the rest of the app (`config.py`, `constants.js`, `MultiSystemPanel.js`, server replay logic) supported six. Users could not switch to Uston APC from the dashboard. Added the missing entry so the dropdown matches the supported set, then rebuilt `bundle.min.js`.
