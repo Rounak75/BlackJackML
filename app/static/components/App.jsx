@@ -208,11 +208,20 @@ function App() {
     socketRef.current?.emit('deal_card', { rank, suit, target })
   }, [])
 
-  // Wrapped handler: also notifies DealOrderEngine when a card is dealt
+  // Wrapped handler: when DOE is active, the server target is auto-driven by DOE
+  // (my-seat→player, dealer slot→dealer, other seats→seen). When DOE is off,
+  // or DOE's round is done, the user's manual target wins.
   const handleDealCardWrapped = useCallback((rank, suit, targetOverride) => {
-    handleDealCard(rank, suit, targetOverride)
+    let target = targetOverride || dealTargetRef.current
+    if (dealOrderEnabled && dealOrderRef.current) {
+      const round = dealOrderRef.current.getDealRound()
+      if (round < 2) {
+        target = dealOrderRef.current.getCurrentTarget()
+      }
+    }
+    handleDealCard(rank, suit, target)
     if (dealOrderRef.current && dealOrderEnabled) {
-      dealOrderRef.current.recordCard(rank, suit, targetOverride || dealTargetRef.current)
+      dealOrderRef.current.recordCard(rank, suit, target)
     }
   }, [handleDealCard, dealOrderEnabled])
 
