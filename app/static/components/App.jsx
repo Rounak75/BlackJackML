@@ -467,7 +467,8 @@ function App() {
   //   Actions:    H  Hit (target → player)   X  Stand (target → dealer)
   //               B  Double                  P  Split        R  Surrender
   //   Results:    W  Win                     L  Loss         U  Push
-  //   Targets:    ,  player                  .  dealer       /  seen
+  //   Targets:    A  player (also , H)        S  dealer (also . X)
+  //               D  seen (also /)
   //   Session:    N  New hand                ⇧+S (hold)  Shuffle
   //               Ctrl+Z  Undo
   //   UI:         M  Mode cycle              T  HUD toggle
@@ -587,7 +588,10 @@ function App() {
         return
       }
 
-      // ── Targets ─────────────────────────────────────────────────────
+      // ── Targets (A/S/D primary; comma/period/slash + H/X aliases) ───
+      if (e.key === 'a' || e.key === 'A') { setTarget('player'); return }
+      if (e.key === 's' || e.key === 'S') { setTarget('dealer'); return }
+      if (e.key === 'd' || e.key === 'D') { setTarget('seen'); return }
       if (e.key === ',') { setTarget('player'); return }
       if (e.key === '.') { setTarget('dealer'); return }
       if (e.key === '/') { setTarget('seen'); return }
