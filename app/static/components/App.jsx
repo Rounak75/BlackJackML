@@ -193,6 +193,13 @@ function App() {
   }, [])
 
 
+  // PHASE A1: Compute DOE-driven CardGrid state on every render.
+  // doeTarget is null when DOE is off OR DOE's round is done — both cases mean
+  // CardGrid falls back to interactive chips driven by the manual `dealTarget`.
+  const doeRef = dealOrderRef.current
+  const doeRoundDone = (dealOrderEnabled && doeRef) ? (doeRef.getDealRound?.() >= 2) : false
+  const doeTarget = (dealOrderEnabled && doeRef && !doeRoundDone) ? (doeRef.getCurrentTarget?.() ?? null) : null
+
   // ── HANDLERS ───────────────────────────────────────────────────────────────
   const handleDealCard = useCallback((rank, suit, targetOverride) => {
     // FIX CRIT-03: Block user-initiated deals during undo replay
@@ -946,6 +953,9 @@ function App() {
             scanMode={scanMode}
             countSystem={count?.system || 'hi_lo'}
             uiMode={uiMode}
+            doeActive={dealOrderEnabled}
+            doeTarget={doeTarget}
+            doeRoundDone={doeRoundDone}
           />
 
           {/* Zen: show side bet EV below cards (pros use this for bet sizing) */}
@@ -1064,6 +1074,9 @@ function App() {
             scanMode={scanMode}
             countSystem={count?.system || 'hi_lo'}
             uiMode={uiMode}
+            doeActive={dealOrderEnabled}
+            doeTarget={doeTarget}
+            doeRoundDone={doeRoundDone}
           />
 
           {/* OutcomeStrip — placed below CardGrid so it never pushes the grid

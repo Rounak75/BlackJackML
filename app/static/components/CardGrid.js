@@ -19,7 +19,7 @@
  *   • Split/Undo have descriptive aria-labels
  */
 
-function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands, scanMode, countSystem, uiMode }) {
+function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo, onSplit, canSplit, dealerMustDraw, dealerStands, scanMode, countSystem, uiMode, doeActive, doeTarget, doeRoundDone }) {
   const { useState, useEffect } = React;
   const [suitFilter, setSuitFilter] = useState('all');
   const [gridExpanded, setGridExpanded] = useState(false);
@@ -53,6 +53,13 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
     },
     { t: 'seen',   label: <span>👁 Seen</span>, ariaLabel: 'Mark card as seen (count only, no hand)' },
   ];
+
+  // PHASE A1: When DOE is active and round is in progress, hide the "seen"
+  // chip — DOE handles "seen" internally for non-self seats. When DOE is off
+  // or round is done, all three chips remain.
+  const visibleTargets = (doeActive && !doeRoundDone)
+    ? targets.filter((tg) => tg.t !== 'seen')
+    : targets;
 
   const suitFullName = { spades: 'Spades', hearts: 'Hearts', diamonds: 'Diamonds', clubs: 'Clubs' };
 
@@ -226,13 +233,22 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
         role="group"
         aria-label="Select deal target"
       >
-        <span className="text-[10px] font-semibold" style={{ color: '#b8ccdf', flexShrink: 0 }} aria-hidden="true">To:</span>
+        <span className="text-[10px] font-semibold" style={{ color: '#b8ccdf', flexShrink: 0 }} aria-hidden="true">
+          {doeActive && !doeRoundDone ? 'DOE →' : (doeActive && doeRoundDone ? 'Round done — manual:' : 'To:')}
+        </span>
         <div className="flex gap-2 flex-1">
-          {targets.map(({ t, label, ariaLabel }) => {
+          {visibleTargets.map(({ t, label, ariaLabel }) => {
             const isDealer = t === 'dealer';
             const mustDraw = isDealer && dealerMustDraw;
-            const isActive = target === t;
-            // CRIT-04: Saturated fill colors per target type
+
+            // Three states:
+            //  - DOE off  → interactive, lit by `target` (current behaviour)
+            //  - DOE on, round in progress → read-only, lit by `doeTarget`
+            //  - DOE on, round done → interactive, lit by `target`
+            const isReadOnly = doeActive && !doeRoundDone;
+            const litTarget  = isReadOnly ? doeTarget : target;
+            const isActive   = litTarget === t;
+
             const fills = {
               player: { bg: '#3b82f6', border: '#60a5fa', text: '#ffffff', shadow: 'rgba(59,130,246,0.5)' },
               dealer: { bg: '#ff9a20', border: '#ffb347', text: '#0a0e18', shadow: 'rgba(255,154,32,0.5)' },
@@ -242,9 +258,10 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             return (
               <button
                 key={t}
-                onClick={() => onTargetChange(t)}
+                onClick={isReadOnly ? undefined : () => onTargetChange(t)}
                 aria-pressed={isActive}
-                aria-label={ariaLabel}
+                aria-disabled={isReadOnly}
+                aria-label={isReadOnly ? `${ariaLabel} (controlled by Deal-Order Engine)` : ariaLabel}
                 className="flex-1 text-xs py-2 rounded-lg font-bold transition-all"
                 style={{
                   background: isActive ? fill.bg : (mustDraw ? 'rgba(255,154,32,0.12)' : 'transparent'),
@@ -254,6 +271,8 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
                   fontSize: 12,
                   boxShadow: isActive ? `0 0 12px ${fill.shadow}` : 'none',
                   letterSpacing: '0.02em',
+                  cursor: isReadOnly ? 'default' : 'pointer',
+                  opacity: isReadOnly && !isActive ? 0.65 : 1,
                 }}
               >
                 {label}
