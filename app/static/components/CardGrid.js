@@ -280,6 +280,25 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             );
           })}
         </div>
+        {/* Hotkey hint — opens the global HotkeyOverlay (`?`) */}
+        <button
+          onClick={() => {
+            const ev = new KeyboardEvent('keydown', { key: '?', shiftKey: true });
+            window.dispatchEvent(ev);
+          }}
+          aria-label="Show keyboard shortcuts"
+          title="Keyboard shortcuts (press ?)"
+          className="text-[10px] py-1 px-2 rounded"
+          style={{
+            background: 'transparent',
+            border: '1px solid rgba(255,255,255,0.12)',
+            color: '#8fa5be',
+            flexShrink: 0,
+            cursor: 'pointer',
+          }}
+        >
+          ⌨ ?
+        </button>
       </div>
 
       {/* Action buttons row: Split + Undo */}
