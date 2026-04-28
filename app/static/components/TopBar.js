@@ -71,7 +71,7 @@ function InfoTooltip({ children }) {
           width: 16, height: 16, borderRadius: '50%',
           background: visible ? 'rgba(255,212,71,0.25)' : 'rgba(255,255,255,0.1)',
           border: `1px solid ${visible ? 'rgba(255,212,71,0.6)' : 'rgba(255,255,255,0.2)'}`,
-          color: visible ? '#ffd447' : '#b8ccdf',
+          color: visible ? 'var(--amber)' : 'var(--text-2)',
           fontSize: 9, fontWeight: 'bold',
           cursor: 'pointer', userSelect: 'none',
           transition: 'all 0.15s',
@@ -86,7 +86,7 @@ function InfoTooltip({ children }) {
             position: 'fixed',
             top:  pos.top,
             left: pos.left,
-            background: '#1c2540',
+            background: 'var(--surface-raised)',
             border: '1px solid rgba(255,255,255,0.18)',
             borderRadius: 8,
             padding: '10px 12px',
@@ -130,10 +130,10 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
   // P3.7 (FEAT-04): penetration display.
   // Backend already serialises count.penetration as a 0-100 percentage.
   const penPct   = count && count.penetration != null ? Math.round(count.penetration) : null;
-  const penColor = penPct == null ? '#b8ccdf'
-                 : penPct >= 80 ? '#ff5c5c'
-                 : penPct >= 70 ? '#ffd447'
-                 : '#b8ccdf';
+  const penColor = penPct == null ? 'var(--text-2)'
+                 : penPct >= 80 ? 'var(--ruby)'
+                 : penPct >= 70 ? 'var(--amber)'
+                 : 'var(--text-2)';
 
   const sysMeta  = COUNTING_SYSTEMS[activeSystem]  || COUNTING_SYSTEMS.hi_lo;
   const shufMeta = SHUFFLE_TYPES[activeShuffle] || SHUFFLE_TYPES.machine;
@@ -171,7 +171,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
     <header
       className="sticky top-0 z-50 flex flex-col"
       style={{
-        background: '#1c2540',
+        background: 'var(--surface-raised)',
         borderBottom: '1.5px solid rgba(255,255,255,0.14)',
         backdropFilter: 'blur(16px)',
       }}
@@ -186,11 +186,11 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
         <div className="flex items-center gap-2 flex-shrink-0">
           <span
             className="font-display"
-            style={{ fontSize: '1.6rem', color: '#ffd447', filter: 'drop-shadow(0 0 14px rgba(255,212,71,0.55))' }}
+            style={{ fontSize: '1.6rem', color: 'var(--amber)', filter: 'drop-shadow(0 0 14px rgba(255,212,71,0.55))' }}
           >
             ♠
           </span>
-          <span className="font-display font-extrabold text-sm tracking-tight" style={{ color: '#f0f4ff' }}>
+          <span className="font-display font-extrabold text-sm tracking-tight" style={{ color: 'var(--text-0)' }}>
             BlackJack ML
           </span>
 
@@ -198,7 +198,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
           {onModeChange && (
             <div style={{
               display: 'flex', gap: 0,
-              background: '#111827',
+              background: 'var(--surface-chrome)',
               borderRadius: 8,
               border: '1px solid rgba(255,255,255,0.12)',
               overflow: 'hidden',
@@ -218,7 +218,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
                     padding: '4px 10px', fontSize: 10, fontWeight: 700,
                     cursor: 'pointer', border: 'none',
                     background: uiMode === m.key ? 'rgba(255,212,71,0.15)' : 'transparent',
-                    color: uiMode === m.key ? '#ffd447' : '#6b7f96',
+                    color: uiMode === m.key ? 'var(--amber)' : '#6b7f96',
                     borderBottom: uiMode === m.key ? '2px solid #ffd447' : '2px solid transparent',
                     transition: 'all 0.15s',
                     whiteSpace: 'nowrap',
@@ -235,7 +235,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
         <div
           className="flex items-center rounded-xl flex-1 justify-center max-w-2xl"
           style={{
-            background: '#111827',
+            background: 'var(--surface-chrome)',
             border: '1.5px solid rgba(255,255,255,0.14)',
             overflow: 'hidden',
           }}
@@ -275,7 +275,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
               style={{
                 fontSize: '0.6rem', textTransform: 'uppercase',
                 letterSpacing: '0.12em', fontWeight: 700,
-                color: '#b8ccdf', marginBottom: 3,
+                color: 'var(--text-2)', marginBottom: 3,
               }}
             >
               {isKO ? 'Running Count' : 'True Count'}
@@ -289,7 +289,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
             {isKO && (
               <div style={{
                 marginTop: 4, fontSize: '0.65rem', letterSpacing: '0.08em',
-                color: rc >= koPivot ? '#44e882' : '#b8ccdf', fontWeight: 600,
+                color: rc >= koPivot ? 'var(--jade)' : 'var(--text-2)', fontWeight: 600,
               }}>
                 Pivot {koPivot >= 0 ? '+' : ''}{koPivot}{rc >= koPivot ? ' · BET' : ' · MIN'}
               </div>
@@ -315,7 +315,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
                   letterSpacing: '0.1em', color: '#a8bcd4', fontWeight: 700,
                 }}>PEN</div>
                 <div className="num" style={{
-                  fontFamily: 'DM Mono, monospace', fontWeight: 700,
+                  fontFamily: 'var(--font-mono)', fontWeight: 700,
                   fontSize: '1.05rem', color: penColor, lineHeight: 1,
                 }}>{penPct}%</div>
                 {/* Depth bar */}
@@ -341,8 +341,8 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
                 const aceRem = sideCounts.aces_remaining || 0;
                 const aceExp = sideCounts.aces_expected  || 0;
                 const aceDelta = aceRem - aceExp; // + = rich, - = poor
-                const aceCol = aceDelta >  0.5 ? '#44e882'
-                             : aceDelta < -0.5 ? '#ff5c5c'
+                const aceCol = aceDelta >  0.5 ? 'var(--jade)'
+                             : aceDelta < -0.5 ? 'var(--ruby)'
                              : '#94a7c4';
                 const sign = aceDelta >= 0 ? '+' : '';
                 return (
@@ -360,7 +360,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
                       letterSpacing: '0.1em', color: '#8fa5be', fontWeight: 700,
                     }}>ACES</div>
                     <div className="num" style={{
-                      fontFamily: 'DM Mono, monospace', fontWeight: 700,
+                      fontFamily: 'var(--font-mono)', fontWeight: 700,
                       fontSize: '1.05rem', color: aceCol, lineHeight: 1,
                     }}>{sign}{aceDelta.toFixed(1)}</div>
                   </div>
@@ -376,9 +376,9 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
 
           {/* Right cluster — Advantage (PHASE 3: bucketed by EV). Hidden in Speed (derived from TC) */}
           {!isSpeedSlim && (() => {
-            const edgeCol = adv >= 1.5 ? '#44e882'
-                          : adv >= 0   ? '#ffd447'
-                          : '#ff5c5c';
+            const edgeCol = adv >= 1.5 ? 'var(--jade)'
+                          : adv >= 0   ? 'var(--amber)'
+                          : 'var(--ruby)';
             return (
               <div
                 title={`Player Edge ${adv.toFixed(2)}% — green ≥+1.5%, gold ≥0%, ruby <0%`}
@@ -396,7 +396,7 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
                   marginBottom: 2,
                 }}>Edge</div>
                 <div className="num" style={{
-                  fontFamily: 'DM Mono, monospace', fontWeight: 700,
+                  fontFamily: 'var(--font-mono)', fontWeight: 700,
                   fontSize: '1rem', color: edgeCol, lineHeight: 1,
                 }}>
                   {adv >= 0 ? '+' : ''}{adv.toFixed(2)}%
@@ -414,20 +414,20 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
           {!isMinimal && (
           <div className="flex flex-col gap-0.5">
             <div className="flex items-center gap-1 mb-0.5">
-              <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: '#b8ccdf' }}>
+              <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: 'var(--text-2)' }}>
                 System
               </span>
               <InfoTooltip>
-                <div className="text-[10px] font-bold mb-1" style={{ color: '#ffd447' }}>
+                <div className="text-[10px] font-bold mb-1" style={{ color: 'var(--amber)' }}>
                   What is a counting system?
                 </div>
-                <div className="text-[10px] leading-relaxed" style={{ color: '#ccdaec' }}>
+                <div className="text-[10px] leading-relaxed" style={{ color: 'var(--text-1)' }}>
                   Card counting assigns a tag to each card you see. You keep a running total — when it's high, the shoe favours you and you bet more.
                 </div>
                 <div className="mt-2 space-y-1">
                   {Object.entries(COUNTING_SYSTEMS).map(([k, v]) => (
-                    <div key={k} className="text-[9px]" style={{ color: '#b8ccdf' }}>
-                      <span style={{ color: '#ccdaec', fontWeight: 600 }}>{v.label}</span> {v.level} — {v.desc.split('.')[0]}.
+                    <div key={k} className="text-[9px]" style={{ color: 'var(--text-2)' }}>
+                      <span style={{ color: 'var(--text-1)', fontWeight: 600 }}>{v.label}</span> {v.level} — {v.desc.split('.')[0]}.
                     </div>
                   ))}
                 </div>
@@ -454,21 +454,21 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
           <div className="flex flex-col gap-0.5">
             {!isMinimal && (
             <div className="flex items-center gap-1 mb-0.5">
-              <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: '#b8ccdf' }}>
+              <span className="text-[9px] uppercase tracking-widest font-semibold" style={{ color: 'var(--text-2)' }}>
                 Shuffle
               </span>
               <InfoTooltip>
-                <div className="text-[10px] font-bold mb-1" style={{ color: '#ffd447' }}>
+                <div className="text-[10px] font-bold mb-1" style={{ color: 'var(--amber)' }}>
                   Why does shuffle type matter?
                 </div>
-                <div className="text-[10px] leading-relaxed mb-2" style={{ color: '#ccdaec' }}>
+                <div className="text-[10px] leading-relaxed mb-2" style={{ color: 'var(--text-1)' }}>
                   The ML Shuffle Tracker remembers card patterns across shuffles. Different shuffle types destroy different amounts of that memory.
                 </div>
                 <div className="space-y-1">
                   {Object.entries(SHUFFLE_TYPES).map(([k, v]) => (
                     <div key={k} className="flex justify-between text-[9px] gap-2">
-                      <span style={{ color: '#ccdaec', fontWeight: 600 }}>{v.label}</span>
-                      <span style={{ color: '#44e882' }}>{v.retention} memory</span>
+                      <span style={{ color: 'var(--text-1)', fontWeight: 600 }}>{v.label}</span>
+                      <span style={{ color: 'var(--jade)' }}>{v.retention} memory</span>
                     </div>
                   ))}
                 </div>
