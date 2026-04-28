@@ -66,6 +66,7 @@ function HotkeyOverlay({ isOpen, onClose }) {
         ['N', 'New hand (count persists)'],
         ['⇧+S (hold)', 'Shuffle shoe (resets count)'],
         ['Ctrl+Z', 'Undo last card'],
+        ['Ctrl+⇧+Z', 'Redo last undo'],
       ],
     },
     {

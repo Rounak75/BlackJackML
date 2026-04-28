@@ -246,12 +246,14 @@ function BettingPanel({
                 {curUnits}u / {maxUnits}u
               </span>
               {overSpread && (
-                <span style={{
-                  fontSize: 8, fontWeight: 800, padding: '1px 5px',
-                  borderRadius: 4, background: 'rgba(255,92,92,0.15)',
-                  border: '1px solid rgba(255,92,92,0.4)', color: '#ff8888',
-                  textTransform: 'uppercase', letterSpacing: '0.05em',
-                }}>HEAVY</span>
+                <span
+                  title="Bet ≥ 12× min unit — heat risk"
+                  style={{
+                    fontSize: 9, fontWeight: 700, padding: '2px 7px',
+                    borderRadius: 10, background: 'rgba(255,92,92,0.12)',
+                    border: '1px solid rgba(255,92,92,0.45)', color: '#ff5c5c',
+                    textTransform: 'uppercase', letterSpacing: '0.08em',
+                  }}>OVER-SPREAD</span>
               )}
             </div>
             {/* Mini ramp bar */}

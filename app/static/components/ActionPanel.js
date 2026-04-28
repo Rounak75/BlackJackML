@@ -23,9 +23,9 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode, in
   const isZen   = uiMode === 'zen';
   const isSpeed = uiMode === 'speed';
 
-  // Track previous action for "last action" label
+  // PHASE 8.2: Track last 3 prior actions for rolling micro-strip
   const prevActionRef = useRef(null);
-  const [lastAction, setLastAction] = useState(null);
+  const [actionHistory, setActionHistory] = useState([]); // oldest → newest, max 3
 
   const action = recommendation ? recommendation.action : null;
   const isDev  = recommendation && recommendation.is_deviation;
@@ -33,10 +33,13 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode, in
 
   const modelLoaded = mlModelInfo && mlModelInfo.loaded;
 
-  // Update last action when current action changes
+  // PHASE 8.2: Push prior action into rolling buffer of length 3 on change
   useEffect(() => {
     if (action && action !== prevActionRef.current && prevActionRef.current) {
-      setLastAction(prevActionRef.current);
+      setActionHistory(prev => {
+        const next = [...prev, prevActionRef.current];
+        return next.length > 3 ? next.slice(next.length - 3) : next;
+      });
     }
     prevActionRef.current = action;
   }, [action]);
@@ -168,10 +171,21 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode, in
             {action || 'DEAL CARDS'}
           </div>
 
-          {/* Last action micro-label — hidden in speed mode */}
-          {!isSpeed && lastAction && action && (
-            <div style={{ fontSize: 9, color: '#6b7f96', marginTop: 4, letterSpacing: '0.04em' }}>
-              prev: <span style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', color: '#8fa5be' }}>{lastAction}</span>
+          {/* PHASE 8.2: Last-3-actions micro-strip — oldest leftmost. Hidden in zen/speed. */}
+          {!isZen && !isSpeed && actionHistory.length > 0 && action && (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 6,
+              marginTop: 4, fontSize: 9, color: '#6b7f96', letterSpacing: '0.04em',
+            }}>
+              <span style={{ textTransform: 'uppercase' }}>prev:</span>
+              {actionHistory.map((a, i) => (
+                <React.Fragment key={i}>
+                  <span style={{ fontWeight: 700, fontFamily: 'DM Mono, monospace', color: '#8fa5be' }}>{a}</span>
+                  {i < actionHistory.length - 1 && (
+                    <span style={{ color: '#4a5568', fontSize: 9 }}>→</span>
+                  )}
+                </React.Fragment>
+              ))}
             </div>
           )}
 

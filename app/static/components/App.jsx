@@ -121,6 +121,8 @@ function App() {
   // ── REFS ───────────────────────────────────────────────────────────────────
   const socketRef = useRef(null)
   const undoStack = useRef([])
+  // PHASE 8.5: redo stack — populated when undo pops, cleared on any forward action.
+  const redoStack = useRef([])
   const dealTargetRef = useRef('player')
   const gameStateRef = useRef(null)
   const dealOrderRef = useRef(null)
@@ -200,6 +202,7 @@ function App() {
     }
     const target = targetOverride || dealTargetRef.current
     undoStack.current.push({ rank, suit, target })
+    redoStack.current = []  // PHASE 8.5: any new forward action invalidates redo
     // §2 Debug: track card deal action
     if (typeof DebugUI !== 'undefined') DebugUI.trackClick('DEAL_CARD', { rank, suit, target })
     socketRef.current?.emit('deal_card', { rank, suit, target })
@@ -216,6 +219,7 @@ function App() {
   const handleSplit = useCallback(() => {
     if (isReplayingRef.current) return
     undoStack.current.push({ type: 'split' })
+    redoStack.current = []  // PHASE 8.5: clear redo on forward action
     socketRef.current?.emit('player_split')
   }, [])
 
@@ -230,6 +234,7 @@ function App() {
       return
     }
     undoStack.current = []
+    redoStack.current = []  // PHASE 8.5: clear redo on new hand
     dealTargetRef.current = 'player'
     setDealTarget('player')
     // §2 Debug: track new hand action
@@ -247,6 +252,7 @@ function App() {
     }
     const shuffleType = document.getElementById('shuffle-type')?.value || 'machine'
     undoStack.current = []
+    redoStack.current = []  // PHASE 8.5: clear redo on shuffle
     // §2 Debug: track shuffle action
     if (typeof DebugUI !== 'undefined') DebugUI.trackClick('SHUFFLE', { type: shuffleType })
     socketRef.current?.emit('shuffle', { type: shuffleType })
@@ -275,6 +281,7 @@ function App() {
     socketRef.current?.emit('new_hand')
 
     undoStack.current = []
+    redoStack.current = []  // PHASE 8.5: clear redo on hand resolution
     dealTargetRef.current = 'player'
     setDealTarget('player')
 
@@ -312,6 +319,7 @@ function App() {
       }
       const removed = top
       undoStack.current = undoStack.current.slice(0, -1)
+      redoStack.current.push(removed)  // PHASE 8.5: capture for redo
       socketRef.current?.emit('undo_split_card')
       // ▶ SYNC: also undo in deal engine
       if (dealOrderRef.current && dealOrderEnabled) {
@@ -324,6 +332,7 @@ function App() {
     const replay  = [...undoStack.current.slice(0, -1)]
     const removed = undoStack.current[undoStack.current.length - 1]
 
+    redoStack.current.push(removed)  // PHASE 8.5: capture removed event for redo
     undoStack.current = []
     dealTargetRef.current = 'player'
     setDealTarget('player')
@@ -363,6 +372,32 @@ function App() {
     })
 
     showToast(`Undid ${removed.rank} → ${removed.target}`, 'info')
+  }, [dealOrderEnabled])
+
+  // PHASE 8.5: redo — single-step replay of the most recent undo
+  const handleRedo = useCallback(() => {
+    if (isReplayingRef.current) {
+      showToast('Undo in progress — please wait', 'warning')
+      return
+    }
+    if (redoStack.current.length === 0) {
+      showToast('Nothing to redo', 'warning')
+      return
+    }
+    const event = redoStack.current.pop()
+    if (event.type === 'split') {
+      undoStack.current.push({ type: 'split' })
+      socketRef.current?.emit('player_split')
+      showToast('Redid split', 'info')
+      return
+    }
+    // Card event
+    undoStack.current.push(event)
+    if (dealOrderRef.current && dealOrderEnabled) {
+      dealOrderRef.current.recordCard(event.rank, event.suit, event.target)
+    }
+    socketRef.current?.emit('deal_card', { rank: event.rank, suit: event.suit, target: event.target })
+    showToast(`Redid ${event.rank} → ${event.target}`, 'info')
   }, [dealOrderEnabled])
 
 
@@ -438,6 +473,13 @@ function App() {
         return
       }
 
+      // ── Ctrl/Cmd+Shift+Z — redo (must come before plain Ctrl+Z) ─────
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'z' || e.key === 'Z')) {
+        e.preventDefault()
+        handleRedo()
+        return
+      }
+
       // ── Ctrl/Cmd+Z — undo (global, works in inputs too) ─────────────
       if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) {
         e.preventDefault()
@@ -445,16 +487,16 @@ function App() {
         return
       }
 
-      // From here on: bail if focus is inside an input/select/textarea so
-      // typing isn't interpreted as an action/result/rank shortcut.
-      if (inEditable) return
-
-      // ── Hotkey overlay (Shift+/) ────────────────────────────────────
+      // ── Hotkey overlay (?) — global, works even when focus is in inputs ──
       if (e.key === '?' || (e.shiftKey && e.key === '/')) {
         e.preventDefault()
         setShowHotkeys(prev => !prev)
         return
       }
+
+      // From here on: bail if focus is inside an input/select/textarea so
+      // typing isn't interpreted as an action/result/rank shortcut.
+      if (inEditable) return
 
       // ── Shift+S (hold) — shuffle ────────────────────────────────────
       if (e.shiftKey && (e.key === 'S' || e.key === 's')) {
@@ -571,7 +613,7 @@ function App() {
       window.removeEventListener('keyup', upHandler)
     }
   }, [
-    handleNewHand, handleShuffle, handleUndo, handleSplit, handleRecordResult,
+    handleNewHand, handleShuffle, handleUndo, handleRedo, handleSplit, handleRecordResult,
     cycleMode, customBet, betting, playerHand, dealerHand, splitHands.length, dealerStandsFlag
   ])
 
@@ -633,29 +675,101 @@ function App() {
   }, [isSpeed, insurance?.available, count?.true])
 
 
-  // ── LOADING SCREEN ─────────────────────────────────────────────────────────
+  // ── PHASE 8.8: SKELETON LOADING SCREEN ─────────────────────────────────────
+  // Layout-matching skeleton (top bar + 3-col grid + bottom status bar) so the
+  // first paint doesn't shift. Shimmer is paused under prefers-reduced-motion.
   if (!gameState) {
-    return (
-      <div className="flex items-center justify-center min-h-screen"
-        style={{ background: '#0a0e18' }}>
-        <div className="text-center">
-          <div className="text-6xl mb-5 font-display font-extrabold"
-            style={{ color: '#ffd447', filter: 'drop-shadow(0 0 20px rgba(255,212,71,0.6))' }}>
-            ♠
-          </div>
-          <div className="text-base font-semibold mb-2" style={{ color: '#ccdaec' }}>
-            Connecting to BlackjackML server…
-          </div>
-          <div className="text-xs" style={{ color: '#b8ccdf' }}>
-            Make sure{' '}
-            <code style={{ background:'#1c2540', padding:'2px 6px', borderRadius:4, color:'#ffd447' }}>
-              python main.py web
-            </code>
-            {' '}is running
-          </div>
-        </div>
-      </div>
-    )
+    const block = (h, w) => React.createElement('div', {
+      className: 'sk-shimmer',
+      style: {
+        height: h, width: w || '100%', borderRadius: 8,
+        background: '#1c2540', marginBottom: 10,
+      },
+    });
+    const col = (children) => React.createElement('div', {
+      style: {
+        display: 'flex', flexDirection: 'column', gap: 0,
+        padding: 12, background: 'rgba(28,37,64,0.4)',
+        border: '1px solid rgba(255,255,255,0.05)', borderRadius: 12,
+      },
+    }, children);
+
+    return React.createElement('div', {
+      style: {
+        background: '#0a0e18', minHeight: '100vh', color: '#ccdaec',
+        display: 'flex', flexDirection: 'column',
+      },
+    },
+      // Inline shimmer keyframes — matches phase 7 motion policy
+      React.createElement('style', null, `
+        @keyframes sk-shimmer-anim {
+          0%   { background-position: -200px 0; }
+          100% { background-position: calc(200px + 100%) 0; }
+        }
+        .sk-shimmer {
+          background-image: linear-gradient(90deg,
+            rgba(255,255,255,0) 0%,
+            rgba(255,255,255,0.05) 50%,
+            rgba(255,255,255,0) 100%);
+          background-size: 200px 100%;
+          background-repeat: no-repeat;
+          animation: sk-shimmer-anim 1.4s ease-in-out infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .sk-shimmer { animation: none; background-image: none; }
+        }
+      `),
+      // Top bar skeleton (56px)
+      React.createElement('div', {
+        style: {
+          height: 56, padding: '12px 18px',
+          background: '#111827',
+          borderBottom: '1.5px solid rgba(255,255,255,0.09)',
+          display: 'flex', alignItems: 'center', gap: 14,
+        },
+      },
+        React.createElement('div', { className: 'sk-shimmer', style: { width: 90, height: 28, borderRadius: 6, background: '#1c2540' } }),
+        React.createElement('div', { className: 'sk-shimmer', style: { width: 130, height: 28, borderRadius: 6, background: '#1c2540' } }),
+        React.createElement('div', { style: { flex: 1 } }),
+        React.createElement('div', { className: 'sk-shimmer', style: { width: 80, height: 28, borderRadius: 6, background: '#1c2540' } }),
+      ),
+      // 3-column grid
+      React.createElement('div', {
+        style: {
+          flex: 1, display: 'grid',
+          gridTemplateColumns: '240px 1fr 240px',
+          gap: 14, padding: 14, paddingBottom: 38,
+        },
+      },
+        col([
+          block(120),
+          block(80),
+          block(140),
+        ].map((b, i) => React.cloneElement(b, { key: i }))),
+        col([
+          block(70),
+          block(160),
+          block(120),
+          block(90),
+        ].map((b, i) => React.cloneElement(b, { key: i }))),
+        col([
+          block(110),
+          block(160),
+          block(90),
+        ].map((b, i) => React.cloneElement(b, { key: i }))),
+      ),
+      // Bottom status bar skeleton (28px)
+      React.createElement('div', {
+        style: {
+          position: 'fixed', bottom: 0, left: 0, right: 0,
+          height: 28, background: 'rgba(13,19,32,0.95)',
+          borderTop: '1px solid rgba(255,255,255,0.1)',
+          display: 'flex', alignItems: 'center', gap: 18, padding: '0 12px',
+          fontSize: 9, color: '#6b7f96', letterSpacing: '0.1em',
+          textTransform: 'uppercase', fontWeight: 700,
+        },
+      }, 'Connecting to BlackjackML server…')
+    );
   }
 
   // ── Status bar data ────────────────────────────────────────────────────────
@@ -1079,6 +1193,7 @@ function App() {
           mlModelInfo={gameState?.ml_model_info}
           lastUpdateAgo={lastUpdateAgo}
           onShowHelp={() => setShowHotkeys(true)}
+          betting={betting}
         />
       </PerfProbe>
 

@@ -13,9 +13,10 @@
  *   mlModelInfo  — { loaded }
  *   lastUpdateAgo — number (seconds) or null
  *   onShowHelp   — fn() to open hotkey overlay (Phase 8)
+ *   betting      — { risk_of_ruin } (Phase 8.4)
  */
 
-function StatusBar({ session, count, wonging, mlModelInfo, lastUpdateAgo, onShowHelp }) {
+function StatusBar({ session, count, wonging, mlModelInfo, lastUpdateAgo, onShowHelp, betting }) {
   const hands = (session && session.hands_played) || 0;
   const penPct = (count && count.penetration != null) ? Math.round(count.penetration) : null;
   const tc = (count && (typeof count.effective_true === 'number'
@@ -88,6 +89,15 @@ function StatusBar({ session, count, wonging, mlModelInfo, lastUpdateAgo, onShow
     cell('Hands', hands),
     cell('Pen', penPct != null ? `${penPct}%` : '—', penColor),
     cell('Wong', wongLabel, wongCol),
+    // PHASE 8.4: Risk-of-Ruin cell — color-bucketed
+    (function() {
+      const ror = betting && typeof betting.risk_of_ruin === 'number' ? betting.risk_of_ruin : null;
+      const rorCol = ror == null ? '#6b7f96'
+                   : ror <= 5  ? '#44e882'
+                   : ror <= 15 ? '#ffd447'
+                   : '#ff5c5c';
+      return cell('RoR', ror == null ? '—' : `${ror.toFixed(1)}%`, rorCol);
+    })(),
     cell('AI', modelLoaded ? 'ML' : 'Basic', modelLoaded ? '#44e882' : '#94a7c4'),
     cell('Update', updateText, '#94a7c4'),
 

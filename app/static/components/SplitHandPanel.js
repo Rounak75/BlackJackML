@@ -70,6 +70,9 @@ function SplitHandZone({ hand, handNumber, isActive, isLastHand, dealerUpcard, o
       flex: 1, borderRadius: 10, padding: '12px',
       background: isActive ? 'rgba(255,212,71,0.06)' : 'rgba(255,255,255,0.02)',
       border: `2px solid ${isActive ? 'rgba(255,212,71,0.5)' : 'rgba(255,255,255,0.1)'}`,
+      // PHASE 8.1: dim & desaturate inactive hand for instant glance read
+      opacity: isActive ? 1 : 0.5,
+      filter: isActive ? 'none' : 'grayscale(0.6)',
       position: 'relative', transition: 'all 0.2s',
     }}>
       {/* Header */}
@@ -188,8 +191,16 @@ function SplitHandPanel({ splitHands, activeHandIndex, dealerUpcard, onNextHand 
             textTransform: 'uppercase', letterSpacing: '0.09em', fontFamily: 'Syne, sans-serif' }}>
             ✂ Split Hands
           </span>
-          <span style={{ fontSize: 9, color: '#94a7c4' }}>
-            Playing Hand {activeHandIndex + 1} of {splitHands.length}
+          {/* PHASE 8.1: Hand X of Y pill — discrete, glanceable */}
+          <span style={{
+            fontSize: 11, fontWeight: 800, color: '#ffd447',
+            background: 'rgba(255,212,71,0.12)',
+            border: '1px solid rgba(255,212,71,0.4)',
+            borderRadius: 4, padding: '2px 8px',
+            textTransform: 'uppercase', letterSpacing: '0.08em',
+            fontFamily: 'DM Mono, monospace',
+          }}>
+            Hand {activeHandIndex + 1} of {splitHands.length}
           </span>
         </div>
         {dealerUpcard && (
