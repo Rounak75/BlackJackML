@@ -841,8 +841,9 @@ function App() {
         />
       </PerfProbe>
 
-      {/* ── PHASE 2/3: Deviation Banner — full-width, conditional ── */}
-      {!isMinimal && (
+      {/* ── PHASE 2/3: Deviation Banner — shown in Default and Zen (it changes
+           THIS hand's play); hidden in Speed (every byte counts) ── */}
+      {!isSpeed && (
         <DeviationBanner
           recommendation={rec}
           count={count}
