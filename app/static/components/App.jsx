@@ -951,8 +951,9 @@ function App() {
             doeRoundDone={doeRoundDone}
           />
 
-          {/* Deal-Order Engine — included in all modes */}
-          {dealOrderEnabled && (
+          {/* Deal-Order Engine — hidden in Speed (state preserved via DOE's own
+              localStorage; remounting on switch back to Zen/Default resumes mid-round) */}
+          {dealOrderEnabled && !isSpeed && (
             <DealOrderEngine
               ref={dealOrderRef}
               count={count}
