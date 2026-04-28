@@ -1220,6 +1220,7 @@ function App() {
           lastUpdateAgo={lastUpdateAgo}
           onShowHelp={() => setShowHotkeys(true)}
           betting={betting}
+          uiMode={uiMode}
         />
       </PerfProbe>
 
