@@ -113,6 +113,7 @@ const STRIPE_CLASS = {
 function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, uiMode, onModeChange,
                   sideCounts, onShowLayoutEditor }) {
   const isMinimal = uiMode === 'zen' || uiMode === 'speed';
+  const isSpeedSlim = uiMode === 'speed';
   const [activeSystem,  setActiveSystem]  = useState('hi_lo');
   const [activeShuffle, setActiveShuffle] = useState('machine');
   // PHASE 7 T5: TC-flash key remount replaces void offsetWidth reflow.
@@ -240,22 +241,26 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
           }}
         >
 
-          {/* Left cluster — RC + ML Enhanced, stacked */}
-          <div
-            style={{
-              display: 'flex', flexDirection: 'column', gap: 2,
-              padding: '6px 14px',
-              background: 'rgba(255,255,255,0.03)',
-              alignSelf: 'stretch', justifyContent: 'center',
-            }}
-          >
-            <CountBlock label="RC" title="Running Count: raw sum of all card tags seen" value={rc} colorVal={rc} mono secondary />
-            <div style={{ height: 1, background: 'rgba(255,255,255,0.07)' }} />
-            <CountBlock label="ML" title="ML-enhanced true count" value={etc.toFixed(1)} colorVal={etc} mono secondary />
-          </div>
+          {/* Left cluster — RC + ML Enhanced, stacked. Hidden in Speed (study-y; TC hero is enough) */}
+          {!isSpeedSlim && (
+            <div
+              style={{
+                display: 'flex', flexDirection: 'column', gap: 2,
+                padding: '6px 14px',
+                background: 'rgba(255,255,255,0.03)',
+                alignSelf: 'stretch', justifyContent: 'center',
+              }}
+            >
+              <CountBlock label="RC" title="Running Count: raw sum of all card tags seen" value={rc} colorVal={rc} mono secondary />
+              <div style={{ height: 1, background: 'rgba(255,255,255,0.07)' }} />
+              <CountBlock label="ML" title="ML-enhanced true count" value={etc.toFixed(1)} colorVal={etc} mono secondary />
+            </div>
+          )}
 
           {/* Divider */}
-          <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
+          {!isSpeedSlim && (
+            <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
+          )}
 
           {/* ── HERO: True Count (balanced) OR Running Count vs Pivot (KO) ── */}
           <div
@@ -364,11 +369,13 @@ function TopBar({ count, onNewHand, onShuffle, onChangeSystem, currentAction, ui
             </>
           )}
 
-          {/* Divider */}
-          <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
+          {/* Divider — hidden in Speed (Edge cluster also hidden) */}
+          {!isSpeedSlim && (
+            <div style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.12)' }} />
+          )}
 
-          {/* Right cluster — Advantage (PHASE 3: bucketed by EV) */}
-          {(() => {
+          {/* Right cluster — Advantage (PHASE 3: bucketed by EV). Hidden in Speed (derived from TC) */}
+          {!isSpeedSlim && (() => {
             const edgeCol = adv >= 1.5 ? '#44e882'
                           : adv >= 0   ? '#ffd447'
                           : '#ff5c5c';
