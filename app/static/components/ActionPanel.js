@@ -153,13 +153,17 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode, in
         }}
       >
 
-        {/* Action word — hero element */}
+        {/* Action word — hero element. Speed mode renders a jumbo 64px verb
+            (color via existing actionClass tokens); the inline <style> below
+            scales to 48px below 480px viewport. */}
         <div style={{ flex: 1 }}>
           <div
-            className={`action-text-base ${action ? actionClass(action) : ''}`}
+            className={`action-text-base ${action ? actionClass(action) : ''}${isSpeed ? ' ap-verb-jumbo' : ''}`}
             title={action ? `Best play: ${action}` : 'Deal cards to see recommendation'}
             style={{
-              fontSize: action ? (isZen ? 'var(--font-hero)' : 'var(--font-action)') : '1.6rem',
+              fontSize: action
+                ? (isSpeed ? 64 : (isZen ? 'var(--font-hero)' : 'var(--font-action)'))
+                : '1.6rem',
               lineHeight: 1,
               fontWeight: 900,
               letterSpacing: '-0.02em',
@@ -170,6 +174,9 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode, in
           >
             {action || 'DEAL CARDS'}
           </div>
+          {isSpeed && React.createElement('style', null,
+            '@media (max-width: 480px) { .ap-verb-jumbo { font-size: 48px !important; } }'
+          )}
 
           {/* PHASE 8.2: Last-3-actions micro-strip — oldest leftmost. Hidden in zen/speed. */}
           {!isZen && !isSpeed && actionHistory.length > 0 && action && (
