@@ -641,6 +641,18 @@ function App() {
     if (dealerMustDraw) setTarget('dealer')
   }, [dealerMustDraw])
 
+  // ── SPEC B: Sticky-target lock during dealer draw in Speed ────────────────
+  // In Speed mode, every card during dealerMustDraw routes to dealer regardless
+  // of any A/S/D press in the same window. The user can rapid-fire dealer cards
+  // without thinking about target. Outside Speed, manual A/S/D still wins.
+  useEffect(() => {
+    if (!isSpeed) return
+    if (!dealerMustDraw) return
+    if (dealTargetRef.current !== 'dealer') {
+      setTarget('dealer')
+    }
+  }, [isSpeed, dealerMustDraw, dealTarget])
+
   // ── PHASE 1: Auto-target switching (all modes, was Speed-only) ────────────
   // After 2 player cards → switch to dealer. After 2 dealer cards → back to player.
   // User can still override manually by clicking the target button — the effect
