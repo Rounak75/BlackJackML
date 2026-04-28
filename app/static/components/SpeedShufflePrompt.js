@@ -41,23 +41,24 @@ function SpeedShufflePrompt({ penetration, threshold, onShuffle, onDismiss, dism
     'aria-label': 'Shuffle prompt',
     style: {
       width: '100%',
-      padding: '10px 14px',
-      borderRadius: 8,
-      background: 'rgba(255,212,71,0.12)',
-      border: '1px solid rgba(255,212,71,0.45)',
-      color: '#ffd447',
+      padding: 'var(--space-3) var(--space-4)',
+      borderRadius: 'var(--radius-md)',
+      // Ambient amber wash kept deliberately — the prompt IS a state warning.
+      background: 'rgba(255,184,77,0.12)',
+      border: 'var(--border-w) solid var(--amber)',
+      color: 'var(--amber)',
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      gap: 12,
-      fontSize: 12, fontWeight: 700, letterSpacing: '0.06em',
+      gap: 'var(--space-3)',
+      fontSize: 'var(--font-sm)', fontWeight: 700, letterSpacing: '0.06em',
     },
   },
     React.createElement('span', null,
       `⚡ Penetration ${Math.round(penetration)}% — shuffle now? `,
       React.createElement('kbd', {
         style: {
-          marginLeft: 8, padding: '2px 6px',
-          background: 'rgba(255,212,71,0.2)', borderRadius: 4,
-          fontFamily: 'monospace', fontSize: 11,
+          marginLeft: 'var(--space-2)', padding: '2px 6px',
+          background: 'rgba(255,184,77,0.2)', borderRadius: 'var(--radius-sm)',
+          fontFamily: 'var(--font-mono)', fontSize: 'var(--font-xs)',
         },
       }, 'Y')
     ),
@@ -65,9 +66,9 @@ function SpeedShufflePrompt({ penetration, threshold, onShuffle, onDismiss, dism
       onClick: onDismiss,
       'aria-label': 'Dismiss shuffle prompt',
       style: {
-        background: 'transparent', border: '1px solid rgba(255,212,71,0.4)',
-        color: '#ffd447', borderRadius: 6, padding: '4px 8px',
-        fontSize: 10, fontWeight: 700, cursor: 'pointer',
+        background: 'transparent', border: 'var(--border-w) solid var(--amber)',
+        color: 'var(--amber)', borderRadius: 'var(--radius-md)', padding: 'var(--space-1) var(--space-2)',
+        fontSize: 'var(--font-xs)', fontWeight: 700, cursor: 'pointer',
       },
     }, 'DISMISS (ESC)')
   );
