@@ -387,8 +387,10 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
                     className={`card-btn compact-rank-btn ${depleted ? 'depleted' : ''} ${hv > 0 ? 'count-pos' : hv < 0 ? 'count-neg' : ''}`}
                     style={{
                       width: '100%',
-                      padding: isSpeed ? '10px 0' : '6px 0',
-                      fontSize: isSpeed ? 18 : 14,
+                      // Spec B: Speed gets bigger tap targets — padding +25% over
+                      // the prior Speed value (10→12), fontSize bumped (18→20).
+                      padding: isSpeed ? '12px 0' : '6px 0',
+                      fontSize: isSpeed ? 20 : 14,
                       fontWeight: 800,
                       borderRadius: 7,
                       border: isOpen ? '2px solid #ffd447' : '1.5px solid rgba(255,255,255,0.15)',
