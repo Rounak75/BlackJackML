@@ -86,9 +86,9 @@ function HandDisplay({
   }
 
   const resultMeta = {
-    win:  { label: '🏆 YOU WIN',  color: '#44e882', bg: 'rgba(68,232,130,0.15)',  border: 'rgba(68,232,130,0.5)'  },
-    loss: { label: '💀 YOU LOSE', color: '#ff5c5c', bg: 'rgba(255,92,92,0.15)',   border: 'rgba(255,92,92,0.5)'   },
-    push: { label: '🤝 PUSH',     color: '#6aafff', bg: 'rgba(106,175,255,0.15)', border: 'rgba(106,175,255,0.5)' },
+    win:  { label: '🏆 YOU WIN',  color: 'var(--jade)', bg: 'rgba(68,232,130,0.15)',  border: 'rgba(68,232,130,0.5)'  },
+    loss: { label: '💀 YOU LOSE', color: 'var(--ruby)', bg: 'rgba(255,92,92,0.15)',   border: 'rgba(255,92,92,0.5)'   },
+    push: { label: '🤝 PUSH',     color: 'var(--sapph)', bg: 'rgba(106,175,255,0.15)', border: 'rgba(106,175,255,0.5)' },
   }
 
   const sym = currency?.symbol ?? '₹'
@@ -99,7 +99,7 @@ function HandDisplay({
 
   return (
     <div className="rounded-xl overflow-hidden"
-      style={{ background: '#1a2236', border: '1.5px solid rgba(255,255,255,0.12)' }}
+      style={{ background: 'var(--surface-raised)', border: 'var(--border-w) solid var(--border-soft)' }}
     >
 
       {/* ══ CRIT-09: INSURANCE BANNER — full-width, ABOVE the hand grid ═══
@@ -120,28 +120,28 @@ function HandDisplay({
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 200 }}>
               <span style={{ fontSize: 22 }}>🛡</span>
               <div>
-                <div style={{ fontSize: 13, fontWeight: 800, color: '#ffffff' }}>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-0)' }}>
                   Insurance Available
                   {tookInsurance && (
                     <span style={{
                       marginLeft: 8, fontSize: 9, fontWeight: 700, padding: '2px 8px',
                       borderRadius: 10, background: 'rgba(106,175,255,0.3)',
-                      color: '#6aafff', border: '1px solid rgba(106,175,255,0.6)',
+                      color: 'var(--sapph)', border: '1px solid rgba(106,175,255,0.6)',
                     }}>✓ INSURED</span>
                   )}
                 </div>
-                <div style={{ fontSize: 10, color: '#b8ccdf', marginTop: 2 }}>
+                <div style={{ fontSize: 10, color: 'var(--text-2)', marginTop: 2 }}>
                   Pays 2:1 · Costs {sym}{activeBet > 0 ? (activeBet * 0.5).toFixed(0) : '½ bet'}
                   {insurance.ev !== null && (
                     <span style={{
-                      marginLeft: 6, fontWeight: 700, fontFamily: 'DM Mono, monospace',
-                      color: insurance.ev >= 0 ? '#44e882' : '#ff5c5c',
+                      marginLeft: 6, fontWeight: 700, fontFamily: 'var(--font-mono)',
+                      color: insurance.ev >= 0 ? 'var(--jade)' : 'var(--ruby)',
                     }}>
                       {insurance.ev >= 0 ? '+' : ''}{insurance.ev?.toFixed(1)}% EV
                     </span>
                   )}
                   {insurance.reason && (
-                    <span style={{ marginLeft: 6, color: '#94a7c4' }}>· {insurance.reason}</span>
+                    <span style={{ marginLeft: 6, color: 'var(--text-2)' }}>· {insurance.reason}</span>
                   )}
                 </div>
               </div>
@@ -157,10 +157,10 @@ function HandDisplay({
                     fontWeight: 800, fontSize: 14, border: 'none',
                     minHeight: 44, minWidth: 120,
                     background: insurance.recommended
-                      ? 'linear-gradient(135deg,#44e882,#22cc66)'
+                      ? 'var(--jade)'
                       : 'rgba(255,255,255,0.08)',
-                    color: insurance.recommended ? '#0a0e18' : '#94a7c4',
-                    boxShadow: insurance.recommended ? '0 2px 12px rgba(68,232,130,0.35)' : 'none',
+                    color: insurance.recommended ? 'var(--surface-base)' : 'var(--text-2)',
+                    boxShadow: 'none',
                     transition: 'all 0.15s',
                   }}
                   onMouseEnter={e => {
@@ -182,10 +182,10 @@ function HandDisplay({
                     fontWeight: 800, fontSize: 14, border: 'none',
                     minHeight: 44, minWidth: 120,
                     background: !insurance.recommended
-                      ? 'linear-gradient(135deg,#ff5c5c,#cc2222)'
+                      ? 'var(--ruby)'
                       : 'rgba(255,255,255,0.08)',
-                    color: !insurance.recommended ? '#ffffff' : '#94a7c4',
-                    boxShadow: !insurance.recommended ? '0 2px 12px rgba(255,92,92,0.35)' : 'none',
+                    color: !insurance.recommended ? 'var(--text-0)' : 'var(--text-2)',
+                    boxShadow: 'none',
                     transition: 'all 0.15s',
                   }}
                   onMouseEnter={e => {
@@ -204,8 +204,8 @@ function HandDisplay({
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{
-                  fontSize: 11, fontFamily: 'DM Mono, monospace', fontWeight: 700,
-                  color: '#6aafff', display: 'inline-flex', alignItems: 'center', gap: 4,
+                  fontSize: 11, fontFamily: 'var(--font-mono)', fontWeight: 700,
+                  color: 'var(--sapph)', display: 'inline-flex', alignItems: 'center', gap: 4,
                 }}>
                   {dealerBj
                     ? <><Icon name="target" size={11} /> Pays +{sym}{(activeBet).toFixed(0)}</>
@@ -221,7 +221,7 @@ function HandDisplay({
                     fontSize: 10, fontWeight: 600,
                     background: 'transparent',
                     border: '1px solid rgba(255,255,255,0.15)',
-                    color: '#94a7c4',
+                    color: 'var(--text-2)',
                   }}
                 >
                   ↩ Undo
@@ -245,7 +245,7 @@ function HandDisplay({
         <div className="flex items-center gap-2 mb-2">
           <div
             className="text-[10px] uppercase tracking-widest font-display font-bold"
-            style={{ color: '#b8ccdf' }}
+            style={{ color: 'var(--text-2)' }}
           >
             Dealer Hand
           </div>
@@ -263,7 +263,7 @@ function HandDisplay({
                   dealerBj   ? 'rgba(255,212,71,0.5)'
                   : dealerBust ? 'rgba(255,92,92,0.5)'
                   : 'rgba(255,255,255,0.2)'}`,
-                color: dealerBj ? '#ffd447' : dealerBust ? '#ff5c5c' : '#ccdaec',
+                color: dealerBj ? 'var(--amber)' : dealerBust ? 'var(--ruby)' : 'var(--text-1)',
               }}
             >
               {dealerBj ? 'BLACKJACK' : dealerBust ? 'BUST' : `${dealerValue}${dealerSoft ? ' soft' : ''}`}
@@ -289,7 +289,7 @@ function HandDisplay({
         {/* Cards */}
         <div className="flex items-center gap-2 flex-wrap" style={{ minHeight: 64 }}>
           {dealerCards.length === 0 ? (
-            <span className="text-xs italic" style={{ color: '#b8ccdf' }}>
+            <span className="text-xs italic" style={{ color: 'var(--text-2)' }}>
               Click a card with "Dealer" selected
             </span>
           ) : (
@@ -306,7 +306,7 @@ function HandDisplay({
 
         {/* Dealer card count indicator */}
         {dealerCards.length > 0 && (
-          <div className="mt-1.5 text-[10px] font-mono" style={{ color: '#b8ccdf' }}>
+          <div className="mt-1.5 text-[10px] font-mono" style={{ color: 'var(--text-2)' }}>
             {dealerCards.length === 1
               ? 'Upcard shown · add hole card when revealed'
               : `${dealerCards.length} cards`}
@@ -316,7 +316,7 @@ function HandDisplay({
         {/* Dealer outcome banners */}
         {dealerBust && (
           <div className="mt-2 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
-            style={{ background: 'rgba(255,92,92,0.15)', border: '1.5px solid rgba(255,92,92,0.5)', color: '#ff5c5c' }}>
+            style={{ background: 'rgba(255,92,92,0.15)', border: '1.5px solid rgba(255,92,92,0.5)', color: 'var(--ruby)' }}>
             💥 DEALER BUST
           </div>
         )}
@@ -328,7 +328,7 @@ function HandDisplay({
         )}
         {dealerBj && (
           <div className="mt-2 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
-            style={{ background: 'rgba(255,212,71,0.15)', border: '1.5px solid rgba(255,212,71,0.5)', color: '#ffd447' }}>
+            style={{ background: 'rgba(255,212,71,0.15)', border: '1.5px solid rgba(255,212,71,0.5)', color: 'var(--amber)' }}>
             ⚠ DEALER BLACKJACK
           </div>
         )}
@@ -341,7 +341,7 @@ function HandDisplay({
         <div className="flex items-center gap-2 mb-2">
           <div
             className="text-[10px] uppercase tracking-widest font-display font-bold"
-            style={{ color: '#b8ccdf' }}
+            style={{ color: 'var(--text-2)' }}
           >
             Your Hand
           </div>
@@ -358,7 +358,7 @@ function HandDisplay({
                   bj   ? 'rgba(255,212,71,0.5)'
                   : bust ? 'rgba(255,92,92,0.5)'
                   : 'rgba(255,255,255,0.2)'}`,
-                color: bj ? '#ffd447' : bust ? '#ff5c5c' : '#ccdaec',
+                color: bj ? 'var(--amber)' : bust ? 'var(--ruby)' : 'var(--text-1)',
               }}
             >
               {bj ? 'BLACKJACK' : bust ? 'BUST' : `${bv}${playerHand?.is_soft ? ' soft' : ''}`}
@@ -371,7 +371,7 @@ function HandDisplay({
               style={{
                 background: 'rgba(255,212,71,0.15)',
                 border: '1px solid rgba(255,212,71,0.45)',
-                color: '#ffd447',
+                color: 'var(--amber)',
               }}
             >
               ×2 DOUBLED
@@ -384,7 +384,7 @@ function HandDisplay({
           {playerHand?.cards?.length > 0 ? (
             playerHand.cards.map((c, i) => <MiniCard key={i} str={c} />)
           ) : (
-            <span className="text-xs italic" style={{ color: '#b8ccdf' }}>
+            <span className="text-xs italic" style={{ color: 'var(--text-2)' }}>
               Click cards with "Player" selected
             </span>
           )}
@@ -426,7 +426,7 @@ function HandDisplay({
         {/* Player bust banner — only show when not yet resolved (bust is instant) */}
         {bust && !resolvedResult && (
           <div className="mt-2 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
-            style={{ background: 'rgba(255,92,92,0.15)', border: '1.5px solid rgba(255,92,92,0.5)', color: '#ff5c5c' }}>
+            style={{ background: 'rgba(255,92,92,0.15)', border: '1.5px solid rgba(255,92,92,0.5)', color: 'var(--ruby)' }}>
             💥 PLAYER BUST — resolving…
           </div>
         )}
@@ -434,7 +434,7 @@ function HandDisplay({
         {/* Player blackjack banner — shown before dealer hole card is revealed */}
         {bj && !resolvedResult && (
           <div className="mt-2 px-3 py-2 rounded-lg text-xs font-bold flex items-center gap-2"
-            style={{ background: 'rgba(255,212,71,0.15)', border: '1.5px solid rgba(255,212,71,0.5)', color: '#ffd447' }}>
+            style={{ background: 'rgba(255,212,71,0.15)', border: '1.5px solid rgba(255,212,71,0.5)', color: 'var(--amber)' }}>
             ⭐ BLACKJACK! Pays 3:2 — waiting for dealer hole card…
           </div>
         )}
@@ -446,8 +446,8 @@ function HandDisplay({
             Hidden once outcome is resolved (hand is over). */}
         {!resolvedResult && sideBets && (() => {
           const BET_META = [
-            { key: 'perfect_pairs',     icon: '👯', name: 'Perfect Pairs', color: '#b99bff' },
-            { key: 'twenty_one_plus_3', icon: '🃏', name: '21+3',          color: '#ffd447' },
+            { key: 'perfect_pairs',     icon: '👯', name: 'Perfect Pairs', color: 'var(--ameth)' },
+            { key: 'twenty_one_plus_3', icon: '🃏', name: '21+3',          color: 'var(--amber)' },
             { key: 'lucky_ladies',      icon: '👑', name: 'Lucky Ladies',  color: '#ff9a20' },
           ]
           const active = BET_META.filter(b => sideBets[b.key]?.recommended)
@@ -455,7 +455,7 @@ function HandDisplay({
           return (
             <div className="mt-3 space-y-1.5">
               <div className="text-[9px] uppercase tracking-widest font-bold"
-                style={{ color: '#b8ccdf' }}>
+                style={{ color: 'var(--text-2)' }}>
                 +EV Side Bets
               </div>
               {active.map(({ key, icon, name, color }) => (
@@ -466,7 +466,7 @@ function HandDisplay({
                     <span style={{ fontSize: '0.85rem' }}>{icon}</span>
                     <span className="text-xs font-semibold" style={{ color }}>{name}</span>
                   </div>
-                  <span className="font-mono font-bold text-xs" style={{ color: '#44e882' }}>
+                  <span className="font-mono font-bold text-xs" style={{ color: 'var(--jade)' }}>
                     +{(sideBets[key].ev || 0).toFixed(1)}% EV
                   </span>
                 </div>
@@ -500,10 +500,10 @@ function MiniCardBack({ label = '?' }) {
     <div
       className="mini-card"
       style={{
-        background: 'linear-gradient(135deg, #1e2c48 25%, #26395c 75%)',
-        color: '#b8ccdf',
-        fontSize: '1.2rem',
-        border: '1.5px solid rgba(255,255,255,0.15)',
+        background: 'var(--surface-deep)',
+        color: 'var(--text-2)',
+        fontSize: 'var(--font-base)',
+        border: 'var(--border-w) solid var(--border)',
       }}
     >
       {label}
