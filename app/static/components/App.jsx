@@ -82,6 +82,9 @@ function App() {
   // Deal-Order Engine state
   const [dealOrderEnabled, setDealOrderEnabled] = useState(true)
 
+  // SPEC B: Speed mode shuffle prompt dismiss state. Reset on shoe boundary.
+  const [shufflePromptDismissed, setShufflePromptDismissed] = useState(false)
+
   // Feature state
   const [zoneConfig, setZoneConfig] = useState({ player_end: 0.33, dealer_end: 0.66 })
   const [seenCards, setSeenCards] = useState([])
@@ -722,6 +725,15 @@ function App() {
     if (!isSpeed && outcomeFlash) setOutcomeFlash(null)
   }, [isSpeed, outcomeFlash])
 
+  // SPEC B: re-arm the shuffle prompt when penetration drops well below the
+  // threshold (i.e. a new shoe was dealt). Hysteresis (-5) avoids flicker.
+  useEffect(() => {
+    const pen = count?.penetration
+    if (pen != null && pen < SHUFFLE_PROMPT_THRESHOLD - 5 && shufflePromptDismissed) {
+      setShufflePromptDismissed(false)
+    }
+  }, [count?.penetration, shufflePromptDismissed])
+
   // ── SPEED MODE: Auto-insurance ─────────────────────────────────────────────
   useEffect(() => {
     if (!isSpeed) return
@@ -973,6 +985,20 @@ function App() {
               activeHandIndex={activeHandIdx}
               dealerUpcard={dealerUp}
               onNextHand={handleNextSplitHand}
+            />
+          )}
+
+          {/* SPEC B: Speed-only shuffle prompt above CardGrid */}
+          {isSpeed && (
+            <SpeedShufflePrompt
+              penetration={count?.penetration}
+              threshold={SHUFFLE_PROMPT_THRESHOLD}
+              onShuffle={() => {
+                handleShuffle()
+                setShufflePromptDismissed(true)
+              }}
+              onDismiss={() => setShufflePromptDismissed(true)}
+              dismissed={shufflePromptDismissed}
             />
           )}
 
