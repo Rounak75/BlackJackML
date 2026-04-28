@@ -668,8 +668,10 @@ function App() {
     }
   }, [playerHand?.cards?.length, dealerHand?.card_count, splitHands.length, dealerMustDraw])
 
-  // ── SPEED MODE: Auto-new-hand on resolved outcome ─────────────────────────
+  // ── SPEED MODE: Auto-new-hand on resolved outcome + outcome flash ─────────
   const autoNewHandTimer = useRef(null)
+  const flashClearTimer = useRef(null)
+  const [outcomeFlash, setOutcomeFlash] = useState(null)
   useEffect(() => {
     if (!isSpeed) return
     const pCards = playerHand?.cards?.length ?? 0
@@ -684,6 +686,24 @@ function App() {
 
     const resolved = pBust || dBust || (pBJ && dCards >= 2) || (dBJ && pCards >= 2) || dStands
     if (resolved) {
+      // Compute outcome label for the flash overlay
+      let outcome = null
+      if (pBust)               outcome = 'LOSE'
+      else if (dBust)          outcome = 'WIN'
+      else if (pBJ && !dBJ)    outcome = 'WIN'
+      else if (dBJ && !pBJ)    outcome = 'LOSE'
+      else if (pBJ && dBJ)     outcome = 'PUSH'
+      else {
+        const pTotal = playerHand?.value ?? 0
+        const dTotal = dealerHand?.value ?? 0
+        outcome = pTotal > dTotal ? 'WIN' : pTotal < dTotal ? 'LOSE' : 'PUSH'
+      }
+      setOutcomeFlash(outcome)
+
+      // Flash clears at 700ms; auto-new-hand still fires at 1500ms.
+      if (flashClearTimer.current) clearTimeout(flashClearTimer.current)
+      flashClearTimer.current = setTimeout(() => setOutcomeFlash(null), 700)
+
       if (autoNewHandTimer.current) clearTimeout(autoNewHandTimer.current)
       autoNewHandTimer.current = setTimeout(() => {
         handleNewHand()
@@ -691,8 +711,16 @@ function App() {
         setTookInsurance(false)
       }, 1500)
     }
-    return () => { if (autoNewHandTimer.current) clearTimeout(autoNewHandTimer.current) }
+    return () => {
+      if (autoNewHandTimer.current) clearTimeout(autoNewHandTimer.current)
+      if (flashClearTimer.current)  clearTimeout(flashClearTimer.current)
+    }
   }, [isSpeed, playerHand, dealerHand, handleNewHand])
+
+  // Clear lingering flash when leaving Speed
+  useEffect(() => {
+    if (!isSpeed && outcomeFlash) setOutcomeFlash(null)
+  }, [isSpeed, outcomeFlash])
 
   // ── SPEED MODE: Auto-insurance ─────────────────────────────────────────────
   useEffect(() => {
@@ -921,6 +949,7 @@ function App() {
             compDep16={rec?.comp_dep_16}
             uiMode={uiMode}
             insurance={insurance}
+            outcomeFlash={isSpeed ? outcomeFlash : null}
           />
 
           <HandDisplay
@@ -1012,6 +1041,7 @@ function App() {
             compDep16={rec?.comp_dep_16}
             uiMode={uiMode}
             insurance={insurance}
+            outcomeFlash={isSpeed ? outcomeFlash : null}
           />
 
           {/* CompDepAlert removed as standalone (Issue #8) —

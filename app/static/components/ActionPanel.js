@@ -17,7 +17,7 @@
  *   compDep16      — recommendation.comp_dep_16 object (Issue #8 inline)
  */
 
-function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode, insurance }) {
+function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode, insurance, outcomeFlash }) {
   const { useState, useRef, useEffect } = React;
   const [showWhy, setShowWhy] = useState(false);
   const isZen   = uiMode === 'zen';
@@ -84,6 +84,7 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode, in
   return (
     <div
       style={{
+        position: 'relative',
         background: '#1c2540',
         border: '1px solid rgba(255,255,255,0.1)',
         borderLeft: `4px solid ${accent}`,
@@ -94,6 +95,24 @@ function ActionPanel({ recommendation, count, mlModelInfo, compDep16, uiMode, in
     >
       {/* ── 4px coloured stripe at top ───────────────────────────── */}
       <div className={`action-stripe ${stripe}`} />
+
+      {/* SPEC B: Round-outcome flash overlay (Speed only — App passes null elsewhere).
+          Briefly tints the panel WIN/LOSE/PUSH for ~700ms before auto-new-hand resets. */}
+      {outcomeFlash && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: outcomeFlash === 'WIN'  ? 'rgba(68,232,130,0.18)'
+                    : outcomeFlash === 'LOSE' ? 'rgba(255,92,92,0.18)'
+                    : 'rgba(255,212,71,0.16)',
+          color:      outcomeFlash === 'WIN'  ? '#44e882'
+                    : outcomeFlash === 'LOSE' ? '#ff5c5c'
+                    : '#ffd447',
+          fontSize: 56, fontWeight: 900, letterSpacing: '0.12em',
+          pointerEvents: 'none',
+          zIndex: 5,
+        }}>{outcomeFlash}</div>
+      )}
 
       {/* PHASE 3: Insurance row — always shown when dealer up = A (informational).
           Pulse + gold styling only when shoe-EV makes insurance correct. */}
