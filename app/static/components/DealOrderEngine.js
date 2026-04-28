@@ -449,6 +449,10 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
     return 'seen';
   }, [dealPos, mySeat, players]);
 
+  // Expose round state so CardGrid can show interactive vs read-only chips.
+  // Round 0 = first card to each seat; round 1 = second card; round 2 = done.
+  var getDealRound = useCallback(function () { return dealRound; }, [dealRound]);
+
   useImperativeHandle(ref, function () {
     return {
       recordCard: recordCard,
@@ -459,8 +463,9 @@ var DealOrderEngine = React.forwardRef(function DealOrderEngine(props, ref) {
       softReset: softReset,
       replayCards: replayCards,
       getCurrentTarget: getCurrentTarget,
+      getDealRound: getDealRound,
     };
-  }, [recordCard, resetForNewHand, resetForShuffle, skipCard, undoDealCard, softReset, replayCards, getCurrentTarget]);
+  }, [recordCard, resetForNewHand, resetForShuffle, skipCard, undoDealCard, softReset, replayCards, getCurrentTarget, getDealRound]);
 
   // ══════════════════════════════════════════════════════════════
   // DERIVED VALUES
