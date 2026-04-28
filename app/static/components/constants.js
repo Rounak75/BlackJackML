@@ -18,6 +18,14 @@
  */
 
 
+// ── Speed mode: shuffle-prompt trigger ─────────────────────────────────
+// When shoe.penetration crosses this percent in Speed mode, the
+// SpeedShufflePrompt renders above CardGrid. Mirrors the server-side
+// GameConfig.PENETRATION (0.75 → 75%); kept frontend-side to avoid
+// threading another value through the gameState payload.
+const SHUFFLE_PROMPT_THRESHOLD = 75;
+
+
 // ── Card ranks in the order they appear in the card grid ─────────────
 // 'A' = Ace, 'J/Q/K' = face cards, all count as 10 in Hi-Lo
 const RANKS = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
