@@ -24,25 +24,25 @@ function StatusBar({ session, count, wonging, mlModelInfo, lastUpdateAgo, onShow
               ? count.effective_true : count.true)) || 0;
 
   // Pen color
-  const penColor = penPct == null ? '#6b7f96'
-                : penPct >= 80 ? '#ff5c5c'
-                : penPct >= 70 ? '#ffd447'
+  const penColor = penPct == null ? 'var(--text-2)'
+                : penPct >= 80 ? 'var(--ruby)'
+                : penPct >= 70 ? 'var(--amber)'
                 : '#88a8c8';
 
   // Wong cue: if wonging is active, use its signal; otherwise compute a passive
   // hint from TC so a pro can see "would Wong" even with the feature off.
   const wongActive = !!(wonging && wonging.enabled);
-  const SIG_COL = { jade: '#44e882', ruby: '#ff5c5c', gold: '#ffd447' };
+  const SIG_COL = { jade: 'var(--jade)', ruby: 'var(--ruby)', gold: 'var(--amber)' };
   let wongLabel, wongCol;
   if (wongActive) {
     wongLabel = wonging.signal || 'WATCHING';
-    wongCol = SIG_COL[wonging.signal_color] || '#ffd447';
+    wongCol = SIG_COL[wonging.signal_color] || 'var(--amber)';
   } else if (tc >= 2) {
     wongLabel = 'WOULD SIT'; wongCol = '#88eebb';
   } else if (tc <= -1) {
     wongLabel = 'WOULD LEAVE'; wongCol = '#ff8888';
   } else {
-    wongLabel = 'NEUTRAL'; wongCol = '#6b7f96';
+    wongLabel = 'NEUTRAL'; wongCol = 'var(--text-2)';
   }
 
   const modelLoaded = !!(mlModelInfo && mlModelInfo.loaded);
@@ -61,14 +61,14 @@ function StatusBar({ session, count, wonging, mlModelInfo, lastUpdateAgo, onShow
     },
       React.createElement('span', {
         style: {
-          fontSize: 8, fontWeight: 700, color: '#6b7f96',
+          fontSize: 8, fontWeight: 700, color: 'var(--text-2)',
           textTransform: 'uppercase', letterSpacing: '0.1em',
         }
       }, label),
       React.createElement('span', {
         style: {
-          fontSize: 11, fontWeight: 700, color: color || '#ccdaec',
-          fontFamily: 'DM Mono, monospace', fontVariantNumeric: 'tabular-nums',
+          fontSize: 11, fontWeight: 700, color: color || 'var(--text-1)',
+          fontFamily: 'var(--font-mono)', fontVariantNumeric: 'tabular-nums',
         }
       }, value)
     )
@@ -81,26 +81,26 @@ function StatusBar({ session, count, wonging, mlModelInfo, lastUpdateAgo, onShow
       position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 40,
       display: 'flex', alignItems: 'center',
       height: 28,
-      background: 'rgba(13,19,32,0.95)',
-      borderTop: '1px solid rgba(255,255,255,0.1)',
+      background: 'rgba(20,20,20,0.95)',
+      borderTop: 'var(--border-w) solid var(--border-soft)',
       backdropFilter: 'blur(8px)',
-      color: '#ccdaec',
+      color: 'var(--text-1)',
     },
   },
     cell('Hands', hands),
     cell('Pen', penPct != null ? `${penPct}%` : '—', penColor),
     cell('Wong', wongLabel, wongCol),
-    cell('AI', modelLoaded ? 'ML' : 'Basic', modelLoaded ? '#44e882' : '#94a7c4'),
+    cell('AI', modelLoaded ? 'ML' : 'Basic', modelLoaded ? 'var(--jade)' : 'var(--text-2)'),
     // SPEC B: hide RoR / Update / right-cluster in Zen and Speed (slim variant)
     !isSlim && (function() {
       const ror = betting && typeof betting.risk_of_ruin === 'number' ? betting.risk_of_ruin : null;
-      const rorCol = ror == null ? '#6b7f96'
-                   : ror <= 5  ? '#44e882'
-                   : ror <= 15 ? '#ffd447'
-                   : '#ff5c5c';
+      const rorCol = ror == null ? 'var(--text-2)'
+                   : ror <= 5  ? 'var(--jade)'
+                   : ror <= 15 ? 'var(--amber)'
+                   : 'var(--ruby)';
       return cell('RoR', ror == null ? '—' : `${ror.toFixed(1)}%`, rorCol);
     })(),
-    !isSlim && cell('Update', updateText, '#94a7c4'),
+    !isSlim && cell('Update', updateText, 'var(--text-2)'),
 
     // Right cluster — push to end. Hidden in slim modes; users access
     // HotkeyOverlay via the `?` keyboard shortcut or the CardGrid `⌨ ?` chip.
@@ -114,13 +114,13 @@ function StatusBar({ session, count, wonging, mlModelInfo, lastUpdateAgo, onShow
         padding: '0 12px', height: '100%',
         background: 'transparent', border: 'none',
         borderLeft: '1px solid rgba(255,255,255,0.06)',
-        color: '#94a7c4', cursor: 'pointer',
+        color: 'var(--text-2)', cursor: 'pointer',
         fontSize: 9, fontWeight: 800, letterSpacing: '0.1em',
         textTransform: 'uppercase',
       },
     },
       React.createElement('span', {
-        style: { fontFamily: 'DM Mono, monospace', fontSize: 11, color: '#ffd447' }
+        style: { fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--amber)' }
       }, '?'),
       'hotkeys'
     )
