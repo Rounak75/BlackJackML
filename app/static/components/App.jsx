@@ -904,18 +904,6 @@ function App() {
             insurance={insurance}
           />
 
-          {/* Deal-Order Engine — included in all modes */}
-          {dealOrderEnabled && (
-            <DealOrderEngine
-              ref={dealOrderRef}
-              count={count}
-              shoe={shoe}
-              onAppUndo={handleUndo}
-              onNewHand={handleNewHand}
-              onShuffle={handleShuffle}
-            />
-          )}
-
           <HandDisplay
             playerHand={playerHand}
             dealerUpcard={dealerUp}
@@ -957,6 +945,18 @@ function App() {
             doeTarget={doeTarget}
             doeRoundDone={doeRoundDone}
           />
+
+          {/* Deal-Order Engine — included in all modes */}
+          {dealOrderEnabled && (
+            <DealOrderEngine
+              ref={dealOrderRef}
+              count={count}
+              shoe={shoe}
+              onAppUndo={handleUndo}
+              onNewHand={handleNewHand}
+              onShuffle={handleShuffle}
+            />
+          )}
 
           {/* Zen: show side bet EV below cards (pros use this for bet sizing) */}
           {isZen && (
@@ -1006,18 +1006,6 @@ function App() {
 
           {/* CompDepAlert removed as standalone (Issue #8) —
               now inline badge in ActionPanel */}
-
-          {/* Deal-Order Engine — seat tracking + decision-aware counting */}
-          {dealOrderEnabled && (
-            <DealOrderEngine
-              ref={dealOrderRef}
-              count={count}
-              shoe={shoe}
-              onAppUndo={handleUndo}
-              onNewHand={handleNewHand}
-              onShuffle={handleShuffle}
-            />
-          )}
 
           {/* Hand display */}
           <HandDisplay
@@ -1078,6 +1066,18 @@ function App() {
             doeTarget={doeTarget}
             doeRoundDone={doeRoundDone}
           />
+
+          {/* Deal-Order Engine — seat tracking + decision-aware counting */}
+          {dealOrderEnabled && (
+            <DealOrderEngine
+              ref={dealOrderRef}
+              count={count}
+              shoe={shoe}
+              onAppUndo={handleUndo}
+              onNewHand={handleNewHand}
+              onShuffle={handleShuffle}
+            />
+          )}
 
           {/* OutcomeStrip — placed below CardGrid so it never pushes the grid
               below the fold. Self-hides until ≥2 player cards are dealt. */}
