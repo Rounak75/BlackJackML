@@ -128,7 +128,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
   return (
     <div
       className={`rounded-xl p-3`}
-      style={{ background: '#1c2540', border: '1.5px solid rgba(255,255,255,0.12)' }}
+      style={{ background: 'var(--surface-raised)', border: '1.5px solid rgba(255,255,255,0.12)' }}
       role="group"
       aria-label="Card entry panel"
     >
@@ -137,14 +137,14 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span
             className="font-display font-bold text-[10px] uppercase tracking-widest"
-            style={{ color: '#b8ccdf' }}
+            style={{ color: 'var(--text-2)' }}
             aria-hidden="true"
           >
             {showFullGrid ? 'Full Card Grid' : 'Click to Deal'}
           </span>
           <span style={{
             fontSize: 10, fontWeight: 800, letterSpacing: '0.05em',
-            color: target === 'player' ? '#60a5fa' : target === 'dealer' ? '#ff9a20' : '#94a7c4',
+            color: target === 'player' ? '#60a5fa' : target === 'dealer' ? '#ff9a20' : 'var(--text-2)',
           }}>
             → {target === 'player' ? 'PLAYER' : target === 'dealer' ? 'DEALER' : 'SEEN'}
           </span>
@@ -159,7 +159,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             style={{
               background: gridExpanded ? 'rgba(255,212,71,0.1)' : 'transparent',
               border: `1px solid ${gridExpanded ? 'rgba(255,212,71,0.4)' : 'rgba(255,255,255,0.12)'}`,
-              color: gridExpanded ? '#ffd447' : '#b8ccdf',
+              color: gridExpanded ? 'var(--amber)' : 'var(--text-2)',
             }}
           >
             {gridExpanded ? 'Compact ▲' : 'Full Grid ▼'}
@@ -180,8 +180,8 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
                     background: suitFilter === key ? '#212d45' : 'transparent',
                     border: `1.5px solid ${suitFilter === key ? 'rgba(255,255,255,0.22)' : 'rgba(255,255,255,0.1)'}`,
                     color: suitFilter === key
-                      ? (red ? '#ff7a7a' : '#f0f4ff')
-                      : (red ? '#ff9999aa' : '#b8ccdf'),
+                      ? (red ? '#ff7a7a' : 'var(--text-0)')
+                      : (red ? '#ff9999aa' : 'var(--text-2)'),
                     fontWeight: suitFilter === key ? 700 : 400,
                   }}
                 >
@@ -229,11 +229,11 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
       {/* Target selector — CRIT-04: saturated fill colors per target */}
       <div
         className="flex items-center gap-2 mb-2 p-2 rounded-lg"
-        style={{ background: '#111827', border: '1px solid rgba(255,255,255,0.1)' }}
+        style={{ background: 'var(--surface-chrome)', border: '1px solid rgba(255,255,255,0.1)' }}
         role="group"
         aria-label="Select deal target"
       >
-        <span className="text-[10px] font-semibold" style={{ color: '#b8ccdf', flexShrink: 0 }} aria-hidden="true">
+        <span className="text-[10px] font-semibold" style={{ color: 'var(--text-2)', flexShrink: 0 }} aria-hidden="true">
           {doeActive && !doeRoundDone ? 'DOE →' : (doeActive && doeRoundDone ? 'Round done — manual:' : 'To:')}
         </span>
         <div className="flex gap-2 flex-1">
@@ -250,9 +250,9 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
             const isActive   = litTarget === t;
 
             const fills = {
-              player: { bg: '#3b82f6', border: '#60a5fa', text: '#ffffff', shadow: 'rgba(59,130,246,0.5)' },
+              player: { bg: '#3b82f6', border: '#60a5fa', text: 'var(--text-0)', shadow: 'rgba(59,130,246,0.5)' },
               dealer: { bg: '#ff9a20', border: '#ffb347', text: '#0a0e18', shadow: 'rgba(255,154,32,0.5)' },
-              seen:   { bg: '#4b5563', border: '#6b7280', text: '#ffffff', shadow: 'rgba(75,85,99,0.4)' },
+              seen:   { bg: '#4b5563', border: '#6b7280', text: 'var(--text-0)', shadow: 'rgba(75,85,99,0.4)' },
             };
             const fill = fills[t] || fills.player;
             return (
@@ -394,8 +394,8 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
                       fontWeight: 800,
                       borderRadius: 7,
                       border: isOpen ? '2px solid #ffd447' : '1.5px solid rgba(255,255,255,0.15)',
-                      background: isOpen ? 'rgba(255,212,71,0.12)' : '#111827',
-                      color: depleted ? '#4a5568' : '#f0f4ff',
+                      background: isOpen ? 'rgba(255,212,71,0.12)' : 'var(--surface-chrome)',
+                      color: depleted ? '#4a5568' : 'var(--text-0)',
                       cursor: 'pointer',
                       position: 'relative',
                       transition: 'all 0.15s',
@@ -428,7 +428,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
                       transform: 'translateX(-50%)',
                       marginBottom: 4, zIndex: 50,
                       display: 'flex', flexDirection: 'row', gap: 2,
-                      background: '#1c2540',
+                      background: 'var(--surface-raised)',
                       border: '1.5px solid rgba(255,212,71,0.5)',
                       borderRadius: 8, padding: 4,
                       boxShadow: '0 -4px 20px rgba(0,0,0,0.5)',
@@ -446,7 +446,7 @@ function CardGrid({ target, onTargetChange, remainingByRank, onDealCard, onUndo,
                             padding: '6px 8px', fontSize: 18, cursor: 'pointer',
                             borderRadius: 5, border: 'none',
                             background: 'transparent',
-                            color: suit.isRed ? '#ff7a7a' : '#f0f4ff',
+                            color: suit.isRed ? '#ff7a7a' : 'var(--text-0)',
                             fontWeight: 700, lineHeight: 1,
                             transition: 'background 0.1s',
                           }}
