@@ -99,54 +99,54 @@ function HotkeyOverlay({ isOpen, onClose }) {
     onClick: onClose,
     style: {
       position: 'fixed', inset: 0, zIndex: 2000,
-      background: 'rgba(8,12,20,0.78)',
+      background: 'rgba(10,10,10,0.78)',
       backdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 20,
+      padding: 'var(--space-5)',
     }
   },
     React.createElement('div', {
       onClick: e => e.stopPropagation(),
       style: {
-        background: '#111827',
-        border: '1.5px solid rgba(255,212,71,0.35)',
-        borderRadius: 14,
+        background: 'var(--surface-chrome)',
+        border: 'var(--border-w) solid var(--border)',
+        borderRadius: 'var(--radius-lg)',
         boxShadow: '0 16px 64px rgba(0,0,0,0.7)',
-        padding: 22,
+        padding: 'var(--space-5)',
         maxWidth: 920, width: '100%',
         maxHeight: '88vh', overflowY: 'auto',
-        color: '#f0f4ff',
+        color: 'var(--text-0)',
       }
     },
       // Header
       React.createElement('div', {
         style: {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 16,
-          borderBottom: '1px solid rgba(255,255,255,0.08)',
-          paddingBottom: 10,
+          marginBottom: 'var(--space-4)',
+          borderBottom: 'var(--border-w) solid var(--border-soft)',
+          paddingBottom: 'var(--space-3)',
         }
       },
         React.createElement('div', null,
           React.createElement('div', {
             style: {
-              fontFamily: 'Syne, sans-serif',
-              fontSize: 20, fontWeight: 900, letterSpacing: '0.04em',
-              color: '#ffd447',
+              fontFamily: 'var(--font-display)',
+              fontSize: 'var(--font-lg)', fontWeight: 900, letterSpacing: '0.04em',
+              color: 'var(--amber)',
             }
           }, '⌨  KEYBOARD SHORTCUTS'),
           React.createElement('div', {
-            style: { fontSize: 11, color: '#94a7c4', marginTop: 2 }
+            style: { fontSize: 'var(--font-xs)', color: 'var(--text-2)', marginTop: 2 }
           }, 'Press Esc or click outside to close')
         ),
         React.createElement('button', {
           onClick: onClose,
           'aria-label': 'Close',
           style: {
-            background: 'transparent', border: '1px solid rgba(255,255,255,0.18)',
-            color: '#ccdaec', borderRadius: 6,
-            padding: '4px 10px', cursor: 'pointer',
-            fontSize: 13, fontWeight: 700,
+            background: 'transparent', border: 'var(--border-w) solid var(--border)',
+            color: 'var(--text-1)', borderRadius: 'var(--radius-md)',
+            padding: 'var(--space-1) var(--space-3)', cursor: 'pointer',
+            fontSize: 'var(--font-sm)', fontWeight: 700,
           },
         }, 'Esc')
       ),
@@ -156,7 +156,7 @@ function HotkeyOverlay({ isOpen, onClose }) {
         style: {
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-          gap: 14,
+          gap: 'var(--space-3)',
         }
       },
         SECTIONS.map(sec =>
@@ -164,17 +164,17 @@ function HotkeyOverlay({ isOpen, onClose }) {
             key: sec.title,
             style: {
               background: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              borderRadius: 10,
-              padding: '10px 12px',
+              border: 'var(--border-w) solid var(--border-soft)',
+              borderRadius: 'var(--radius-md)',
+              padding: 'var(--space-3)',
             }
           },
             React.createElement('div', {
               style: {
-                fontFamily: 'Syne, sans-serif',
-                fontSize: 11, fontWeight: 800,
+                fontFamily: 'var(--font-display)',
+                fontSize: 'var(--font-xs)', fontWeight: 800,
                 letterSpacing: '0.12em', textTransform: 'uppercase',
-                color: '#ffd447', marginBottom: 8,
+                color: 'var(--amber)', marginBottom: 'var(--space-2)',
               }
             }, sec.title),
             sec.rows.map((r, i) =>
@@ -183,26 +183,26 @@ function HotkeyOverlay({ isOpen, onClose }) {
                 style: {
                   display: 'flex', alignItems: 'baseline',
                   justifyContent: 'space-between',
-                  gap: 12, padding: '4px 0',
+                  gap: 'var(--space-3)', padding: 'var(--space-1) 0',
                   borderBottom: i === sec.rows.length - 1
                     ? 'none'
-                    : '1px dashed rgba(255,255,255,0.06)',
+                    : '1px dashed var(--border-soft)',
                 }
               },
                 React.createElement('span', {
                   style: {
-                    fontFamily: 'DM Mono, monospace',
-                    fontSize: 11, fontWeight: 700,
-                    color: '#ccdaec',
+                    fontFamily: 'var(--font-mono)',
+                    fontSize: 'var(--font-xs)', fontWeight: 700,
+                    color: 'var(--text-1)',
                     background: 'rgba(255,255,255,0.05)',
-                    border: '1px solid rgba(255,255,255,0.1)',
-                    borderRadius: 5, padding: '2px 7px',
+                    border: 'var(--border-w) solid var(--border-soft)',
+                    borderRadius: 'var(--radius-sm)', padding: '2px 7px',
                     whiteSpace: 'nowrap',
                   }
                 }, r[0]),
                 React.createElement('span', {
                   style: {
-                    fontSize: 11, color: '#b8ccdf', textAlign: 'right',
+                    fontSize: 'var(--font-xs)', color: 'var(--text-2)', textAlign: 'right',
                     flex: 1,
                   }
                 }, r[1])
